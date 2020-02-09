@@ -1,7 +1,7 @@
 script_name('Taximate')
 script_author("21se")
-script_version('1.0.0')
-script_version_number(1)
+script_version('1.0.1')
+script_version_number(2)
 script.update = false
 
 local inicfg = require 'inicfg'
@@ -15,11 +15,6 @@ local u8 = encoding.UTF8
 local toScreen = convertGameScreenCoordsToWindowScreenCoords
 local notificationsQueue = {}
 local sX, sY = toScreen(630, 438)
-
-local DELAY = {
-	ANTIFLOOD = 1.2,
-	DELETE_ORDER = 30,
-}
 
 local MAX_PASSENGERS = {
 	DEFAULT = 3,
@@ -78,7 +73,7 @@ function main()
 	if not doesDirectoryExist(getWorkingDirectory()..'\\config') then createDirectory(getWorkingDirectory()..'\\config') end
 	if not doesDirectoryExist(getWorkingDirectory()..'\\config\\Taximate') then createDirectory(getWorkingDirectory()..'\\config\\Taximate') end
 	ini = inicfg.load({settings = defaultSettings}, 'Taximate/settings.ini')
-	imgui.clistBuffer.v = tostring(ini.settings.workClist)
+	imgui.initBuffers()
 	soundManager.loadSound("new_order")
 	soundManager.loadSound("correct_order")
 	soundManager.loadSound("new_passenger")
@@ -176,7 +171,7 @@ chatManager = {}
 		while true do
 			wait(0)
 			for messageIndex = 1, chatManager.messagesQueueSize do
-				if chatManager.messagesQueue[messageIndex] and os.clock() - chatManager.antifloodClock > DELAY.ANTIFLOOD then
+				if chatManager.messagesQueue[messageIndex] and os.clock() - chatManager.antifloodClock > ini.settings.antifloodDelay then
 					if string.find(chatManager.messagesQueue[messageIndex], '/jskill') then
 						player.skillCheck = true
 					elseif string.find(chatManager.messagesQueue[messageIndex],'/paycheck') then
@@ -197,26 +192,13 @@ chatManager = {}
 
 	function chatManager.sendTaxiNotification(currentOrder)
 		if ini.settings.sendSMS then
-			if currentOrder.distance > 400 then
-				if currentOrder.currentDistance < currentOrder.smsCount / 4 * currentOrder.distance - 10 then
-					if currentOrder.smsCount > 1 then
-						chatManager.addMessageToQueue(string.format(FORMAT_TAXI_SMS.onWay, currentOrder.id, vehicleManager.vehicleName, currentOrder.currentDistance))
-						currentOrder.smsCount = currentOrder.smsCount - 1
-					end
-				end
-				if currentOrder.smsCount == 1 and currentOrder.currentDistance < 30 then
+			if not currentOrder.arrived then
+				if currentOrder.SMSClock < os.clock() then
+					chatManager.addMessageToQueue(string.format(FORMAT_TAXI_SMS.onWay, currentOrder.id, vehicleManager.vehicleName, currentOrder.currentDistance))
+					currentOrder.SMSClock = os.clock() + ini.settings.SMSTimer
+				elseif currentOrder.currentDistance < 30 then
 					chatManager.addMessageToQueue(string.format(FORMAT_TAXI_SMS.arrived, currentOrder.id, vehicleManager.vehicleName))
-					currentOrder.smsCount = 0
-				end
-			else
-				if currentOrder.currentDistance > 30 then
-					if currentOrder.smsCount > 1 then
-						chatManager.addMessageToQueue(string.format(FORMAT_TAXI_SMS.onWay, currentOrder.id, vehicleManager.vehicleName, currentOrder.currentDistance))
-						currentOrder.smsCount = currentOrder.smsCount - 1
-					end
-				elseif currentOrder.smsCount > 0 then
-					chatManager.addMessageToQueue(string.format(FORMAT_TAXI_SMS.arrived, currentOrder.id, vehicleManager.vehicleName))
-					currentOrder.smsCount = 0
+					currentOrder.arrived = true
 				end
 			end
 		end
@@ -259,11 +241,7 @@ chatManager = {}
 
 						orderHandler.currentOrder.distance = getDistanceToCoords3d(orderHandler.currentOrder.pos.x,orderHandler.currentOrder.pos.y,orderHandler.currentOrder.pos.z)
 
-						if orderHandler.currentOrder.distance > 400 then
-							orderHandler.currentOrder.smsCount = 4
-						else
-							orderHandler.currentOrder.smsCount = 2
-						end
+						orderHandler.currentOrder.SMSClock = os.clock()
 					end
 				end
 				orderHandler.deleteOrder(passengerNickname)
@@ -305,8 +283,6 @@ orderHandler = {}
 	orderHandler.orderList = {}
 
 	orderHandler.autoAccept = false
-	orderHandler.maxDistanceCurrentOrder = 1400
-	orderHandler.maxDistanceSecondOrder = 1000
 	orderHandler.lastAcceptedOrderClock = os.clock()
 	orderHandler.lastCorrectOrderNickname = nil
 	orderHandler.lastCorrectOrderClock = os.clock()
@@ -319,7 +295,7 @@ orderHandler = {}
 			soundManager.playSound("correct_order")
 		end
 		if ini.settings.notifications then
-			imgui.addNotification("Вызов от {4296f9}".. orderHandler.currentOrder.nickname.."["..orderHandler.currentOrder.id.."] {FFFFFF}отменён\nМетка на карте удалена",5)
+			imgui.addNotification("Вызов отменён\nМетка на карте удалена",5)
 		end
 		orderHandler.currentOrder = nil
 		if orderHandler.currentOrderBlip then
@@ -345,7 +321,9 @@ orderHandler = {}
 			currentDistance = _distance,
 			time = _time,
 			correct = false,
-			showMark = true
+			showMark = true,
+			SMSClock = os.clock()-ini.settings.SMSTimer,
+			arrived = false
 		}
 	end
 
@@ -362,7 +340,7 @@ orderHandler = {}
 							orderHandler.currentOrderCheckpoint = createCheckpoint(1, orderHandler.currentOrder.pos.x, orderHandler.currentOrder.pos.y, orderHandler.currentOrder.pos.z, orderHandler.currentOrder.pos.x, orderHandler.currentOrder.pos.y, orderHandler.currentOrder.pos.z, 2.99)
 							chatManager.addMessageToQueue("/gps")
 							if ini.settings.notifications then
-								imgui.addNotification("Клиент {4296f9}"..orderHandler.currentOrder.nickname..'['..orderHandler.currentOrder.id..']'.."{FFFFFF} поблизости\nМетка на карте обновлена",5)
+								imgui.addNotification("Клиент поблизости\nМетка на карте обновлена",5)
 							end
 							if ini.settings.notifications and ini.settings.sounds then
 								soundManager.playSound("correct_order")
@@ -418,7 +396,7 @@ orderHandler = {}
 		while true do
 			wait(0)
 			for nickname, order in pairs(orderHandler.orderList) do
-				if os.clock() - order.time > DELAY.DELETE_ORDER then
+				if os.clock() - order.time > ini.settings.deleteOrderDelay then
 					orderHandler.orderList[nickname] = nil
 				end
 			end
@@ -439,11 +417,11 @@ orderHandler = {}
 			if not table.contains(orderNickname, vehicleManager.lastPassengersList) or ini.settings.acceptLastPassengersOrders then
 				if table.isEmpty(vehicleManager.passengersList) then
 					if orderHandler.autoAccept then
-						if orderDistance <= orderHandler.maxDistanceCurrentOrder then
+						if orderDistance <= ini.settings.maxDistanceToAcceptOrder then
 							orderHandler.acceptOrder(orderNickname, orderClock)
 						end
 					else
-						if orderDistance <= orderHandler.maxDistanceSecondOrder then
+						if orderDistance <= ini.settings.maxDistanceToGetOrder then
 							if not orderHandler.orderList[orderNickname].correct then
 								orderHandler.orderList[orderNickname].correct = true
 								if ini.settings.notifications and ini.settings.sounds then
@@ -458,7 +436,7 @@ orderHandler = {}
 						end
 					end
 				else
-					if orderDistance <= orderHandler.maxDistanceSecondOrder then
+					if orderDistance <= ini.settings.maxDistanceToGetOrder then
 						if not orderHandler.orderList[orderNickname].correct then
 							orderHandler.orderList[orderNickname].correct = true
 							if ini.settings.notifications and ini.settings.sounds then
@@ -608,6 +586,11 @@ defaultSettings = {}
 	defaultSettings.workClist = 19
 	defaultSettings.acceptLastPassengersOrders = false
 	defaultSettings.hotKeys = true
+	defaultSettings.SMSTimer = 15
+	defaultSettings.maxDistanceToAcceptOrder = 1400
+	defaultSettings.maxDistanceToGetOrder = 1000
+	defaultSettings.antifloodDelay = 1.0
+	defaultSettings.deleteOrderDelay = 30
 
 soundManager = {}
 	soundManager.soundsList = {}
@@ -758,6 +741,11 @@ function sampev.onSendChat(message)
 end
 
 function sampev.onSendCommand(command)
+	if command == "/test" then
+		for i = 1, 10 do
+			chatManager.addMessageToQueue(" ")
+		end
+	end
 	chatManager.updateAntifloodClock()
 end
 
@@ -838,8 +826,23 @@ function table.isEmpty(table)
 	return true
 end
 
+imgui.settingsTab = 1
 imgui.showSettings = imgui.ImBool(false)
-imgui.clistBuffer = imgui.ImBuffer(3)
+
+function imgui.initBuffers()
+	imgui.antifloodDelayBuffer = imgui.ImBuffer(4)
+	imgui.deleteOrderDelayBuffer = imgui.ImBuffer(3)
+	imgui.clistBuffer = imgui.ImBuffer(3)
+	imgui.SMSTimerBuffer = imgui.ImBuffer(3)
+	imgui.maxDistanceToAcceptOrderBuffer = imgui.ImBuffer(5)
+	imgui.maxDistanceToGetOrderBuffer = imgui.ImBuffer(5)
+	imgui.antifloodDelayBuffer.v = tostring(ini.settings.antifloodDelay)
+	imgui.deleteOrderDelayBuffer.v = tostring(ini.settings.deleteOrderDelay)
+	imgui.clistBuffer.v = tostring(ini.settings.workClist)
+	imgui.SMSTimerBuffer.v = tostring(ini.settings.SMSTimer)
+	imgui.maxDistanceToAcceptOrderBuffer.v = tostring(ini.settings.maxDistanceToAcceptOrder)
+	imgui.maxDistanceToGetOrderBuffer.v = tostring(ini.settings.maxDistanceToGetOrder)
+end
 
 function imgui.OnDrawFrame()
 	if isKeyDown(88) and not sampIsDialogActive() and not sampIsChatInputActive() and not isPauseMenuActive() then
@@ -1102,9 +1105,13 @@ function imgui.onRenderNotification()
 						orderHandler.acceptOrder(notification.orderNickname, orderHandler.orderList[notification.orderNickname].time)
 					end
 				end
+
 				imgui.End()
 				if push then
 					imgui.PopStyleVar()
+				end
+				if not notification.active then
+					notification = nil
 				end
 			end
 		end
@@ -1134,75 +1141,147 @@ function imgui.onRenderSettings()
 	imgui.SetNextWindowSize(imgui.ImVec2(600, 390), 2)
 	imgui.SetNextWindowPos(imgui.ImVec2(resX/2, resY/2), 2, imgui.ImVec2(0.5, 0.5))
 	imgui.Begin('Taximate '..thisScript()['version'], imgui.showSettings, imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize)
-	if imgui.Checkbox("Отображение Taximate Binder", imgui.ImBool(ini.settings.showBindMenu)) then
-		ini.settings.showBindMenu = not ini.settings.showBindMenu
-		inicfg.save(ini,'Taximate/settings.ini')
+	imgui.BeginChild('top', imgui.ImVec2(0, 20), false)
+	imgui.BeginChild(" right",imgui.ImVec2(190,20), false)
+	if imgui.Selectable('\t\t\t  Функции', imgui.settingsTab == 1) then
+		imgui.settingsTab = 1
 	end
-	if imgui.Checkbox("Отображение Taximate HUD", imgui.ImBool(ini.settings.showHUD)) then
-		ini.settings.showHUD = not ini.settings.showHUD
-		inicfg.save(ini,'Taximate/settings.ini')
-	end
-	if imgui.Checkbox("Уведомления", imgui.ImBool(ini.settings.notifications)) then
-		ini.settings.notifications = not ini.settings.notifications
-		inicfg.save(ini,'Taximate/settings.ini')
-	end
+	imgui.EndChild()
 	imgui.SameLine()
-	if imgui.Checkbox("Звуковые уведомления", imgui.ImBool(ini.settings.notifications and ini.settings.sounds)) then
-		ini.settings.sounds = not ini.settings.sounds
-		inicfg.save(ini,'Taximate/settings.ini')
+	imgui.BeginChild("  right",imgui.ImVec2(190,20), false)
+	if imgui.Selectable('\t\t\tПараметры', imgui.settingsTab == 2) then
+		imgui.settingsTab = 2
 	end
-	if imgui.Checkbox("Автоматическая отправка СМС клиенту", imgui.ImBool(ini.settings.sendSMS)) then
-		ini.settings.sendSMS = not ini.settings.sendSMS
-		inicfg.save(ini,'Taximate/settings.ini')
-	end
-	if imgui.Checkbox("Обновление метки на карте, если клиент поблизости",imgui.ImBool(ini.settings.updateOrderMark)) then
-		ini.settings.updateOrderMark = not ini.settings.updateOrderMark
-		inicfg.save(ini,'Taximate/settings.ini')
-	end
-	if imgui.Checkbox("Принятие повторного вызова от клиента",imgui.ImBool(ini.settings.acceptRepeatOrder)) then
-		ini.settings.acceptRepeatOrder = not ini.settings.acceptRepeatOrder
-		inicfg.save(ini,'Taximate/settings.ini')
-	end
-	if imgui.Checkbox("Менять clist при начале / конце рабочего дня. Рабочий clist:",imgui.ImBool(ini.settings.autoClist)) then
-		ini.settings.autoClist = not ini.settings.autoClist
-		inicfg.save(ini,'Taximate/settings.ini')
-	end
+	imgui.EndChild()
 	imgui.SameLine()
-	imgui.PushItemWidth(25)
-	if imgui.InputText("", imgui.clistBuffer) then
-		if tonumber(imgui.clistBuffer.v) == nil or tonumber(imgui.clistBuffer.v) < 0 or tonumber(imgui.clistBuffer.v) > 33 then
-			imgui.clistBuffer.v = '0'
+	imgui.BeginChild("   right",imgui.ImVec2(190,20), false)
+	if imgui.Selectable('\t\tИнформация', imgui.settingsTab == 3) then
+		imgui.settingsTab = 3
+	end
+	imgui.EndChild()
+	imgui.EndChild()
+	imgui.BeginChild('bottom', imgui.ImVec2(0, 0), true)
+	if imgui.settingsTab == 1 then
+		if imgui.Checkbox("Отображение Taximate Binder", imgui.ImBool(ini.settings.showBindMenu)) then
+			ini.settings.showBindMenu = not ini.settings.showBindMenu
+			inicfg.save(ini,'Taximate/settings.ini')
 		end
-			ini.settings.workClist = imgui.clistBuffer.v
-		inicfg.save(ini,'Taximate/settings.ini')
-	end
-	imgui.PopItemWidth()
-	if imgui.Checkbox("Принятие вызовов от 3-х последних пассажиров",imgui.ImBool(ini.settings.acceptLastPassengersOrders)) then
-		ini.settings.acceptLastPassengersOrders = not ini.settings.acceptLastPassengersOrders
-		inicfg.save(ini,'Taximate/settings.ini')
-	end
-	if imgui.Checkbox("Горячие клавиши",imgui.ImBool(ini.settings.hotKeys)) then
-		ini.settings.hotKeys = not ini.settings.hotKeys
-		inicfg.save(ini,'Taximate/settings.ini')
-	end
-	imgui.NewLine()
-	if imgui.Checkbox("Автоматическая проверка обновлений", imgui.ImBool(ini.settings.checkUpdates)) then
-		ini.settings.checkUpdates = not ini.settings.checkUpdates
-		inicfg.save(ini,'Taximate/settings.ini')
-	end
-	if imgui.Button("Проверить обновления") then
-		checkUpdates()
-	end
-	imgui.SameLine()
-	if script.update then
-		if imgui.Button("Скачать новую версию") then
-			update()
+		if imgui.Checkbox("Отображение Taximate HUD", imgui.ImBool(ini.settings.showHUD)) then
+			ini.settings.showHUD = not ini.settings.showHUD
+			inicfg.save(ini,'Taximate/settings.ini')
+		end
+		if imgui.Checkbox("Уведомления", imgui.ImBool(ini.settings.notifications)) then
+			ini.settings.notifications = not ini.settings.notifications
+			inicfg.save(ini,'Taximate/settings.ini')
+		end
+		imgui.SameLine()
+		if imgui.Checkbox("Звуковые уведомления", imgui.ImBool(ini.settings.notifications and ini.settings.sounds)) then
+			ini.settings.sounds = not ini.settings.sounds
+			inicfg.save(ini,'Taximate/settings.ini')
+		end
+		if imgui.Checkbox("Автоматическая отправка СМС клиенту раз в", imgui.ImBool(ini.settings.sendSMS)) then
+			ini.settings.sendSMS = not ini.settings.sendSMS
+			inicfg.save(ini,'Taximate/settings.ini')
+		end
+		imgui.SameLine()
+		imgui.PushItemWidth(25)
+		if imgui.InputText("секунд", imgui.SMSTimerBuffer) then
+			if tonumber(imgui.SMSTimerBuffer.v) == nil or tonumber(imgui.SMSTimerBuffer.v) < 0 or tonumber(imgui.SMSTimerBuffer.v) > 99 then
+				imgui.SMSTimerBuffer.v = '15'
+			end
+				ini.settings.SMSTimer = tonumber(imgui.SMSTimerBuffer.v)
+			inicfg.save(ini,'Taximate/settings.ini')
+		end
+		if imgui.Checkbox("Обновление метки на карте, если клиент поблизости",imgui.ImBool(ini.settings.updateOrderMark)) then
+			ini.settings.updateOrderMark = not ini.settings.updateOrderMark
+			inicfg.save(ini,'Taximate/settings.ini')
+		end
+		if imgui.Checkbox("Принятие повторного вызова от клиента",imgui.ImBool(ini.settings.acceptRepeatOrder)) then
+			ini.settings.acceptRepeatOrder = not ini.settings.acceptRepeatOrder
+			inicfg.save(ini,'Taximate/settings.ini')
+		end
+		if imgui.Checkbox("Менять clist при начале / конце рабочего дня. Рабочий clist:",imgui.ImBool(ini.settings.autoClist)) then
+			ini.settings.autoClist = not ini.settings.autoClist
+			inicfg.save(ini,'Taximate/settings.ini')
+		end
+		imgui.SameLine()
+		imgui.PushItemWidth(25)
+		if imgui.InputText("", imgui.clistBuffer) then
+			if tonumber(imgui.clistBuffer.v) == nil or tonumber(imgui.clistBuffer.v) < 0 or tonumber(imgui.clistBuffer.v) > 33 then
+				imgui.clistBuffer.v = tostring(defaultSettings.workClist)
+			end
+				ini.settings.workClist = '19'
+			inicfg.save(ini,'Taximate/settings.ini')
+		end
+		imgui.PopItemWidth()
+		if imgui.Checkbox("Принятие вызовов от 3-х последних пассажиров",imgui.ImBool(ini.settings.acceptLastPassengersOrders)) then
+			ini.settings.acceptLastPassengersOrders = not ini.settings.acceptLastPassengersOrders
+			inicfg.save(ini,'Taximate/settings.ini')
+		end
+		if imgui.Checkbox("Горячие клавиши",imgui.ImBool(ini.settings.hotKeys)) then
+			ini.settings.hotKeys = not ini.settings.hotKeys
+			inicfg.save(ini,'Taximate/settings.ini')
+		end
+	elseif imgui.settingsTab == 2 then
+		imgui.Text("Дистанция для автопринятия вызова:")
+		imgui.SameLine()
+		imgui.PushItemWidth(50)
+		if imgui.InputText("м ", imgui.maxDistanceToAcceptOrderBuffer) then
+			if tonumber(imgui.maxDistanceToAcceptOrderBuffer.v) == nil or tonumber(imgui.maxDistanceToAcceptOrderBuffer.v) < 0 or tonumber(imgui.maxDistanceToAcceptOrderBuffer.v) > 9999 then
+				imgui.maxDistanceToAcceptOrderBuffer.v = '1400'
+			end
+				ini.settings.maxDistanceToAcceptOrder = tonumber(imgui.maxDistanceToAcceptOrderBuffer.v)
+			inicfg.save(ini,'Taximate/settings.ini')
+		end
+		imgui.Text("Дистанция для получения доп. вызова:")
+		imgui.SameLine()
+		imgui.PushItemWidth(50)
+		if imgui.InputText("м", imgui.maxDistanceToGetOrderBuffer) then
+			if tonumber(imgui.maxDistanceToGetOrderBuffer.v) == nil or tonumber(imgui.maxDistanceToGetOrderBuffer.v) < 0 or tonumber(imgui.maxDistanceToGetOrderBuffer.v) > 9999 then
+				imgui.maxDistanceToGetOrderBuffer.v = '1000'
+			end
+				ini.settings.maxDistanceToGetOrder = tonumber(imgui.maxDistanceToGetOrderBuffer.v)
+			inicfg.save(ini,'Taximate/settings.ini')
+		end
+		imgui.Text("Задержка антифлуда:")
+		imgui.SameLine()
+		imgui.PushItemWidth(30)
+		if imgui.InputText("с", imgui.antifloodDelayBuffer) then
+			if tonumber(imgui.antifloodDelayBuffer.v) == nil or tonumber(imgui.antifloodDelayBuffer.v) < 0 or tonumber(imgui.antifloodDelayBuffer.v) > 999 then
+				imgui.antifloodDelayBuffer.v = '1.0'
+			end
+				ini.settings.antifloodDelay = tonumber(imgui.antifloodDelayBuffer.v)
+			inicfg.save(ini,'Taximate/settings.ini')
+		end
+		imgui.Text("Принимать заказы не старше:")
+		imgui.SameLine()
+		imgui.PushItemWidth(25)
+		if imgui.InputText("с ", imgui.deleteOrderDelayBuffer) then
+			if tonumber(imgui.deleteOrderDelayBuffer.v) == nil or tonumber(imgui.deleteOrderDelayBuffer.v) < 0 or tonumber(imgui.deleteOrderDelayBuffer.v) > 99 then
+				imgui.deleteOrderDelayBuffer.v = '30'
+			end
+				ini.settings.deleteOrderDelay = tonumber(imgui.deleteOrderDelayBuffer.v)
+			inicfg.save(ini,'Taximate/settings.ini')
 		end
 	else
-		imgui.Text("Обновления отсутствуют")
+		if imgui.Checkbox("Автоматическая проверка обновлений", imgui.ImBool(ini.settings.checkUpdates)) then
+			ini.settings.checkUpdates = not ini.settings.checkUpdates
+			inicfg.save(ini,'Taximate/settings.ini')
+		end
+		if imgui.Button("Проверить обновления") then
+			checkUpdates()
+		end
+		imgui.SameLine()
+		if script.update then
+			if imgui.Button("Скачать новую версию") then
+				update()
+			end
+		else
+			imgui.Text("Обновления отсутствуют")
+		end
+		imgui.Text("Обратная связь в ВК - vk.com/twonse")
 	end
-	imgui.Text("Обратная связь в ВК - vk.com/twonse")
-
+	imgui.EndChild()
 	imgui.End()
 end
 
