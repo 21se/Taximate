@@ -1,5 +1,5 @@
 # Taximate
-SAMP-RP Taxi Helper
+[Скачать](https://github.com/21se/Taximate/releases) SAMP-RP Taxi Helper
 
 ## Настройки
 - Меню настроек скрипта - /taximate
