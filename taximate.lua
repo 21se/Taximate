@@ -1,11 +1,11 @@
 script_name('Taximate')
 script_author("21se")
-script_version('1.0.1')
-script_version_number(2)
+script_version('1.0.2')
+script_version_number(3)
 script.update = false
 
 local inicfg = require 'inicfg'
-local ini
+local ini = {}
 local sampev = require 'lib.samp.events'
 local imgui = require 'imgui'
 local as_action = require 'moonloader'.audiostream_state
@@ -69,7 +69,6 @@ function main()
 		player.id = playerID
 	until sampGetPlayerScore(player.id) ~= 0 and sampGetCurrentServerName() ~= 'Samp-Rp.Ru'
 
-	player.refreshPlayerInfo()
 	if not doesDirectoryExist(getWorkingDirectory()..'\\config') then createDirectory(getWorkingDirectory()..'\\config') end
 	if not doesDirectoryExist(getWorkingDirectory()..'\\config\\Taximate') then createDirectory(getWorkingDirectory()..'\\config\\Taximate') end
 	ini = inicfg.load({settings = defaultSettings}, 'Taximate/settings.ini')
@@ -83,6 +82,8 @@ function main()
 	imgui.smallFont = imgui.GetIO().Fonts:AddFontFromFileTTF("C:\\Windows\\Fonts\\arial.ttf", 16.0, nil, imgui.GetIO().Fonts:GetGlyphRangesCyrillic())
 	imgui.RebuildFonts()
 	imgui.Process = true
+	chatManager.initQueue()
+	player.refreshPlayerInfo()
   lua_thread.create(chatManager.checkMessagesQueueThread)
 	lua_thread.create(vehicleManager.refreshVehicleInfoThread)
 	lua_thread.create(orderHandler.deleteUnacceptedOrdersThread)
@@ -122,7 +123,7 @@ function main()
 			if player.onWork then
 				player.onWork = false
 				if ini.settings.autoClist then
-					chatManager.addMessageToQueue("/clist 0")
+					chatManager.addMessageToQueue("/clist 0", true,true)
 				end
 				if orderHandler.currentOrder then
 					orderHandler.cancelCurrentOrder()
@@ -130,7 +131,7 @@ function main()
 			else
 				player.onWork = true
 				if ini.settings.autoClist then
-					chatManager.addMessageToQueue("/clist "..ini.settings.workClist)
+					chatManager.addMessageToQueue("/clist "..ini.settings.workClist,true,true)
 				end
 			end
 		end
@@ -171,19 +172,22 @@ chatManager = {}
 		while true do
 			wait(0)
 			for messageIndex = 1, chatManager.messagesQueueSize do
-				if chatManager.messagesQueue[messageIndex] and os.clock() - chatManager.antifloodClock > ini.settings.antifloodDelay then
-					if string.find(chatManager.messagesQueue[messageIndex], '/jskill') then
-						player.skillCheck = true
-					elseif string.find(chatManager.messagesQueue[messageIndex],'/paycheck') then
-						player.payCheck = true
-					elseif string.find(chatManager.messagesQueue[messageIndex],'/clist') then
-						player.clistEnable = true
-					elseif string.find(chatManager.messagesQueue[messageIndex],'/gps') then
-						player.removeGPSmark = true
+				if chatManager.messagesQueue[messageIndex].message ~= '' and os.clock() - chatManager.antifloodClock > ini.settings.antifloodDelay then
+					if chatManager.messagesQueue[messageIndex].hideResult then
+						if string.find(chatManager.messagesQueue[messageIndex].message, '/jskill') then
+							player.skillCheck = true
+						elseif string.find(chatManager.messagesQueue[messageIndex].message,'/paycheck') then
+							player.payCheck = true
+						elseif string.find(chatManager.messagesQueue[messageIndex].message,'/clist') then
+							player.clistEnable = true
+						elseif string.find(chatManager.messagesQueue[messageIndex].message,'/gps') then
+							player.removeGPSmark = true
+						end
 					end
 
-					sampSendChat(u8:decode(chatManager.messagesQueue[messageIndex]))
-					chatManager.messagesQueue[messageIndex] = nil
+					sampSendChat(u8:decode(chatManager.messagesQueue[messageIndex].message))
+					chatManager.messagesQueue[messageIndex].message = ''
+					chatManager.messagesQueue[messageIndex].hideResult = false
 					chatManager.updateAntifloodClock()
 				end
 			end
@@ -259,23 +263,35 @@ chatManager = {}
 		end)
 	end
 
-	function chatManager.addMessageToQueue(string, _nonRepeat)
+	function chatManager.initQueue()
+		for messageIndex = 1, chatManager.messagesQueueSize do
+			chatManager.messagesQueue[messageIndex] = {
+				message = '',
+				hideResult = false
+			}
+		end
+	end
+
+	function chatManager.addMessageToQueue(string, _nonRepeat, _hideResult)
 		local isRepeat = false
 		local nonRepeat = _nonRepeat or false
+		local hideResult = _hideResult or false
 
 		if nonRepeat then
 			for messageIndex = 1, chatManager.messagesQueueSize do
-				if string == chatManager.messagesQueue[messageIndex] then
-					isRepeat = true
+				if string == chatManager.messagesQueue[messageIndex].message then
+						isRepeat = true
 				end
 			end
 		end
 
 		if not isRepeat then
 			for messageIndex = 1, chatManager.messagesQueueSize-1 do
-				chatManager.messagesQueue[messageIndex] = chatManager.messagesQueue[messageIndex+1]
+				chatManager.messagesQueue[messageIndex].message =  chatManager.messagesQueue[messageIndex+1].message
+				chatManager.messagesQueue[messageIndex].hideResult = chatManager.messagesQueue[messageIndex+1].hideResult
 			end
-			chatManager.messagesQueue[chatManager.messagesQueueSize] = string
+			chatManager.messagesQueue[chatManager.messagesQueueSize].message = string
+			chatManager.messagesQueue[chatManager.messagesQueueSize].hideResult = hideResult
 		end
 	end
 
@@ -304,7 +320,7 @@ orderHandler = {}
 			orderHandler.currentOrderBlip = nil
 			orderHandler.currentOrderCheckpoint = nil
 		else
-			chatManager.addMessageToQueue("/gps")
+			chatManager.addMessageToQueue("/gps", true, true)
 		end
 	end
 
@@ -338,7 +354,7 @@ orderHandler = {}
 							orderHandler.currentOrderBlip = addBlipForCoord(orderHandler.currentOrder.pos.x, orderHandler.currentOrder.pos.y, orderHandler.currentOrder.pos.z)
 							changeBlipColour(orderHandler.currentOrderBlip, 0xBB0000FF)
 							orderHandler.currentOrderCheckpoint = createCheckpoint(1, orderHandler.currentOrder.pos.x, orderHandler.currentOrder.pos.y, orderHandler.currentOrder.pos.z, orderHandler.currentOrder.pos.x, orderHandler.currentOrder.pos.y, orderHandler.currentOrder.pos.z, 2.99)
-							chatManager.addMessageToQueue("/gps")
+							chatManager.addMessageToQueue("/gps", true, true)
 							if ini.settings.notifications then
 								imgui.addNotification("Клиент поблизости\nМетка на карте обновлена",5)
 							end
@@ -569,8 +585,8 @@ player = {}
 	player.tips = 0
 
 	function player.refreshPlayerInfo()
-		chatManager.addMessageToQueue("/paycheck")
-		chatManager.addMessageToQueue("/jskill")
+		chatManager.addMessageToQueue("/paycheck",true , true)
+		chatManager.addMessageToQueue("/jskill", true, true)
 	end
 
 defaultSettings = {}
@@ -741,11 +757,6 @@ function sampev.onSendChat(message)
 end
 
 function sampev.onSendCommand(command)
-	if command == "/test" then
-		for i = 1, 10 do
-			chatManager.addMessageToQueue(" ")
-		end
-	end
 	chatManager.updateAntifloodClock()
 end
 
@@ -881,7 +892,7 @@ function imgui.onRenderHUD()
 			if imgui.Button(buttonText, imgui.ImVec2(300, 0)) then
 				player.onWork = true
 				if ini.settings.autoClist then
-					chatManager.addMessageToQueue("/clist "..ini.settings.workClist)
+					chatManager.addMessageToQueue("/clist "..ini.settings.workClist, true, true)
 				end
 			end
 		else
@@ -892,24 +903,24 @@ function imgui.onRenderHUD()
 			if imgui.Button(buttonText, imgui.ImVec2(300, 0)) then
 				player.onWork = false
 				if ini.settings.autoClist then
-					chatManager.addMessageToQueue("/clist 0")
+					chatManager.addMessageToQueue("/clist 0", true, true)
 				end
 			end
 		end
 
 		imgui.BeginChild('', imgui.ImVec2(150,20), false, imgui.WindowFlags.NoScrollbar)
-			imgui.TextColoredRGB("Скилл: {4296f9}"..player.skill..' {FFFFFF}('..player.skillExp..'%)')
+		imgui.TextColoredRGB("Скилл: {4296f9}"..player.skill..' {FFFFFF}('..player.skillExp..'%)')
 	  imgui.EndChild()
 		imgui.SameLine()
 		imgui.BeginChild('right', imgui.ImVec2(0, 20), false, imgui.WindowFlags.NoScrollbar)
-	 		imgui.TextColoredRGB("Ранг: {4296f9}"..player.rank..' {FFFFFF}('..player.rankExp..'%)')
+	 	imgui.TextColoredRGB("Ранг: {4296f9}"..player.rank..' {FFFFFF}('..player.rankExp..'%)')
 		imgui.EndChild()
 		imgui.BeginChild('bottom', imgui.ImVec2(170, 20), false, imgui.WindowFlags.NoScrollbar)
-			imgui.TextColoredRGB("ЗП: {4296f9}" ..player.salary.. ' / '..player.salaryLimit .. '{FFFFFF} вирт')
+		imgui.TextColoredRGB("ЗП: {4296f9}" ..player.salary.. ' / '..player.salaryLimit .. '{FFFFFF} вирт')
 		imgui.EndChild()
 		imgui.SameLine()
 		imgui.BeginChild('bottom ', imgui.ImVec2(0, 20), false, imgui.WindowFlags.NoScrollbar)
-			imgui.TextColoredRGB("Чай: {4296f9}" ..player.tips .. '{FFFFFF} вирт')
+		imgui.TextColoredRGB("Чай: {4296f9}" ..player.tips .. '{FFFFFF} вирт')
 		imgui.EndChild()
 
 		if orderHandler.currentOrder then
@@ -957,9 +968,11 @@ function imgui.onRenderBindMenu()
 			if bind.edit then
 				imgui.PushItemWidth(194)
 				imgui.PushStyleVar(imgui.StyleVar.FramePadding, imgui.ImVec2(15,4))
+				imgui.PushID(bindIndex)
 				if imgui.InputText("", bind.buffer) then
 					bind.string = bind.buffer.v
 				end
+				imgui.PopID()
 				imgui.PopStyleVar()
 				imgui.PopItemWidth()
 			else
@@ -1279,6 +1292,10 @@ function imgui.onRenderSettings()
 		else
 			imgui.Text("Обновления отсутствуют")
 		end
+		if imgui.Button("Перезапустить скрипт") then
+			thisScript():reload()
+		end
+		imgui.NewLine()
 		imgui.Text("Обратная связь в ВК - vk.com/twonse")
 	end
 	imgui.EndChild()
