@@ -1,7 +1,7 @@
 script_name('Taximate')
 script_author("21se")
-script_version('1.0.4')
-script_version_number(6)
+script_version('1.0.5')
+script_version_number(7)
 script.update = false
 
 local inicfg = require 'inicfg'
@@ -197,12 +197,15 @@ chatManager = {}
 	function chatManager.sendTaxiNotification(currentOrder)
 		if ini.settings.sendSMS and vehicleManager.vehicleName then
 			if not currentOrder.arrived then
-				if currentOrder.SMSClock < os.clock() then
-					chatManager.addMessageToQueue(string.format(FORMAT_TAXI_SMS.onWay, currentOrder.id, vehicleManager.vehicleName, currentOrder.currentDistance))
-					currentOrder.SMSClock = os.clock() + ini.settings.SMSTimer
-				elseif currentOrder.currentDistance < 30 then
+				if currentOrder.currentDistance < 30 then
 					chatManager.addMessageToQueue(string.format(FORMAT_TAXI_SMS.arrived, currentOrder.id, vehicleManager.vehicleName))
 					currentOrder.arrived = true
+				elseif currentOrder.SMSClock < os.clock() and currentOrder.updateDistance then
+					chatManager.addMessageToQueue(string.format(FORMAT_TAXI_SMS.onWay, currentOrder.id, vehicleManager.vehicleName, currentOrder.currentDistance))
+					currentOrder.SMSClock = os.clock() + ini.settings.SMSTimer
+					if currentOrder.pos.x == nil then
+						currentOrder.updateDistance = false
+					end
 				end
 			end
 		end
@@ -235,17 +238,16 @@ chatManager = {}
 							imgui.addNotification(string.format(FORMAT_NOTIFICATIONS.orderAccepted, orderHandler.orderList[passengerNickname].nickname, orderHandler.orderList[passengerNickname].id, orderHandler.orderList[passengerNickname].distance), 10)
 						end
 						orderHandler.currentOrder = orderHandler.orderList[passengerNickname]
+						orderHandler.currentOrder.SMSClock = os.clock()
 
-						result, posX, posY, posZ = getGPSMarkCoords3d()
+						wait(500)
+						local result, posX, posY, posZ = getGPSMarkCoords3d()
 						if result then
 							orderHandler.currentOrder.pos.x = posX
 							orderHandler.currentOrder.pos.y = posY
 							orderHandler.currentOrder.pos.z = posZ
+							orderHandler.currentOrder.distance = getDistanceToCoords3d(orderHandler.currentOrder.pos.x,orderHandler.currentOrder.pos.y,orderHandler.currentOrder.pos.z)
 						end
-
-						orderHandler.currentOrder.distance = getDistanceToCoords3d(orderHandler.currentOrder.pos.x,orderHandler.currentOrder.pos.y,orderHandler.currentOrder.pos.z)
-
-						orderHandler.currentOrder.SMSClock = os.clock()
 					end
 				end
 				orderHandler.deleteOrder(passengerNickname)
@@ -342,7 +344,8 @@ orderHandler = {}
 			correct = false,
 			showMark = true,
 			SMSClock = os.clock()-ini.settings.SMSTimer,
-			arrived = false
+			arrived = false,
+			updateDistance = true
 		}
 	end
 
@@ -383,7 +386,12 @@ orderHandler = {}
 						end
 					end
 				end
-				orderHandler.currentOrder.currentDistance = getDistanceToCoords3d(orderHandler.currentOrder.pos.x, orderHandler.currentOrder.pos.y, orderHandler.currentOrder.pos.z)
+
+				if orderHandler.currentOrder.pos.x then
+					orderHandler.currentOrder.currentDistance = getDistanceToCoords3d(orderHandler.currentOrder.pos.x, orderHandler.currentOrder.pos.y, orderHandler.currentOrder.pos.z)
+					orderHandler.currentOrder.updateDistance = true
+				end
+
 				if vehicleManager.isPassengerInVehicle(vehicleManager.vehicleHandle, orderHandler.currentOrder.nickname) then
 					orderHandler.currentOrder = nil
 				end
@@ -1443,12 +1451,13 @@ function getGPSMarkCoords3d()
       local _posZ = representIntAsFloat(readMemory(markerStruct + 8, 4, false))
 			local _radius = representIntAsFloat(readMemory(markerStruct + 28, 4, false))
 
-      if (_posX ~= 0.0 or _posY ~= 0.0 or _posZ ~= 0.0) and _radius == 3 then
+      if (_posX ~= 0.0 and _posY ~= 0.0 and _posZ ~= 0.0) and _radius == 3 then
       	markerPosX = _posX
         markerPosY = _posY
         markerPosZ = _posZ
         isFind = true
 				writeMemory(markerStruct + 28, 4, 2.99, true)
+				break
 	   	end
     end
 
