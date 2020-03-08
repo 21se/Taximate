@@ -1,7 +1,7 @@
 script_name('Taximate')
 script_author("21se")
 script_version('1.0.4')
-script_version_number(5)
+script_version_number(6)
 script.update = false
 
 local inicfg = require 'inicfg'
