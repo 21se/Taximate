@@ -1,7 +1,7 @@
 script_name('Taximate')
 script_author("21se")
-script_version('1.0.3')
-script_version_number(4)
+script_version('1.0.4')
+script_version_number(5)
 script.update = false
 
 local inicfg = require 'inicfg'
@@ -313,6 +313,9 @@ orderHandler = {}
 		if ini.settings.notifications then
 			imgui.addNotification("Вызов отменён\nМетка на карте удалена",5)
 		end
+		if ini.settings.sendSMSCancel then
+			chatManager.addMessageToQueue("/sms "..orderHandler.currentOrder.id.. ' [Taxi] Я не приеду, вызовите новое такси')
+		end
 		orderHandler.currentOrder = nil
 		if orderHandler.currentOrderBlip then
 			deleteCheckpoint(orderHandler.currentOrderCheckpoint)
@@ -596,6 +599,7 @@ defaultSettings = {}
 	defaultSettings.sounds = true
 	defaultSettings.notifications = true
 	defaultSettings.sendSMS = true
+	defaultSettings.sendSMSCancel = true
 	defaultSettings.updateOrderMark = true
 	defaultSettings.acceptRepeatOrder = true
 	defaultSettings.autoClist = true
@@ -1205,6 +1209,10 @@ function imgui.onRenderSettings()
 				ini.settings.SMSTimer = tonumber(imgui.SMSTimerBuffer.v)
 			inicfg.save(ini,'Taximate/settings.ini')
 		end
+		if imgui.Checkbox("Отправка СМС клиенту при отмене вызова", imgui.ImBool(ini.settings.sendSMSCancel)) then
+			ini.settings.sendSMSCancel = not ini.settings.sendSMSCancel
+			inicfg.save(ini,'Taximate/settings.ini')
+		end
 		if imgui.Checkbox("Обновление метки на карте, если клиент поблизости",imgui.ImBool(ini.settings.updateOrderMark)) then
 			ini.settings.updateOrderMark = not ini.settings.updateOrderMark
 			inicfg.save(ini,'Taximate/settings.ini')
@@ -1223,7 +1231,7 @@ function imgui.onRenderSettings()
 			if tonumber(imgui.clistBuffer.v) == nil or tonumber(imgui.clistBuffer.v) < 0 or tonumber(imgui.clistBuffer.v) > 33 then
 				imgui.clistBuffer.v = tostring(defaultSettings.workClist)
 			end
-				ini.settings.workClist = '19'
+				ini.settings.workClist = tonumber(imgui.clistBuffer.v)
 			inicfg.save(ini,'Taximate/settings.ini')
 		end
 		imgui.PopItemWidth()
@@ -1440,6 +1448,7 @@ function getGPSMarkCoords3d()
         markerPosY = _posY
         markerPosZ = _posZ
         isFind = true
+				writeMemory(markerStruct + 28, 4, 2.99, true)
 	   	end
     end
 
