@@ -1,7 +1,7 @@
 script_name('Taximate')
 script_author("21se")
-script_version('1.0.2')
-script_version_number(3)
+script_version('1.0.3')
+script_version_number(4)
 script.update = false
 
 local inicfg = require 'inicfg'
@@ -195,7 +195,7 @@ chatManager = {}
 	end
 
 	function chatManager.sendTaxiNotification(currentOrder)
-		if ini.settings.sendSMS then
+		if ini.settings.sendSMS and vehicleManager.vehicleName then
 			if not currentOrder.arrived then
 				if currentOrder.SMSClock < os.clock() then
 					chatManager.addMessageToQueue(string.format(FORMAT_TAXI_SMS.onWay, currentOrder.id, vehicleManager.vehicleName, currentOrder.currentDistance))
