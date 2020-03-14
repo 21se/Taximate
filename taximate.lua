@@ -1,7 +1,7 @@
 script_name('Taximate')
 script_author("21se")
-script_version('1.0.5')
-script_version_number(7)
+script_version('1.0.6')
+script_version_number(8)
 script.update = false
 
 local inicfg = require 'inicfg'
@@ -557,7 +557,7 @@ vehicleManager = {}
 	end
 
 	function vehicleManager.isPassengerInVehicle(vehicleHandle, nickname)
-		for seatIndex = 0, 2 do
+		for seatIndex = 0, vehicleManager.maxPassengers-1 do
 			if not isCarPassengerSeatFree(vehicleHandle, seatIndex) then
 				local passengerHandle = getCharInCarPassengerSeat(vehicleHandle, seatIndex)
 				local result, passengerID = sampGetPlayerIdByCharHandle(passengerHandle)
