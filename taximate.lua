@@ -1,7 +1,7 @@
 script_name('Taximate')
 script_author("21se")
-script_version('1.0.7')
-script_version_number(9)
+script_version('1.0.8')
+script_version_number(10)
 script.update = false
 
 local inicfg = require 'inicfg'
@@ -15,6 +15,7 @@ local u8 = encoding.UTF8
 local toScreen = convertGameScreenCoordsToWindowScreenCoords
 local notificationsQueue = {}
 local sX, sY = toScreen(630, 438)
+local fastMapKey = 0
 
 local MAX_PASSENGERS = {
 	DEFAULT = 3,
@@ -92,6 +93,12 @@ function main()
 		lua_thread.create(checkUpdates)
 	end
 
+	if doesFileExist(getGameDirectory()..'\\map.asi') and doesFileExist(getGameDirectory()..'\\map.ini') then
+		local fastMap = inicfg.load(_, getGameDirectory()..'\\map.ini')
+		fastMapKey = fastMap.MAP.key
+		fastMap = nil
+	end
+
 	while true do
 		wait(0)
 
@@ -135,7 +142,6 @@ function main()
 				end
 			end
 		end
-
 
 		if player.onWork then
 			if not orderHandler.currentOrder then
@@ -619,6 +625,7 @@ defaultSettings = {}
 	defaultSettings.maxDistanceToGetOrder = 1000
 	defaultSettings.antifloodDelay = 1.0
 	defaultSettings.deleteOrderDelay = 30
+	defaultSettings.fastMapCompatibility = true
 
 soundManager = {}
 	soundManager.soundsList = {}
@@ -884,7 +891,7 @@ function imgui.OnDrawFrame()
 end
 
 function imgui.onRenderHUD()
-	if vehicleManager.vehicleName or isKeyDown(88) then
+	if (vehicleManager.vehicleName or isKeyDown(88)) and not sampIsDialogActive() and not sampIsChatInputActive() and not isPauseMenuActive() and not (ini.settings.fastMapCompatibility and isKeyDown(fastMapKey)) then
 		local windowSizeY = 110
 		local windowPosY = 0
 		if orderHandler.currentOrder then
@@ -955,7 +962,7 @@ function imgui.onRenderHUD()
 end
 
 function imgui.onRenderBindMenu()
-	if (isKeyDown(88) or bindMenu.isBindEdit()) and not sampIsDialogActive() and not sampIsChatInputActive() and not isPauseMenuActive() then
+	if (isKeyDown(88) or bindMenu.isBindEdit()) and not sampIsDialogActive() and not sampIsChatInputActive() and not isPauseMenuActive() and not (ini.settings.fastMapCompatibility and isKeyDown(fastMapKey)) then
 		if not bindMenu.isBindEdit() then
 			bindMenu.bindList = bindMenu.getBindList()
 		end
@@ -1249,6 +1256,10 @@ function imgui.onRenderSettings()
 		end
 		if imgui.Checkbox("Горячие клавиши",imgui.ImBool(ini.settings.hotKeys)) then
 			ini.settings.hotKeys = not ini.settings.hotKeys
+			inicfg.save(ini,'Taximate/settings.ini')
+		end
+		if imgui.Checkbox("Совместимость с FastMap",imgui.ImBool(ini.settings.fastMapCompatibility)) then
+			ini.settings.fastMapCompatibility = not ini.settings.fastMapCompatibility
 			inicfg.save(ini,'Taximate/settings.ini')
 		end
 	elseif imgui.settingsTab == 2 then
