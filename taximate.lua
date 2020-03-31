@@ -1,7 +1,7 @@
 script_name('Taximate')
 script_author("21se")
-script_version('1.0.6')
-script_version_number(8)
+script_version('1.0.7')
+script_version_number(9)
 script.update = false
 
 local inicfg = require 'inicfg'
@@ -351,7 +351,7 @@ orderHandler = {}
 
 	function orderHandler.refreshCurrentOrder()
 		if orderHandler.currentOrder then
-			if vehicleManager.vehicleName then
+			if vehicleManager.maxPassengers then
 				local charInStream, charHandle = sampGetCharHandleBySampPlayerId(orderHandler.currentOrder.id)
 				if charInStream and ini.settings.updateOrderMark then
 					orderHandler.currentOrder.pos.x, orderHandler.currentOrder.pos.y, orderHandler.currentOrder.pos.z = getCharCoordinates(charHandle)
