@@ -1,12 +1,13 @@
 script_name('Taximate')
 script_author("21se")
-script_version('1.0.8')
-script_version_number(10)
+script_version('1.1.0')
+script_version_number(11)
 script.update = false
 
 local inicfg = require 'inicfg'
 local ini = {}
 local sampev = require 'lib.samp.events'
+local vkeys = require 'lib.vkeys'
 local imgui = require 'imgui'
 local as_action = require 'moonloader'.audiostream_state
 local encoding = require 'encoding'
@@ -77,6 +78,7 @@ function main()
 	soundManager.loadSound("new_order")
 	soundManager.loadSound("correct_order")
 	soundManager.loadSound("new_passenger")
+
 	imgui.ApplyCustomStyle()
 	imgui.GetIO().Fonts:Clear()
 	imgui.GetIO().Fonts:AddFontFromFileTTF("C:\\Windows\\Fonts\\arial.ttf", 18.0, nil, imgui.GetIO().Fonts:GetGlyphRangesCyrillic())
@@ -85,9 +87,12 @@ function main()
 	imgui.Process = true
 	chatManager.initQueue()
 	player.refreshPlayerInfo()
+	bindMenu.bindList = bindMenu.getBindList()
+	lua_thread.create(bindMenu.bindsPressProcessingThread)
   lua_thread.create(chatManager.checkMessagesQueueThread)
 	lua_thread.create(vehicleManager.refreshVehicleInfoThread)
 	lua_thread.create(orderHandler.deleteUnacceptedOrdersThread)
+
 	sampRegisterChatCommand("taximate", function() imgui.showSettings.v = not imgui.showSettings.v end)
 	if ini.settings.checkUpdates then
 		lua_thread.create(checkUpdates)
@@ -125,8 +130,7 @@ function main()
 			end
 		end
 
-
-		if ((isKeyJustPressed(88) and isKeyDown(82)) or (isKeyJustPressed(82) and isKeyDown(88))) and ini.settings.hotKeys then
+		if isKeysPressed(ini.settings.key3, ini.settings.key3add, false) and ini.settings.hotKeys then
 			if player.onWork then
 				player.onWork = false
 				if ini.settings.autoClist then
@@ -146,12 +150,12 @@ function main()
 		if player.onWork then
 			if not orderHandler.currentOrder then
 				if orderHandler.lastCorrectOrderNickname then
-					if ((isKeyJustPressed(88) and isKeyDown(160)) or (isKeyJustPressed(160) and isKeyDown(88))) and ini.settings.hotKeys then
+					if isKeysPressed(ini.settings.key2, ini.settings.key2add, false) and ini.settings.hotKeys then
 						orderHandler.acceptOrder(orderHandler.lastCorrectOrderNickname, orderHandler.lastCorrectOrderClock)
 					end
 				end
 			else
-				if ((isKeyJustPressed(88) and isKeyDown(160)) or (isKeyJustPressed(160) and isKeyDown(88))) and ini.settings.hotKeys then
+				if isKeysPressed(ini.settings.key2, ini.settings.key2add, false) and ini.settings.hotKeys then
 					orderHandler.cancelCurrentOrder()
 				end
 			end
@@ -202,7 +206,7 @@ chatManager = {}
 
 	function chatManager.sendTaxiNotification(currentOrder)
 		if ini.settings.sendSMS and vehicleManager.vehicleName then
-			if not currentOrder.arrived then
+			if not currentOrder.arrived and currentOrder.showMark then
 				if currentOrder.currentDistance < 30 then
 					chatManager.addMessageToQueue(string.format(FORMAT_TAXI_SMS.arrived, currentOrder.id, vehicleManager.vehicleName))
 					currentOrder.arrived = true
@@ -253,6 +257,7 @@ chatManager = {}
 							orderHandler.currentOrder.pos.y = posY
 							orderHandler.currentOrder.pos.z = posZ
 							orderHandler.currentOrder.distance = getDistanceToCoords3d(orderHandler.currentOrder.pos.x,orderHandler.currentOrder.pos.y,orderHandler.currentOrder.pos.z)
+							orderHandler.currentOrder.showMark = true
 						end
 					end
 				end
@@ -322,7 +327,7 @@ orderHandler = {}
 			imgui.addNotification("Вызов отменён\nМетка на карте удалена",5)
 		end
 		if ini.settings.sendSMSCancel then
-			chatManager.addMessageToQueue("/sms "..orderHandler.currentOrder.id.. ' [Taxi] Я не приеду, вызовите новое такси')
+			chatManager.addMessageToQueue("/sms "..orderHandler.currentOrder.id.. ' [Taxi] Вызов отменён, закажите новое такси')
 		end
 		orderHandler.currentOrder = nil
 		if orderHandler.currentOrderBlip then
@@ -348,7 +353,7 @@ orderHandler = {}
 			currentDistance = _distance,
 			time = _time,
 			correct = false,
-			showMark = true,
+			showMark = false,
 			SMSClock = os.clock()-ini.settings.SMSTimer,
 			arrived = false,
 			updateDistance = true
@@ -626,6 +631,12 @@ defaultSettings = {}
 	defaultSettings.antifloodDelay = 1.0
 	defaultSettings.deleteOrderDelay = 30
 	defaultSettings.fastMapCompatibility = true
+	defaultSettings.key1 = 88
+	defaultSettings.key1add = 0
+	defaultSettings.key2 = 16
+	defaultSettings.key2add = 88
+	defaultSettings.key3 = 88
+	defaultSettings.key3add = 82
 
 soundManager = {}
 	soundManager.soundsList = {}
@@ -641,34 +652,38 @@ soundManager = {}
 	end
 
 bindMenu = {}
-	bindMenu.bindList = {}
+	bindMenu.bindList={}
+	bindMenu.defaultBinds = {
+		{text = "Привет", key = 0, keyadd =0},
+		{text = "Куда едем?", key = 0, keyadd =0},
+		{text = "Спасибо", key = 0,keyadd =0},
+		{text = "Хорошо", key = 0, keyadd =0},
+		{text = "Удачи", key = 0, keyadd =0},
+		{text = "Да", key = 0, keyadd =0},
+		{text = "Нет", key = 0, keyadd =0},
+		{text = "))", key = 0, keyadd =0},
+		{text = "Почини", key = 0, keyadd =0},
+		{text = "Заправь", key = 0, keyadd =0},
+		{text = "/rkt", key = 0, keyadd =0},
+		{text = "", key = 0, keyadd = 0},
+		{text = "", key = 0, keyadd = 0},
+		{text = "", key = 0, keyadd = 0},
+		{text = "", key = 0, keyadd = 0},
+		{text = "", key = 0, keyadd = 0},
+		{text = "", key = 0, keyadd = 0},
+	}
 
 	function bindMenu.getBindList()
 		local list = {}
 
-		if doesFileExist(getWorkingDirectory()..'\\config\\Taximate\\bind_list.txt') then
-			local file = io.open(getWorkingDirectory()..'\\config\\Taximate\\bind_list.txt', 'r')
-			for line in file:lines() do
-				local _buffer = imgui.ImBuffer(128)
-			  _buffer.v = line
-				table.insert(list,{buffer = _buffer, edit = false})
-			end
-			io.close(file)
-		else
+		bindMenu.ini = inicfg.load(bindMenu.defaultBinds, 'Taximate/binds.ini')
 
-			local text = "Привет\nКуда едем?\nСпасибо\nХорошо\nУдачи\nДа\nНет\n))\nПочини\nЗаправь\n/rkt"
-			local file = io.open(getWorkingDirectory()..'\\config\\Taximate\\bind_list.txt', "w")
-			file:write(text)
-			io.close(file)
-
-			local file = io.open(getWorkingDirectory()..'\\config\\Taximate\\bind_list.txt', 'r')
-			for line in file:lines() do
-				local _buffer = imgui.ImBuffer(128)
-				_buffer.v = line
-				table.insert(list,{buffer = _buffer, edit = false})
-			end
-			io.close(file)
+		for index, bind in pairs(bindMenu.ini)  do
+			local _buffer = imgui.ImBuffer(128)
+			_buffer.v = bind.text
+			table.insert(list,{buffer = _buffer, key = bind.key, keyadd =bind.keyadd, edit = false})
 		end
+
 		return list
 	end
 
@@ -681,41 +696,22 @@ bindMenu = {}
 		return false
 	end
 
-	function bindMenu.saveBind(bindIndex, bind)
-		bind.edit = false
-		local file = io.open(getWorkingDirectory()..'\\config\\Taximate\\bind_list.txt', "r")
-		local bindText = ''
-		if file ~= nil then
-			for _bindIndex, _bind in pairs(bindMenu.bindList) do
-				bindText = bindText.._bind.buffer.v.."\n"
-			end
-			bindMenu.bindList[bindIndex] = nil
-			io.close(file)
-		end
-
-		file = io.open(getWorkingDirectory()..'\\config\\Taximate\\bind_list.txt', "w")
-		file:write(bindText)
-		file:flush()
-		io.close(file)
+	function bindMenu.saveBind(bindIndex)
+		bindMenu.ini[bindIndex].text = bindMenu.bindList[bindIndex].buffer.v
+		bindMenu.ini[bindIndex].key = bindMenu.bindList[bindIndex].key
+		bindMenu.ini[bindIndex].keyadd = bindMenu.bindList[bindIndex].keyadd
+		inicfg.save(bindMenu.ini, '/Taximate/binds.ini')
 	end
 
-	function bindMenu.deleteBind(bindIndex)
-		local file = io.open(getWorkingDirectory()..'\\config\\Taximate\\bind_list.txt', "r")
-		local bindText = ''
-		if file ~= nil then
-			for _bindIndex, _bind in pairs(bindMenu.bindList) do
-				if _bindIndex ~= bindIndex then
-					bindText = bindText.._bind.buffer.v.."\n"
-				end
-			end
-			bindMenu.bindList[bindIndex] = nil
-			io.close(file)
+	function bindMenu.bindsPressProcessingThread()
+		while true do
+			wait(0)
+			for index, bind in pairs(bindMenu.bindList) do
+				if isKeysPressed(bind.key, bind.keyadd, false) and not sampIsDialogActive() and not sampIsChatInputActive() and not isPauseMenuActive() then
+				 chatManager.addMessageToQueue(bind.buffer.v)
+			 	end
+		 	end
 		end
-
-		file = io.open(getWorkingDirectory()..'\\config\\Taximate\\bind_list.txt', "w")
-		file:write(bindText)
-		file:flush()
-		io.close(file)
 	end
 
 function sampev.onShowDialog(DdialogId, Dstyle, Dtitle, Dbutton1, Dbutton2, Dtext)
@@ -858,6 +854,12 @@ end
 
 imgui.settingsTab = 1
 imgui.showSettings = imgui.ImBool(false)
+imgui.showInputWindow = false
+imgui.key1Edit = false
+imgui.key2Edit = false
+imgui.key3Edit = false
+imgui.key = 0
+imgui.keyadd = 0
 
 function imgui.initBuffers()
 	imgui.antifloodDelayBuffer = imgui.ImBuffer(4)
@@ -875,23 +877,88 @@ function imgui.initBuffers()
 end
 
 function imgui.OnDrawFrame()
-	if isKeyDown(88) and not sampIsDialogActive() and not sampIsChatInputActive() and not isPauseMenuActive() then
+	if (isKeysPressed(ini.settings.key1, ini.settings.key1add, true) or imgui.showInputWindow) and not sampIsDialogActive() and not sampIsChatInputActive() and not isPauseMenuActive() then
 		imgui.ShowCursor = true
 	end
 	imgui.onRenderNotification()
-	if ini.settings.showHUD then
-		imgui.onRenderHUD()
-	end
-	if ini.settings.showBindMenu then
-		imgui.onRenderBindMenu()
-	end
-	if imgui.showSettings.v then
-		imgui.onRenderSettings()
+	if imgui.showInputWindow then
+		imgui.onRenderInputWindow()
+	else
+		if ini.settings.showHUD then
+			imgui.onRenderHUD()
+		end
+		if ini.settings.showBindMenu then
+			imgui.onRenderBindMenu()
+		end
+		if imgui.showSettings.v then
+			imgui.onRenderSettings()
+		end
 	end
 end
 
+function imgui.onRenderInputWindow()
+	imgui.SetNextWindowPos(imgui.ImVec2(sX-1060,sY-640))
+	imgui.SetNextWindowSize(imgui.ImVec2(270, 195))
+	imgui.Begin("Горячие клавиши", _, imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize + imgui.WindowFlags.NoScrollbar + imgui.WindowFlags.NoMove + imgui.WindowFlags.NoTitleBar)
+	imgui.Text("\t\t  Установить клавиши")
+	imgui.NewLine()
+	imgui.NewLine()
+	if imgui.key ~= 0 then
+		imgui.SameLine()
+		imgui.Text("\t\t\t\t\t"..vkeys.id_to_name(imgui.key))
+	end
+	if imgui.keyadd ~= 0 then
+		imgui.SameLine()
+		imgui.Text("+ " .. vkeys.id_to_name(imgui.keyadd))
+	end
+	lua_thread.create(function()
+		repeat
+			wait(0)
+			for k, v in pairs(vkeys) do
+				if wasKeyPressed(v) then
+					if v < 160 or v > 165 then
+						if imgui.key == 0 and k ~= "VK_ESCAPE" and k ~= "VK_RETURN" and k ~= "VK_BACK" then
+							imgui.key = v
+						elseif imgui.key ~= v and imgui.keyadd == 0 and k ~= "VK_ESCAPE" and k ~= "VK_RETURN" and k ~= "VK_BACK"  then
+							imgui.keyadd = v
+						elseif k == "VK_ESCAPE" then
+							imgui.key = 0
+							imgui.keyadd = 0
+							imgui.showInputWindow = false
+						elseif k == "VK_RETURN" then
+							imgui.showInputWindow = false
+						elseif k == "VK_BACK" then
+							imgui.key = 0
+							imgui.keyadd = 0
+						end
+					end
+				end
+			end
+		until not imgui.showInputWindow
+		imgui.showInputWindow = false
+	end)
+	imgui.NewLine()
+	imgui.Text("Нажмите клавишу/комбинацию\nBackspace - стереть клавиши")
+	imgui.NewLine()
+	if imgui.Button("Сохранить") then
+		imgui.showInputWindow = false
+	end
+	imgui.SameLine()
+	if imgui.Button("Отменить") then
+		imgui.key = 0
+		imgui.keyadd = 0
+		imgui.showInputWindow = false
+	end
+	imgui.SameLine()
+	if imgui.Button("Удалить") then
+		imgui.key = -1
+		imgui.showInputWindow = false
+	end
+	imgui.End()
+end
+
 function imgui.onRenderHUD()
-	if (vehicleManager.vehicleName or isKeyDown(88)) and not sampIsDialogActive() and not sampIsChatInputActive() and not isPauseMenuActive() and not (ini.settings.fastMapCompatibility and isKeyDown(fastMapKey)) then
+	if (vehicleManager.vehicleName or isKeysPressed(ini.settings.key1, ini.settings.key1add, true)) and not sampIsDialogActive() and not sampIsChatInputActive() and not isPauseMenuActive() and not (ini.settings.fastMapCompatibility and isKeyDown(fastMapKey)) then
 		local windowSizeY = 110
 		local windowPosY = 0
 		if orderHandler.currentOrder then
@@ -906,7 +973,13 @@ function imgui.onRenderHUD()
 		if not player.onWork then
 			local buttonText = "Начать рабочий день"
 			if ini.settings.hotKeys then
-				buttonText = buttonText .. " [X + R]"
+				if ini.settings.key3 ~= 0 then
+					buttonText = buttonText .. " [" ..vkeys.id_to_name(ini.settings.key3)
+					if ini.settings.key3add ~= 0 then
+						buttonText = buttonText .. " + " ..vkeys.id_to_name(ini.settings.key3add)
+					end
+					buttonText = buttonText .. ']'
+				end
 			end
 			if imgui.Button(buttonText, imgui.ImVec2(300, 0)) then
 				player.onWork = true
@@ -917,7 +990,13 @@ function imgui.onRenderHUD()
 		else
 			local buttonText = "Закончить рабочий день"
 			if ini.settings.hotKeys then
-				buttonText = buttonText .. " [X + R]"
+				if ini.settings.key3 ~= 0 then
+					buttonText = buttonText .. " [" ..vkeys.id_to_name(ini.settings.key3)
+					if ini.settings.key3add ~= 0 then
+						buttonText = buttonText .. " + " ..vkeys.id_to_name(ini.settings.key3add)
+					end
+					buttonText = buttonText .. ']'
+				end
 			end
 			if imgui.Button(buttonText, imgui.ImVec2(300, 0)) then
 				player.onWork = false
@@ -948,7 +1027,13 @@ function imgui.onRenderHUD()
 			imgui.TextColoredRGB("Дистанция: {4296f9}"..orderHandler.currentOrder.currentDistance.. ' {FFFFFF}м')
 			local buttonText = "Отменить вызов"
 			if ini.settings.hotKeys then
-				buttonText = buttonText .. " [SHIFT + X]"
+				if ini.settings.key2 ~= 0 then
+					buttonText = buttonText .. " [" ..vkeys.id_to_name(ini.settings.key2)
+					if ini.settings.key2add ~= 0 then
+						buttonText = buttonText .. " + " ..vkeys.id_to_name(ini.settings.key2add)
+					end
+					buttonText = buttonText .. ']'
+				end
 			end
 			if imgui.Button(buttonText, imgui.ImVec2(285, 0)) then
 				orderHandler.cancelCurrentOrder()
@@ -962,30 +1047,22 @@ function imgui.onRenderHUD()
 end
 
 function imgui.onRenderBindMenu()
-	if (isKeyDown(88) or bindMenu.isBindEdit()) and not sampIsDialogActive() and not sampIsChatInputActive() and not isPauseMenuActive() and not (ini.settings.fastMapCompatibility and isKeyDown(fastMapKey)) then
+	if (isKeysPressed(ini.settings.key1, ini.settings.key1add, true) or bindMenu.isBindEdit()) and not sampIsDialogActive() and not sampIsChatInputActive() and not isPauseMenuActive() and not (ini.settings.fastMapCompatibility and isKeyDown(fastMapKey)) then
 		if not bindMenu.isBindEdit() then
 			bindMenu.bindList = bindMenu.getBindList()
 		end
 		imgui.ShowCursor = true
 		imgui.SetNextWindowPos(imgui.ImVec2(105,250))
-		imgui.SetNextWindowSize(imgui.ImVec2(315, 550))
+		imgui.SetNextWindowSize(imgui.ImVec2(315, 530))
 		imgui.PushStyleVar(imgui.StyleVar.Alpha, 0.95)
-		imgui.Begin("Taximate Binder", _, imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize + imgui.WindowFlags.NoMove + 		imgui.WindowFlags.AlwaysVerticalScrollbar)
+		imgui.Begin("Taximate Binder", _, imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize + imgui.WindowFlags.NoMove + 		imgui.WindowFlags.NoScrollbar)
 		imgui.PushFont(imgui.smallFont)
 
-		if imgui.Button("Добавить строку", imgui.ImVec2(289,0)) then
-			if not bindMenu.isBindEdit() then
-				local file = io.open(getWorkingDirectory()..'\\config\\Taximate\\bind_list.txt', "a")
-				file:write(''.."\n")
-				file:flush()
-				io.close(file)
-			end
-		end
-
 		for bindIndex, bind in pairs(bindMenu.bindList) do
+			if bind then
 			imgui.PushID(bindIndex)
 			if bind.edit then
-				imgui.PushItemWidth(194)
+				imgui.PushItemWidth(177)
 				imgui.PushStyleVar(imgui.StyleVar.FramePadding, imgui.ImVec2(15,4))
 				imgui.PushID(bindIndex)
 				if imgui.InputText("", bind.buffer) then
@@ -995,7 +1072,7 @@ function imgui.onRenderBindMenu()
 				imgui.PopStyleVar()
 				imgui.PopItemWidth()
 			else
-				if imgui.Button(bind.buffer.v, imgui.ImVec2(265,25)) then
+				if imgui.Button(bind.buffer.v, imgui.ImVec2(275,25)) then
 					chatManager.addMessageToQueue(bind.buffer.v)
 				end
 			end
@@ -1003,15 +1080,40 @@ function imgui.onRenderBindMenu()
 			imgui.SameLine()
 			imgui.PushID(bindIndex)
 			if bind.edit then
-				if imgui.Button("Удалить", imgui.ImVec2(0,25)) then
-					bindMenu.deleteBind(bindIndex)
+				local buttonName = "Bind"
+				if bind.key ~= 0 then
+					buttonName = vkeys.id_to_name(bind.key)
 				end
+				if bind.keyadd ~= 0 then
+					buttonName = buttonName .. " + " .. vkeys.id_to_name(bind.keyadd)
+				end
+				if imgui.Button(buttonName, imgui.ImVec2(90,25)) then
+					imgui.key = 0
+					imgui.keyadd = 0
+					imgui.showInputWindow = true
+					--bind.edit = true
+				end
+
+				if not imgui.showInputWindow and imgui.key ~= 0 then
+					if imgui.key == -1 then
+						imgui.key = 0
+						imgui.keyadd = 0
+					end
+					bind.key = imgui.key
+					bind.keyadd = imgui.keyadd
+					imgui.key = 0
+					imgui.keyadd = 0
+					bindMenu.saveBind(bindIndex)
+				end
+
 				imgui.SameLine()
 				if bindMenu.bindList[bindIndex] then
 					if imgui.Button("-", imgui.ImVec2(16,25)) or isKeyJustPressed(13) then
-						bindMenu.saveBind(bindIndex, bind)
+						bind.edit = false
+						bindMenu.saveBind(bindIndex)
 					end
 				end
+
 			else
 				if imgui.Button("+", imgui.ImVec2(16,25)) then
 					bind.edit = true
@@ -1024,58 +1126,7 @@ function imgui.onRenderBindMenu()
 			end
 			imgui.PopID()
 		end
-
-		if orderHandler.currentOrder then
-			imgui.NewLine()
-			imgui.SameLine(11)
-			if imgui.CollapsingHeader('Отправить СМС клиенту', imgui.ImVec2(290, 0)) then
-				imgui.NewLine()
-				imgui.SameLine(30)
-				if imgui.Button('Скоро буду', imgui.ImVec2(267, 0)) then
-					chatManager.addMessageToQueue("/sms "..orderHandler.currentOrder.id.. ' [Taxi] Скоро буду')
-				end
-				imgui.NewLine()
-				imgui.SameLine(30)
-				if imgui.Button('Я не приеду, вызовите новое такси', imgui.ImVec2(267, 0)) then
-					chatManager.addMessageToQueue("/sms "..orderHandler.currentOrder.id.. ' [Taxi] Я не приеду, вызовите новое такси')
-				end
-				imgui.NewLine()
-				imgui.SameLine(30)
-				if imgui.Button('Да', imgui.ImVec2(267, 0)) then
-					chatManager.addMessageToQueue("/sms "..orderHandler.currentOrder.id.. ' [Taxi] Да')
-				end
-				imgui.NewLine()
-				imgui.SameLine(30)
-				if imgui.Button('Нет', imgui.ImVec2(267, 0)) then
-					chatManager.addMessageToQueue("/sms "..orderHandler.currentOrder.id.. ' [Taxi] Нет')
-				end
-			end
-		end
-
-
-		if not table.isEmpty(vehicleManager.passengersList) then
-			imgui.NewLine()
-			imgui.SameLine(11)
-			if vehicleManager.maxPassengers then
-				if imgui.CollapsingHeader('Меню действий с пассажирами') then
-					for passengerIndex = 0, vehicleManager.maxPassengers-1 do
-						if vehicleManager.passengersList[passengerIndex] then
-							imgui.NewLine()
-							imgui.SameLine(33)
-							if imgui.CollapsingHeader(vehicleManager.passengersList[passengerIndex].nickname..'['..vehicleManager.passengersList[passengerIndex].id..']', imgui.ImVec2(0, 0)) then
-								imgui.NewLine()
-								imgui.SameLine(60)
-								imgui.PushID(passengerIndex)
-								if imgui.Button('Выкинуть из автомобиля', imgui.ImVec2(237, 0)) then
-									chatManager.addMessageToQueue("/eject "..vehicleManager.passengersList[passengerIndex].id)
-								end
-								imgui.PopID()
-							end
-						end
-					end
-				end
-			end
-		end
+	end
 
 		imgui.PopFont()
 		imgui.End()
@@ -1129,8 +1180,16 @@ function imgui.onRenderNotification()
 				imgui.NewLine()
 				if notification.button then
 					local acceptOrderText = "Принять вызов"
-					if orderHandler.lastCorrectOrderNickname == notification.orderNickname and ini.settings.hotKeys then
-						acceptOrderText = acceptOrderText .. " [SHIFT + X]"
+					if orderHandler.lastCorrectOrderNickname == notification.orderNickname then
+						if ini.settings.hotKeys then
+							if ini.settings.key2 ~= 0 then
+								acceptOrderText = acceptOrderText .. " [" ..vkeys.id_to_name(ini.settings.key2)
+								if ini.settings.key2add ~= 0 then
+									acceptOrderText = acceptOrderText .. " + " ..vkeys.id_to_name(ini.settings.key2add)
+								end
+								acceptOrderText = acceptOrderText .. ']'
+							end
+						end
 					end
 					if imgui.Button(acceptOrderText, imgui.ImVec2(300, 0))
 					then
@@ -1263,6 +1322,83 @@ function imgui.onRenderSettings()
 			inicfg.save(ini,'Taximate/settings.ini')
 		end
 	elseif imgui.settingsTab == 2 then
+		imgui.BeginChild("Горячие клавиши", imgui.ImVec2(0, 125), true)
+		imgui.Text("Горячие клавиши")
+		imgui.Text("Открыть Taximate HUD/Binder: ")
+		imgui.SameLine()
+		local buttonText = "None"
+		if ini.settings.key1 ~= 0 then
+			buttonText = vkeys.id_to_name(ini.settings.key1)
+		end
+		if ini.settings.key1add ~= 0 then
+			buttonText = buttonText .. " + " .. vkeys.id_to_name(ini.settings.key1add)
+		end
+		imgui.PushID(1)
+		if imgui.Button(buttonText) then
+			imgui.key = 0
+			imgui.keyadd = 0
+			imgui.showInputWindow = true
+			imgui.key1Edit = true
+		end
+		imgui.PopID()
+		imgui.Text("Принять/отменить вызов: ")
+		imgui.SameLine()
+		buttonText = "None"
+		if ini.settings.key2 ~= 0 then
+			buttonText = vkeys.id_to_name(ini.settings.key2)
+		end
+		if ini.settings.key2add ~= 0 then
+			buttonText = buttonText .. " + " .. vkeys.id_to_name(ini.settings.key2add)
+		end
+		imgui.PushID(2)
+		if imgui.Button(buttonText) then
+			imgui.key = 0
+			imgui.keyadd = 0
+			imgui.showInputWindow = true
+			imgui.key2Edit = true
+		end
+		imgui.PopID()
+		imgui.Text("Начать/закончить работу таксиста: ")
+		imgui.SameLine()
+		buttonText = "None"
+		if ini.settings.key3 ~= 0 then
+			buttonText = vkeys.id_to_name(ini.settings.key3)
+		end
+		if ini.settings.key3add ~= 0 then
+			buttonText = buttonText .. " + " .. vkeys.id_to_name(ini.settings.key3add)
+		end
+		imgui.PushID(3)
+		if imgui.Button(buttonText) then
+			imgui.key = 0
+			imgui.keyadd = 0
+			imgui.showInputWindow = true
+			imgui.key3Edit = true
+		end
+		imgui.PopID()
+
+		if not imgui.showInputWindow and imgui.key ~= 0 then
+			if imgui.key == -1 then
+				imgui.key = 0
+				imgui.keyadd = 0
+			end
+			if imgui.key1Edit then
+				ini.settings.key1 = imgui.key
+				ini.settings.key1add = imgui.keyadd
+			elseif imgui.key2Edit then
+				ini.settings.key2 = imgui.key
+				ini.settings.key2add = imgui.keyadd
+			elseif imgui.key3Edit then
+				ini.settings.key3 = imgui.key
+				ini.settings.key3add = imgui.keyadd
+			end
+			inicfg.save(ini,'Taximate/settings.ini')
+			imgui.key1Edit = false
+			imgui.key2Edit = false
+			imgui.key3Edit = false
+			imgui.key = 0
+			imgui.keyadd = 0
+		end
+		imgui.EndChild()
 		imgui.Text("Дистанция для автопринятия вызова:")
 		imgui.SameLine()
 		imgui.PushItemWidth(50)
@@ -1501,6 +1637,26 @@ function checkUpdates()
       end
     end
   end)
+end
+
+local PressType = {KeyDown = isKeyDown, KeyPressed = wasKeyPressed}
+
+function keycheck(k)
+    local r = true
+    for i = 1, #k.k do
+      r = r and PressType[k.t[i]](k.k[i])
+    end
+    return r
+end
+
+function isKeysPressed(key, keyadd, hold)
+	if hold then
+		return (isKeyDown(key) and keyadd == 0) or (isKeyDown(key) and isKeyDown(keyadd))
+	end
+	if keyadd == 0 then
+		return isKeyJustPressed(key)
+	end
+	return keycheck({k  = {key, keyadd}, t = {'KeyDown', 'KeyPressed'}})
 end
 
 function update()
