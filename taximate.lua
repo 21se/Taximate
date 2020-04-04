@@ -1,7 +1,7 @@
 script_name('Taximate')
 script_author("21se")
-script_version('1.1.0')
-script_version_number(11)
+script_version('1.1.1')
+script_version_number(12)
 script.update = false
 
 local inicfg = require 'inicfg'
@@ -78,7 +78,6 @@ function main()
 	soundManager.loadSound("new_order")
 	soundManager.loadSound("correct_order")
 	soundManager.loadSound("new_passenger")
-
 	imgui.ApplyCustomStyle()
 	imgui.GetIO().Fonts:Clear()
 	imgui.GetIO().Fonts:AddFontFromFileTTF("C:\\Windows\\Fonts\\arial.ttf", 18.0, nil, imgui.GetIO().Fonts:GetGlyphRangesCyrillic())
@@ -680,8 +679,10 @@ bindMenu = {}
 
 		for index, bind in pairs(bindMenu.ini)  do
 			local _buffer = imgui.ImBuffer(128)
-			_buffer.v = bind.text
-			table.insert(list,{buffer = _buffer, key = bind.key, keyadd =bind.keyadd, edit = false})
+			if bind.text ~= "" then
+				_buffer.v = bind.text
+				table.insert(list,{buffer = _buffer, key = bind.key, keyadd =bind.keyadd, edit = false})
+			end
 		end
 
 		return list
@@ -697,9 +698,22 @@ bindMenu = {}
 	end
 
 	function bindMenu.saveBind(bindIndex)
-		bindMenu.ini[bindIndex].text = bindMenu.bindList[bindIndex].buffer.v
-		bindMenu.ini[bindIndex].key = bindMenu.bindList[bindIndex].key
-		bindMenu.ini[bindIndex].keyadd = bindMenu.bindList[bindIndex].keyadd
+		if bindMenu.bindList[bindIndex].buffer.v ~= "" then
+			bindMenu.ini[bindIndex].text = bindMenu.bindList[bindIndex].buffer.v
+			bindMenu.ini[bindIndex].key = bindMenu.bindList[bindIndex].key
+			bindMenu.ini[bindIndex].keyadd = bindMenu.bindList[bindIndex].keyadd
+		else
+			index = bindIndex
+			while bindMenu.ini[index+1] do
+				bindMenu.ini[index].text = bindMenu.ini[index+1].text
+				bindMenu.ini[index].key = bindMenu.ini[index+1].key
+				bindMenu.ini[index].keyadd = bindMenu.ini[index+1].keyadd
+				index = index + 1
+			end
+			bindMenu.ini[index].text = ""
+			bindMenu.ini[index].key = 0
+			bindMenu.ini[index].keyadd = 0
+		end
 		inicfg.save(bindMenu.ini, '/Taximate/binds.ini')
 	end
 
@@ -707,7 +721,7 @@ bindMenu = {}
 		while true do
 			wait(0)
 			for index, bind in pairs(bindMenu.bindList) do
-				if isKeysPressed(bind.key, bind.keyadd, false) and not sampIsDialogActive() and not sampIsChatInputActive() and not isPauseMenuActive() then
+				if isKeysPressed(bind.key, bind.keyadd, false) and not sampIsDialogActive() and not sampIsChatInputActive() and not isPauseMenuActive() and bind.buffer.v ~= "Новая строка" and ini.settings.hotKeys then
 				 chatManager.addMessageToQueue(bind.buffer.v)
 			 	end
 		 	end
@@ -1053,16 +1067,25 @@ function imgui.onRenderBindMenu()
 		end
 		imgui.ShowCursor = true
 		imgui.SetNextWindowPos(imgui.ImVec2(105,250))
-		imgui.SetNextWindowSize(imgui.ImVec2(315, 530))
+		imgui.SetNextWindowSize(imgui.ImVec2(315, 550))
 		imgui.PushStyleVar(imgui.StyleVar.Alpha, 0.95)
-		imgui.Begin("Taximate Binder", _, imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize + imgui.WindowFlags.NoMove + 		imgui.WindowFlags.NoScrollbar)
+		imgui.Begin("Taximate Binder", _, imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize + imgui.WindowFlags.NoMove + 		imgui.WindowFlags.AlwaysVerticalScrollbar)
 		imgui.PushFont(imgui.smallFont)
+
+		if imgui.Button("Добавить строку", imgui.ImVec2(289,0)) then
+			if not bindMenu.isBindEdit() and not bindMenu.bindList[17] then
+				local _buffer = imgui.ImBuffer(128)
+				_buffer.v = "Новая строка"
+				table.insert(bindMenu.bindList, {buffer = _buffer, key =0 , keyadd =0, edit = false})
+				bindMenu.saveBind(table.getn(bindMenu.bindList))
+			end
+		end
 
 		for bindIndex, bind in pairs(bindMenu.bindList) do
 			if bind then
 			imgui.PushID(bindIndex)
 			if bind.edit then
-				imgui.PushItemWidth(177)
+				imgui.PushItemWidth(116)
 				imgui.PushStyleVar(imgui.StyleVar.FramePadding, imgui.ImVec2(15,4))
 				imgui.PushID(bindIndex)
 				if imgui.InputText("", bind.buffer) then
@@ -1072,7 +1095,20 @@ function imgui.onRenderBindMenu()
 				imgui.PopStyleVar()
 				imgui.PopItemWidth()
 			else
-				if imgui.Button(bind.buffer.v, imgui.ImVec2(275,25)) then
+				local buttonName = ""
+				if ini.settings.hotKeys then
+				if bind.key ~= 0 then
+					buttonName = "["..vkeys.id_to_name(bind.key)
+				end
+				if bind.keyadd ~= 0 then
+					buttonName = buttonName .. " + " .. vkeys.id_to_name(bind.keyadd)
+				end
+				if buttonName ~= "" then
+					buttonName = buttonName .. "] "
+				end
+				end
+				buttonName = buttonName .. bind.buffer.v
+				if imgui.Button(buttonName, imgui.ImVec2(265,25)) and bind.buffer.v ~= "Новая строка" then
 					chatManager.addMessageToQueue(bind.buffer.v)
 				end
 			end
@@ -1087,7 +1123,7 @@ function imgui.onRenderBindMenu()
 				if bind.keyadd ~= 0 then
 					buttonName = buttonName .. " + " .. vkeys.id_to_name(bind.keyadd)
 				end
-				if imgui.Button(buttonName, imgui.ImVec2(90,25)) then
+				if imgui.Button(buttonName, imgui.ImVec2(70,25)) then
 					imgui.key = 0
 					imgui.keyadd = 0
 					imgui.showInputWindow = true
@@ -1105,7 +1141,12 @@ function imgui.onRenderBindMenu()
 					imgui.keyadd = 0
 					bindMenu.saveBind(bindIndex)
 				end
-
+				imgui.SameLine()
+				if imgui.Button("Удалить", imgui.ImVec2(0,25)) then
+							bindMenu.bindList[bindIndex].buffer.v = ""
+							bindMenu.bindList[bindIndex].edit = false
+							bindMenu.saveBind(bindIndex)
+				end
 				imgui.SameLine()
 				if bindMenu.bindList[bindIndex] then
 					if imgui.Button("-", imgui.ImVec2(16,25)) or isKeyJustPressed(13) then
@@ -1127,6 +1168,58 @@ function imgui.onRenderBindMenu()
 			imgui.PopID()
 		end
 	end
+
+	if orderHandler.currentOrder then
+			imgui.NewLine()
+			imgui.SameLine(11)
+			if imgui.CollapsingHeader('Отправить СМС клиенту', imgui.ImVec2(290, 0)) then
+				imgui.NewLine()
+				imgui.SameLine(30)
+				if imgui.Button('Скоро буду', imgui.ImVec2(267, 0)) then
+					chatManager.addMessageToQueue("/sms "..orderHandler.currentOrder.id.. ' [Taxi] Скоро буду')
+				end
+				imgui.NewLine()
+				imgui.SameLine(30)
+				if imgui.Button('Я не приеду, вызовите новое такси', imgui.ImVec2(267, 0)) then
+					chatManager.addMessageToQueue("/sms "..orderHandler.currentOrder.id.. ' [Taxi] Я не приеду, вызовите новое такси')
+				end
+				imgui.NewLine()
+				imgui.SameLine(30)
+				if imgui.Button('Да', imgui.ImVec2(267, 0)) then
+					chatManager.addMessageToQueue("/sms "..orderHandler.currentOrder.id.. ' [Taxi] Да')
+				end
+				imgui.NewLine()
+				imgui.SameLine(30)
+				if imgui.Button('Нет', imgui.ImVec2(267, 0)) then
+					chatManager.addMessageToQueue("/sms "..orderHandler.currentOrder.id.. ' [Taxi] Нет')
+				end
+			end
+		end
+
+
+		if not table.isEmpty(vehicleManager.passengersList) then
+			imgui.NewLine()
+			imgui.SameLine(11)
+			if vehicleManager.maxPassengers then
+				if imgui.CollapsingHeader('Меню действий с пассажирами') then
+					for passengerIndex = 0, vehicleManager.maxPassengers-1 do
+						if vehicleManager.passengersList[passengerIndex] then
+							imgui.NewLine()
+							imgui.SameLine(33)
+							if imgui.CollapsingHeader(vehicleManager.passengersList[passengerIndex].nickname..'['..vehicleManager.passengersList[passengerIndex].id..']', imgui.ImVec2(0, 0)) then
+								imgui.NewLine()
+								imgui.SameLine(60)
+								imgui.PushID(passengerIndex)
+								if imgui.Button('Выкинуть из автомобиля', imgui.ImVec2(237, 0)) then
+									chatManager.addMessageToQueue("/eject "..vehicleManager.passengersList[passengerIndex].id)
+								end
+								imgui.PopID()
+							end
+						end
+					end
+				end
+			end
+		end
 
 		imgui.PopFont()
 		imgui.End()
@@ -1458,8 +1551,14 @@ function imgui.onRenderSettings()
 		if imgui.Button("Перезапустить скрипт") then
 			thisScript():reload()
 		end
-		imgui.NewLine()
-		imgui.Text("Обратная связь в ВК - vk.com/twonse")
+		imgui.Text("\n\n\n\n\n\n\n\n\nСообщить об ошибке или предложить нововведения:")
+		if imgui.Button("VK.com/twonse") then
+			os.execute("start https://vk.com/twonse")
+		end
+		imgui.SameLine()
+		if imgui.Button("GitHub.com/21se/Taximate") then
+			os.execute("start https://github.com/21se/Taximate")
+		end
 	end
 	imgui.EndChild()
 	imgui.End()
