@@ -1,7 +1,7 @@
 script_name('Taximate')
 script_author("21se(pivo)")
-script_version('1.2.0')
-script_version_number(13)
+script_version('1.2.1')
+script_version_number(16)
 script.update = false
 
 local inicfg = require 'inicfg'
@@ -125,10 +125,8 @@ function main()
 
 		if player.onWork then
 			orderHandler.refreshCurrentOrder()
-		else
-			if orderHandler.currentOrder then
-				orderHandler.cancelCurrentOrder()
-			end
+		elseif orderHandler.currentOrder then
+			orderHandler.cancelCurrentOrder()
 		end
 
 		if isKeysPressed(ini.settings.key3, ini.settings.key3add, false) and ini.settings.hotKeys then
@@ -235,6 +233,8 @@ chatManager = {}
 							if ini.settings.notifications then
 								imgui.addNotification(string.format(FORMAT_NOTIFICATIONS.orderAccepted, orderHandler.orderList[passengerNickname].nickname, orderHandler.orderList[passengerNickname].id, orderHandler.orderList[passengerNickname].distance), 10)
 							end
+						else
+							orderHandler.currentOrder.repeatCount = orderHandler.currentOrder.repeatCount + 1
 						end
 					elseif orderHandler.orderList[passengerNickname] then
 						if ini.settings.notifications and ini.settings.sounds then
@@ -247,12 +247,14 @@ chatManager = {}
 						orderHandler.currentOrder.SMSClock = os.clock()
 
 						wait(500)
+
 						local result, posX, posY, posZ = getGPSMarkCoords3d()
 						if result then
 							orderHandler.currentOrder.pos.x = posX
 							orderHandler.currentOrder.pos.y = posY
 							orderHandler.currentOrder.pos.z = posZ
 							orderHandler.currentOrder.distance = getDistanceToCoords3d(orderHandler.currentOrder.pos.x,orderHandler.currentOrder.pos.y,orderHandler.currentOrder.pos.z)
+							orderHandler.currentOrder.currentDistance = orderHandler.currentOrder.distance
 							orderHandler.currentOrder.showMark = true
 						end
 					end
@@ -352,7 +354,8 @@ orderHandler = {}
 			showMark = false,
 			SMSClock = os.clock()-ini.settings.SMSTimer,
 			arrived = false,
-			updateDistance = true
+			updateDistance = true,
+			repeatCount = 0
 		}
 	end
 
@@ -460,7 +463,7 @@ orderHandler = {}
 	end
 
 	function orderHandler.getOrder()
-		for keyIndex, key in ipairs(table.getTableKeysSortedByValue(orderHandler.orderList, "distance", true)) do
+		for keyIndex, key in ipairs(table.getTableKeysSortedByValue(orderHandler.orderList, "time", false)) do
 			if orderHandler.orderList[key] then
 				return true, key, orderHandler.orderList[key].distance, orderHandler.orderList[key].time
 			end
@@ -507,7 +510,7 @@ orderHandler = {}
 					end
 				end
 			end
-		elseif orderNickname == orderHandler.currentOrder.nickname and ini.settings.acceptRepeatOrder then
+		elseif orderNickname == orderHandler.currentOrder.nickname and ini.settings.acceptRepeatOrder and orderHandler.currentOrder.repeatCount < 3 then
 			orderHandler.acceptOrder(orderNickname, orderClock)
 		end
 	end
@@ -935,8 +938,8 @@ function imgui.OnDrawFrame()
 end
 
 function imgui.onRenderInputWindow()
-	imgui.SetNextWindowPos(vec(290, 190))
-	imgui.SetNextWindowSize(vec(90, 81))
+	imgui.SetNextWindowPos(vec(290, 180))
+	imgui.SetNextWindowSize(vec(90, 91))
 	imgui.Begin("Горячие клавиши", _, imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize + imgui.WindowFlags.NoScrollbar + imgui.WindowFlags.NoMove + imgui.WindowFlags.NoTitleBar)
 		imgui.Dummy(vec(15,0))
 		imgui.SameLine()
@@ -945,21 +948,22 @@ function imgui.onRenderInputWindow()
 		imgui.NewLine()
 		if imgui.key ~= 0 then
 			imgui.SameLine()
-			imgui.Text("\t\t\t\t\t"..vkeys.id_to_name(imgui.key))
+			imgui.Text(vkeys.id_to_name(imgui.key))
 		end
 		if imgui.keyadd ~= 0 then
 			imgui.SameLine()
 			imgui.Text("+ " .. vkeys.id_to_name(imgui.keyadd))
 		end
+
 		lua_thread.create(function()
 			repeat
 				wait(0)
 				for k, v in pairs(vkeys) do
 					if wasKeyPressed(v) then
 						if v < 160 or v > 165 then
-							if imgui.key == 0 and k ~= "VK_ESCAPE" and k ~= "VK_RETURN" and k ~= "VK_BACK" then
+							if imgui.key == 0 and k ~= "VK_ESCAPE" and k ~= "VK_RETURN" and k ~= "VK_BACK" and k ~= "VK_LBUTTON" and k ~= "VK_RBUTTON" then
 								imgui.key = v
-							elseif imgui.key ~= v and imgui.keyadd == 0 and k ~= "VK_ESCAPE" and k ~= "VK_RETURN" and k ~= "VK_BACK"  then
+							elseif imgui.key ~= v and imgui.keyadd == 0 and k ~= "VK_ESCAPE" and k ~= "VK_RETURN" and k ~= "VK_BACK" and k ~= "VK_LBUTTON" and k ~= "VK_RBUTTON" then
 								imgui.keyadd = v
 							elseif k == "VK_ESCAPE" then
 								imgui.key = 0
@@ -972,49 +976,58 @@ function imgui.onRenderInputWindow()
 								imgui.keyadd = 0
 							end
 						end
+					elseif imgui.IsMouseReleased(0) and imgui.showInputWindow then
+						if imgui.key == 0 then
+							imgui.key = vkeys.VK_LBUTTON
+						elseif imgui.key ~= vkeys.VK_LBUTTON and imgui.keyadd == 0 then
+							imgui.keyadd = vkeys.VK_LBUTTON
+						end
+					elseif imgui.IsMouseReleased(1) and imgui.showInputWindow then
+						if imgui.key == 0 then
+							imgui.key = vkeys.VK_RBUTTON
+						elseif imgui.key ~= vkeys.VK_RBUTTON and imgui.keyadd == 0 then
+							imgui.keyadd = vkeys.VK_RBUTTON
+						end
 					end
 				end
 			until not imgui.showInputWindow
 			imgui.showInputWindow = false
 		end)
 		imgui.Dummy(vec(0, 10))
-		imgui.Text("Нажмите клавишу/комбинацию\nBackspace - стереть клавиши")
-		if imgui.Button("Сохранить", vec(30,10)) then
+		imgui.Text("Нажмите клавишу/комбинацию\nBackspace - стереть клавиши\nEnter - сохранить")
+		if imgui.Button("Удалить", vec(42,10)) then
+			imgui.key = -1
 			imgui.showInputWindow = false
 		end
 		imgui.SameLine()
-		if imgui.Button("Отменить", vec(26,10)) then
+		if imgui.Button("Отменить", vec(42,10)) then
 			imgui.key = 0
 			imgui.keyadd = 0
-			imgui.showInputWindow = false
-		end
-		imgui.SameLine()
-		if imgui.Button("Удалить", vec(23,10)) then
-			imgui.key = -1
 			imgui.showInputWindow = false
 		end
 	imgui.End()
 end
 
+imgui.hudHovered = false
 function imgui.onRenderHUD()
 	if vehicleManager.vehicleName or isKeysPressed(ini.settings.key1, ini.settings.key1add, true) then
 		local windowPosY = 0
 		if orderHandler.currentOrder then
 			windowPosY = 37
-			imgui.SetNextWindowPos(vec(ini.settings.hudPosX, ini.settings.hudPosY-windowPosY))
 		end
 
-		if not imgui.IsMouseDragging() then
+		if not (imgui.hudHovered and imgui.IsMouseDragging(0)) or orderHandler.currentOrder then
 			imgui.SetNextWindowPos(vec(ini.settings.hudPosX, ini.settings.hudPosY-windowPosY))
+			imgui.SetNextWindowSize(vec(105, 42+windowPosY))
 		end
-		imgui.SetNextWindowSize(vec(105, 42+windowPosY))
+
 		imgui.PushStyleVar(imgui.StyleVar.Alpha, 0.95)
-		imgui.Begin("Taximate HUD", _, imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize + imgui.WindowFlags.NoScrollbar)
-
+		imgui.Begin("Taximate HUD", _, imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize + imgui.WindowFlags.NoScrollbar + imgui.WindowFlags.NoFocusOnAppearing)
+			imgui.hudHovered = imgui.IsRootWindowOrAnyChildHovered()
 			local newPos = imgui.GetWindowPos()
 			local savePosX, savePosY = convertWindowScreenCoordsToGameScreenCoords(newPos.x, newPos.y)
 
-			if (math.ceil(savePosX)~=math.ceil(ini.settings.hudPosX) or math.ceil(savePosY)~=math.ceil(ini.settings.hudPosY)) and imgui.IsMouseDragging(0) and not orderHandler.currentOrder then
+			if (math.ceil(savePosX)~=math.ceil(ini.settings.hudPosX) or math.ceil(savePosY)~=math.ceil(ini.settings.hudPosY)) and imgui.IsRootWindowOrAnyChildFocused() and imgui.IsMouseDragging(0) and imgui.IsRootWindowOrAnyChildHovered() and not orderHandler.currentOrder then
 				ini.settings.hudPosX = math.ceil(savePosX)
 				ini.settings.hudPosY = math.ceil(savePosY)
 				inicfg.save(ini,'Taximate/settings.ini')
