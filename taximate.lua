@@ -2,7 +2,7 @@ script_name('Taximate')
 script_author("21se(pivo)")
 script_version('1.2.2')
 script_version_number(17)
-script_url("https://github.com/21se/Taximate")
+script_url("https://21se.github.io/Taximate/")
 script.update = false
 
 local inicfg = require 'inicfg'
@@ -1633,12 +1633,12 @@ function imgui.onRenderSettings()
 				end
 				imgui.Dummy(vec(0,75))
 				imgui.Text("Сообщить об ошибке или предложить нововведения:")
-				if imgui.Button("VK.com/twonse") then
+				if imgui.Button("VK") then
 					os.execute("start https://vk.com/twonse")
 				end
 				imgui.SameLine()
-				if imgui.Button("GitHub.com/21se/Taximate") then
-					os.execute("start https://github.com/21se/Taximate")
+				if imgui.Button("GitHub") then
+					os.execute("start https://github.com/21se/Taximate/issues/new")
 				end
 			end
 		imgui.EndChild()
