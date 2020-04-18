@@ -1,4 +1,4 @@
-# ***[Скачать Taximate](https://github.com/21se/Taximate/releases)***
+# [Скачать Taximate](https://github.com/21se/Taximate/releases)
 
 ## Настройки
 - Меню настроек скрипта - /taximate
@@ -15,8 +15,8 @@
 ## Скриншоты
 
 ![ ](https://i.imgur.com/q6GQ4Xp.png) 
-![ ](https://i.imgur.com/IxTMbIx.png) ![ ](https://i.imgur.com/jkLY4rf.png)
-![ ](https://i.imgur.com/rTY1ScK.png)
+![ ](https://i.imgur.com/IxTMbIx.png) ![ ](https://i.imgur.com/dvEpeqr.png)
+![ ](https://i.imgur.com/tk3c4h7.png) ![ ](https://i.imgur.com/muBz9Ke.png)
 
 ## Установка
 - Распаковать файлы архива в папку GTA San Andreas/moonloader/
