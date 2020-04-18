@@ -1,7 +1,8 @@
 script_name('Taximate')
 script_author("21se(pivo)")
-script_version('1.2.1')
-script_version_number(16)
+script_version('1.2.2')
+script_version_number(17)
+script_url("https://github.com/21se/Taximate")
 script.update = false
 
 local inicfg = require 'inicfg'
@@ -127,6 +128,12 @@ function main()
 			orderHandler.refreshCurrentOrder()
 		elseif orderHandler.currentOrder then
 			orderHandler.cancelCurrentOrder()
+		end
+
+		if ini.settings.markers then
+			vehicleManager.drawMarkers()
+		else
+			vehicleManager.clearMarkers()
 		end
 
 		if isKeysPressed(ini.settings.key3, ini.settings.key3add, false) and ini.settings.hotKeys then
@@ -522,6 +529,7 @@ vehicleManager = {}
 	vehicleManager.maxPassengers = nil
 	vehicleManager.vehicleName = nil
 	vehicleManager.vehicleHandle = nil
+	vehicleManager.markers = {}
 
 	function vehicleManager.refreshVehicleInfoThread()
 		while true do
@@ -612,6 +620,38 @@ vehicleManager = {}
 		end
 	end
 
+	function vehicleManager.drawMarkers()
+		for id = 0, 999 do
+			if sampIsPlayerConnected(id) then
+				local charInStream, charHandle = sampGetCharHandleBySampPlayerId(id)
+				if charInStream then
+					if not vehicleManager.markers[id] then
+						if isCharInAnyCar(charHandle) and sampGetPlayerColor(id) == 16777215 then
+							vehicleManager.markers[id] = addBlipForChar(charHandle)
+							changeBlipDisplay(vehicleManager.markers[id], 2)
+							changeBlipColour(vehicleManager.markers[id], 0xFFFFFF25)
+						end
+					elseif not isCharInAnyCar(charHandle) or sampGetPlayerColor(id) ~= 16777215 then
+							removeBlip(vehicleManager.markers[id])
+							vehicleManager.markers[id] = nil
+					end
+				else
+					if vehicleManager.markers[id] then
+						removeBlip(vehicleManager.markers[id])
+						vehicleManager.markers[id] = nil
+					end
+				end
+			end
+		end
+	end
+
+	function vehicleManager.clearMarkers()
+		for id, marker in pairs(vehicleManager.markers) do
+			removeBlip(marker)
+			vehicleManager.markers[id] = nil
+		end
+	end
+
 player = {}
 	player.id = nil
 	player.nickname = nil
@@ -660,6 +700,7 @@ defaultSettings = {}
 	defaultSettings.binderPosY = 103
 	defaultSettings.hudPosX = 498
 	defaultSettings.hudPosY = 310
+	defaultSettings.markers = true
 
 soundManager = {}
 	soundManager.soundsList = {}
@@ -829,6 +870,8 @@ function onScriptTerminate(script, quitGame)
 	if script == thisScript() then
 		removeBlip(orderHandler.currentOrderBlip)
 		deleteCheckpoint(orderHandler.currentOrderCheckpoint)
+		vehicleManager.clearMarkers()
+		imgui.Process = false
 	end
 end
 
@@ -1016,7 +1059,7 @@ function imgui.onRenderHUD()
 			windowPosY = 37
 		end
 
-		if not (imgui.hudHovered and imgui.IsMouseDragging(0)) or orderHandler.currentOrder then
+		if not (imgui.hudHovered and imgui.IsMouseDragging(0) and isKeysPressed(ini.settings.key1, ini.settings.key1add, true)) or orderHandler.currentOrder then
 			imgui.SetNextWindowPos(vec(ini.settings.hudPosX, ini.settings.hudPosY-windowPosY))
 			imgui.SetNextWindowSize(vec(105, 42+windowPosY))
 		end
@@ -1108,21 +1151,26 @@ function imgui.onRenderHUD()
 	end
 end
 
+imgui.bindHovered = false
 function imgui.onRenderBindMenu()
 	if isKeysPressed(ini.settings.key1, ini.settings.key1add, true) or bindMenu.isBindEdit() then
 		if not bindMenu.isBindEdit() then
 			bindMenu.bindList = bindMenu.getBindList()
 		end
 		imgui.ShowCursor = true
-		imgui.SetNextWindowPos(vec(ini.settings.binderPosX,ini.settings.binderPosY),2)
-		imgui.SetNextWindowSize(vec(105, 228))
+
+		if not (imgui.bindHovered and imgui.IsMouseDragging(0) and (isKeysPressed(ini.settings.key1, ini.settings.key1add, true) or bindMenu.isBindEdit())) then
+			imgui.SetNextWindowPos(vec(ini.settings.binderPosX, ini.settings.binderPosY))
+			imgui.SetNextWindowSize(vec(105, 228))
+		end
+
 		imgui.PushStyleVar(imgui.StyleVar.Alpha, 0.95)
 			imgui.Begin("Taximate Binder", _, imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize + imgui.WindowFlags.AlwaysVerticalScrollbar)
-
+			imgui.bindHovered = imgui.IsRootWindowOrAnyChildHovered()
 			local newPos = imgui.GetWindowPos()
 			local savePosX, savePosY = convertWindowScreenCoordsToGameScreenCoords(newPos.x, newPos.y)
 
-			if (math.ceil(savePosX)~=math.ceil(ini.settings.binderPosX) or math.ceil(savePosY)~=math.ceil(ini.settings.binderPosY)) and imgui.IsMouseDragging(0) then
+			if (math.ceil(savePosX)~=math.ceil(ini.settings.binderPosX) or math.ceil(savePosY)~=math.ceil(ini.settings.binderPosY)) and (imgui.bindHovered and imgui.IsMouseDragging(0) and (isKeysPressed(ini.settings.key1, ini.settings.key1add, true) or bindMenu.isBindEdit())) then
 				ini.settings.binderPosX = math.ceil(savePosX)
 				ini.settings.binderPosY = math.ceil(savePosY)
 				inicfg.save(ini,'Taximate/settings.ini')
@@ -1453,6 +1501,10 @@ function imgui.onRenderSettings()
 				end
 				if imgui.Checkbox("Принятие вызовов от 3-х последних пассажиров",imgui.ImBool(ini.settings.acceptLastPassengersOrders)) then
 					ini.settings.acceptLastPassengersOrders = not ini.settings.acceptLastPassengersOrders
+					inicfg.save(ini,'Taximate/settings.ini')
+				end
+				if imgui.Checkbox("Показывать на карте игроков в транспорте",imgui.ImBool(ini.settings.markers)) then
+					ini.settings.markers = not ini.settings.markers
 					inicfg.save(ini,'Taximate/settings.ini')
 				end
 				if imgui.Checkbox("Горячие клавиши",imgui.ImBool(ini.settings.hotKeys)) then
