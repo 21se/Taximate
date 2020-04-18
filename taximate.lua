@@ -1,7 +1,7 @@
 script_name('Taximate')
 script_author("21se(pivo)")
-script_version('1.2.2')
-script_version_number(17)
+script_version('1.2.3')
+script_version_number(20)
 script_url("https://21se.github.io/Taximate/")
 script.update = false
 
@@ -55,6 +55,8 @@ local FORMAT_TAXI_SMS = {
 
 local FORMAT_NOTIFICATIONS ={
 	newOrder = "Новый вызов от {4296f9}%s[%s]\nДистанция: {4296f9}%s {FFFFFF}м",
+	newOrderPos = "Новый вызов от {4296f9}%s[%s]\nДистанция: {42ff96}%s {FFFFFF}м",
+	newOrderNeg = "Новый вызов от {4296f9}%s[%s]\nДистанция: {d44331}%s {FFFFFF}м",
 	orderAccepted = "Принят вызов от {4296f9}%s[%s]\nДистанция: {4296f9}%s {FFFFFF}м"
 }
 
@@ -108,7 +110,6 @@ function main()
 
 	while true do
 		wait(0)
-
 		imgui.ShowCursor = false
 
 		if player.onWork then
@@ -134,6 +135,12 @@ function main()
 			vehicleManager.drawMarkers()
 		else
 			vehicleManager.clearMarkers()
+		end
+
+		if ini.settings.ordersDistanceUpdate then
+			if player.onWork then
+				orderHandler.updateOrdersDistance()
+			end
 		end
 
 		if isKeysPressed(ini.settings.key3, ini.settings.key3add, false) and ini.settings.hotKeys then
@@ -193,9 +200,10 @@ chatManager = {}
 							player.clistEnable = true
 						elseif string.find(chatManager.messagesQueue[messageIndex].message,'/gps') then
 							player.removeGPSmark = true
+						elseif string.find(chatManager.messagesQueue[messageIndex].message,'/service') then
+							player.updateDistance = true
 						end
 					end
-
 					sampSendChat(u8:decode(chatManager.messagesQueue[messageIndex].message))
 					chatManager.messagesQueue[messageIndex].message = ''
 					chatManager.messagesQueue[messageIndex].hideResult = false
@@ -320,6 +328,7 @@ orderHandler = {}
 	orderHandler.lastAcceptedOrderClock = os.clock()
 	orderHandler.lastCorrectOrderNickname = nil
 	orderHandler.lastCorrectOrderClock = os.clock()
+	orderHandler.updateOrdersDistanceClock = os.clock()
 	orderHandler.currentOrder = nil
 	orderHandler.currentOrderBlip = nil
 	orderHandler.currentOrderCheckpoint = nil
@@ -340,8 +349,19 @@ orderHandler = {}
 			removeBlip(orderHandler.currentOrderBlip)
 			orderHandler.currentOrderBlip = nil
 			orderHandler.currentOrderCheckpoint = nil
-		else
+		elseif not sampIsDialogActive() then
 			chatManager.addMessageToQueue("/gps", true, true)
+		end
+	end
+
+	function orderHandler.updateOrdersDistance()
+		if vehicleManager.vehicleName then
+			if orderHandler.updateOrdersDistanceClock < os.clock() then
+				if not sampIsDialogActive() then
+					chatManager.addMessageToQueue("/service",true,true)
+					orderHandler.updateOrdersDistanceClock = os.clock() + ini.settings.ordersDistanceUpdateTimer
+				end
+			end
 		end
 	end
 
@@ -362,7 +382,8 @@ orderHandler = {}
 			SMSClock = os.clock()-ini.settings.SMSTimer,
 			arrived = false,
 			updateDistance = true,
-			repeatCount = 0
+			repeatCount = 0,
+			direction = 0
 		}
 	end
 
@@ -379,7 +400,9 @@ orderHandler = {}
 								orderHandler.currentOrderBlip = addBlipForCoord(orderHandler.currentOrder.pos.x, orderHandler.currentOrder.pos.y, orderHandler.currentOrder.pos.z)
 								changeBlipColour(orderHandler.currentOrderBlip, 0xBB0000FF)
 								orderHandler.currentOrderCheckpoint = createCheckpoint(1, orderHandler.currentOrder.pos.x, orderHandler.currentOrder.pos.y, orderHandler.currentOrder.pos.z, orderHandler.currentOrder.pos.x, orderHandler.currentOrder.pos.y, orderHandler.currentOrder.pos.z, 2.99)
-								chatManager.addMessageToQueue("/gps", true, true)
+								if not sampIsDialogActive() then
+									chatManager.addMessageToQueue("/gps", true, true)
+								end
 								if ini.settings.notifications then
 									imgui.addNotification("Клиент поблизости\nМетка на карте обновлена",5)
 								end
@@ -462,7 +485,7 @@ orderHandler = {}
 		while true do
 			wait(0)
 			for nickname, order in pairs(orderHandler.orderList) do
-				if os.clock() - order.time > 30 then
+				if os.clock() - order.time > 30 or not sampIsPlayerConnected(order.id) or not sampGetPlayerNickname(order.id)==order.nickname then
 					orderHandler.orderList[nickname] = nil
 				end
 			end
@@ -666,10 +689,13 @@ player = {}
 	player.salary = 0
 	player.salaryLimit = 0
 	player.tips = 0
+	player.updateDistance = false
 
 	function player.refreshPlayerInfo()
 		chatManager.addMessageToQueue("/paycheck",true , true)
-		chatManager.addMessageToQueue("/jskill", true, true)
+		if not sampIsDialogActive() then
+			chatManager.addMessageToQueue("/jskill", true, true)
+		end
 	end
 
 defaultSettings = {}
@@ -701,6 +727,8 @@ defaultSettings = {}
 	defaultSettings.hudPosX = 498
 	defaultSettings.hudPosY = 310
 	defaultSettings.markers = true
+	defaultSettings.ordersDistanceUpdate = true
+	defaultSettings.ordersDistanceUpdateTimer = 5
 
 soundManager = {}
 	soundManager.soundsList = {}
@@ -824,6 +852,32 @@ function sampev.onShowDialog(DdialogId, Dstyle, Dtitle, Dbutton1, Dbutton2, Dtex
 				orderHandler.currentOrderCheckpoint = nil
 			end
 		end
+	elseif string.find(Dtitle, u8:decode"Вызовы") then
+		if player.onWork then
+			if player.updateDistance then
+				player.updateDistance = false
+				for string in string.gmatch(Dtext, '[^\n]+') do
+					if string.find(string, u8:decode"сек") then
+						local nickname, id, time, distance = string.match(string, u8:decode"%[%d+%] (.+)%[ID:(%d+)%]	(%d+) сек	(.+)")
+						time = tonumber(time)
+						distance = string2Meters(distance)
+						if time < 30 then
+							if orderHandler.orderList[nickname] then
+								if distance < orderHandler.orderList[nickname].distance then
+									orderHandler.orderList[nickname].direction = 1
+								elseif distance > orderHandler.orderList[nickname].distance then
+									orderHandler.orderList[nickname].direction = -1
+								end
+								orderHandler.orderList[nickname].distance = distance
+							else
+								orderHandler.addOrder(nickname, id, distance, os.clock())
+							end
+						end
+					end
+				end
+			end
+			return false
+		end
 	end
 end
 
@@ -843,6 +897,16 @@ function sampev.onServerMessage(color, message)
 	elseif string.find(message, u8:decode" Цвет выбран") then
 		if player.clistEnable then
 			player.clistEnable = false
+			return false
+		end
+	elseif string.find(message, u8:decode" Вызовов не поступало") then
+		if player.updateDistance then
+			player.updateDistance = false
+			return false
+		end
+	elseif string.find(message, u8:decode" Введите: /service ") then
+		if player.updateDistance then
+			player.updateDistance = false
 			return false
 		end
 	else
@@ -958,6 +1022,7 @@ function imgui.initBuffers()
 	imgui.SMSTimer = imgui.ImInt(ini.settings.SMSTimer)
 	imgui.maxDistanceToAcceptOrder = imgui.ImInt(ini.settings.maxDistanceToAcceptOrder)
 	imgui.maxDistanceToGetOrder = imgui.ImInt(ini.settings.maxDistanceToGetOrder)
+	imgui.ordersDistanceUpdateTimer = imgui.ImInt(ini.settings.ordersDistanceUpdateTimer)
 end
 
 function imgui.OnDrawFrame()
@@ -1343,6 +1408,10 @@ function imgui.onRenderNotification()
 		if notification.active and (notification.time < os.clock() or (notification.button and not isOrderExist)) then
 			notification.active = false
 		end
+
+		if (notification.time < os.clock()) and (notification.button and isOrderExist and orderHandler.orderList[notification.orderNickname].direction>0) then
+			notification.active = true
+		end
 		if count < 3 then
 			if not notification.active then
 				if notification.showtime > 0 then
@@ -1375,6 +1444,15 @@ function imgui.onRenderNotification()
 					imgui.Begin('message #' .. notificationIndex, _, imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize + imgui.WindowFlags.NoScrollbar + imgui.WindowFlags.NoMove + imgui.WindowFlags.NoTitleBar)
 					imgui.TextColoredRGB(notificationTitle)
 					imgui.Dummy(vec(0,5))
+					if notification.button then
+						if orderHandler.orderList[notification.orderNickname] then
+							if orderHandler.orderList[notification.orderNickname].direction>0 then
+							 notification.text = string.format(FORMAT_NOTIFICATIONS.newOrderPos, notification.orderNickname, orderHandler.orderList[notification.orderNickname].id, orderHandler.orderList[notification.orderNickname].distance)
+							elseif orderHandler.orderList[notification.orderNickname].direction<0 then
+							 notification.text = string.format(FORMAT_NOTIFICATIONS.newOrderNeg, notification.orderNickname, orderHandler.orderList[notification.orderNickname].id, orderHandler.orderList[notification.orderNickname].distance)
+							end
+						end
+					end
 					imgui.TextColoredRGB(notification.text)
 					imgui.Dummy(vec(0,5))
 					if notification.button then
@@ -1420,8 +1498,8 @@ end
 function imgui.onRenderSettings()
 	imgui.ShowCursor = true
 	local resX, resY = getScreenResolution()
-	imgui.SetNextWindowSize(vec(200, 162))
-	imgui.SetNextWindowPos(vec(220, 143),2)
+	imgui.SetNextWindowSize(vec(200, 177))
+	imgui.SetNextWindowPos(vec(220, 128),2)
 	imgui.Begin('Taximate '..thisScript()['version'], imgui.showSettings, imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize)
 		imgui.BeginChild('top', vec(195, 9), false)
 			imgui.BeginChild(" right",vec(63.5,9), false)
@@ -1442,7 +1520,7 @@ function imgui.onRenderSettings()
 				end
 			imgui.EndChild()
 		imgui.EndChild()
-		imgui.BeginChild('bottom', vec(195, 137), true)
+		imgui.BeginChild('bottom', vec(195, 152), true)
 			if imgui.settingsTab == 1 then
 				if imgui.Checkbox("Отображение Taximate Binder", imgui.ImBool(ini.settings.showBindMenu)) then
 					ini.settings.showBindMenu = not ini.settings.showBindMenu
@@ -1505,6 +1583,19 @@ function imgui.onRenderSettings()
 				end
 				if imgui.Checkbox("Показывать на карте игроков в транспорте",imgui.ImBool(ini.settings.markers)) then
 					ini.settings.markers = not ini.settings.markers
+					inicfg.save(ini,'Taximate/settings.ini')
+				end
+				if imgui.Checkbox("Обновление дистанции всех вызовов раз в", imgui.ImBool(ini.settings.ordersDistanceUpdate)) then
+					ini.settings.ordersDistanceUpdate = not ini.settings.ordersDistanceUpdate
+					inicfg.save(ini,'Taximate/settings.ini')
+				end
+				imgui.SameLine()
+				imgui.PushItemWidth(toScreenX(51))
+				if imgui.SliderInt("секунд ", imgui.ordersDistanceUpdateTimer, 3, 30) then
+					if imgui.ordersDistanceUpdateTimer.v < 3 or imgui.ordersDistanceUpdateTimer.v > 30 then
+						imgui.ordersDistanceUpdateTimer.v = defaultSettings.ordersDistanceUpdateTimer
+					end
+					ini.settings.ordersDistanceUpdateTimer = imgui.ordersDistanceUpdateTimer.v
 					inicfg.save(ini,'Taximate/settings.ini')
 				end
 				if imgui.Checkbox("Горячие клавиши",imgui.ImBool(ini.settings.hotKeys)) then
@@ -1631,14 +1722,15 @@ function imgui.onRenderSettings()
 				if imgui.Button("Перезапустить скрипт") then
 					thisScript():reload()
 				end
-				imgui.Dummy(vec(0,75))
+				imgui.Dummy(vec(0,100))
 				imgui.Text("Сообщить об ошибке или предложить нововведения:")
-				if imgui.Button("VK") then
-					os.execute("start https://vk.com/twonse")
-				end
 				imgui.SameLine()
 				if imgui.Button("GitHub") then
 					os.execute("start https://github.com/21se/Taximate/issues/new")
+				end
+				imgui.SameLine()
+				if imgui.Button("VK") then
+					os.execute("start https://vk.com/twonse")
 				end
 			end
 		imgui.EndChild()
