@@ -1,8 +1,8 @@
 script_name('Taximate')
 script_author("21se(pivo)")
-script_version('1.2.3')
-script_version_number(20)
-script_url("https://21se.github.io/Taximate/")
+script_version('1.2.4')
+script_version_number(21)
+script_url("https://21se.github.io/Taximate")
 script.update = false
 
 local inicfg = require 'inicfg'
@@ -64,6 +64,7 @@ local FORMAT_NOTIFICATIONS ={
 function main()
 	if not isSampLoaded() or not isSampfuncsLoaded() then return end
 	while not isSampAvailable() do wait(100) end
+	sampAddChatMessage(u8:decode('{00CED1}[Taximate v'..thisScript().version..']{FFFFFF} Меню настроек скрипта - {00CED1}/taximate{FFFFFF}, страница скрипта: {00CED1}'.. thisScript().url:gsub('https://', '')),0xFFFFFF)
 
 	repeat
 		wait(100)
@@ -757,7 +758,7 @@ bindMenu = {}
 		{text = "Почини", key = 0, keyadd =0},
 		{text = "Заправь", key = 0, keyadd =0},
 		{text = "/rkt", key = 0, keyadd =0},
-		{text = "", key = 0, keyadd = 0},
+		{text = "Taximate: 21se.github.io/Taximate", key = 0, keyadd = 0},
 		{text = "", key = 0, keyadd = 0},
 		{text = "", key = 0, keyadd = 0},
 		{text = "", key = 0, keyadd = 0},
@@ -1927,7 +1928,7 @@ function checkUpdates()
           file:close()
           os.remove(fpath)
           if info['version_num'] > thisScript()['version_num'] then
-            sampAddChatMessage(u8:decode'[Taximate] Доступна новая версия скрипта. Обновление можно скачать в меню настроек (/taximate)', 0x00CED1)
+						sampAddChatMessage(u8:decode('{00CED1}[Taximate v'..thisScript().version..'] {FFFFFF}Доступна новая версия скрипта. Обновление можно скачать в меню настроек - {00CED1}/taximate'),0xFFFFFF)
 							script.update = true
             return true
           end
@@ -1960,7 +1961,7 @@ end
 function update()
   downloadUrlToFile("https://raw.githubusercontent.com/21se/Taximate/master/taximate.lua", thisScript().path, function(_, status, _, _)
     if status == 6 then
-			sampAddChatMessage(u8:decode'[Taximate] Скрипт обновлён. При возникновении ошибок обращаться в ВК - vk.com/twonse', 0x00CED1)
+			sampAddChatMessage(u8:decode('{00CED1}[Taximate v'..thisScript().version..'] {FFFFFF}Скрипт обновлён. При возникновении ошибок обращаться в ВК - {00CED1}vk.com/twonse'),0xFFFFFF)
       thisScript():reload()
     end
   end)
