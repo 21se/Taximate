@@ -1,7 +1,7 @@
 script_name('Taximate')
 script_author("21se(pivo)")
-script_version('1.2.4')
-script_version_number(21)
+script_version('1.2.5')
+script_version_number(22)
 script_url("https://21se.github.io/Taximate")
 script.update = false
 
@@ -111,6 +111,7 @@ function main()
 
 	while true do
 		wait(0)
+
 		imgui.ShowCursor = false
 
 		if player.onWork then
@@ -157,6 +158,14 @@ function main()
 				player.onWork = true
 				if ini.settings.autoClist then
 					chatManager.addMessageToQueue("/clist "..ini.settings.workClist,true,true)
+				end
+			end
+		end
+
+		if isKeyJustPressed(vkeys.VK_2) then
+			if player.onWork then
+				if vehicleManager.maxPassengers then
+					chatManager.updateAntifloodClock()
 				end
 			end
 		end
@@ -286,6 +295,8 @@ chatManager = {}
 			elseif string.find(message, u8:decode"КЛИЕНТ БАНКА SA") then
 				player.tips = 0
 				player.refreshPlayerInfo()
+			elseif string.find(message, u8:decode"Не флуди!") then
+				chatManager.updateAntifloodClock()
 			end
 		end)
 	end
@@ -358,10 +369,10 @@ orderHandler = {}
 	function orderHandler.updateOrdersDistance()
 		if vehicleManager.vehicleName then
 			if orderHandler.updateOrdersDistanceClock < os.clock() then
-				if not sampIsDialogActive() then
+				if not sampIsDialogActive() and not orderHandler.currentOrder then
 					chatManager.addMessageToQueue("/service",true,true)
-					orderHandler.updateOrdersDistanceClock = os.clock() + ini.settings.ordersDistanceUpdateTimer
 				end
+				orderHandler.updateOrdersDistanceClock = os.clock() + ini.settings.ordersDistanceUpdateTimer
 			end
 		end
 	end
@@ -1410,90 +1421,101 @@ function imgui.onRenderNotification()
 			notification.active = false
 		end
 
-		if (notification.time < os.clock()) and (notification.button and isOrderExist and orderHandler.orderList[notification.orderNickname].direction>0) then
-			notification.active = true
-		end
-		if count < 3 then
-			if not notification.active then
-				if notification.showtime > 0 then
-					notification.active = true
-					notification.time = os.clock() + notification.showtime
-					notification.showtime = 0
+		if not notification.showtime then
+			if notification.time < os.clock() then
+				if notification.button and isOrderExist then
+					if orderHandler.orderList[notification.orderNickname].direction>0 then
+						notification.active = true
+					end
+				else
+					notificationsQueue[notificationIndex] = nil
 				end
 			end
+		end
 
-			if notification.active then
-				count = count + 1
-				if notification.time + 3.000 >= os.clock() then
-					if (notification.time - os.clock()) / 1.0 > 0.95 then
-						imgui.PushStyleVar(imgui.StyleVar.Alpha, 0.95)
-					else
-					imgui.PushStyleVar(imgui.StyleVar.Alpha, (notification.time - os.clock()) / 1.0)
+		if notification then
+			if count < 3 then
+				if not notification.active then
+					if notification.showtime > 0 then
+						notification.active = true
+						notification.time = os.clock() + notification.showtime
+						notification.showtime = 0
 					end
-					push = true
 				end
 
-				local notfPos = 0
-				if orderHandler.currentOrder then
-					notfPos = 37
-				end
-				local notificationTitle = '{4296f9}Taximate notification\t\t\t\t\t{FFFFFF}'.. notification.date
-
-				notfList.pos = { x = ini.settings.hudPosX, y = notfList.pos.y - (notfList.size.y + 15 + sizeWithButton)}
-				imgui.SetNextWindowPos(imgui.ImVec2(toScreenX(notfList.pos.x),toScreenY(notfList.pos.y-notfPos)))
-				imgui.SetNextWindowSize(vec(105, sizeWithButton + notfList.size.y + imgui.GetStyle().ItemSpacing.y + imgui.GetStyle().WindowPadding.y - 5))
-					imgui.Begin('message #' .. notificationIndex, _, imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize + imgui.WindowFlags.NoScrollbar + imgui.WindowFlags.NoMove + imgui.WindowFlags.NoTitleBar)
-					imgui.TextColoredRGB(notificationTitle)
-					imgui.Dummy(vec(0,5))
-					if notification.button then
-						if orderHandler.orderList[notification.orderNickname] then
-							if orderHandler.orderList[notification.orderNickname].direction>0 then
-							 notification.text = string.format(FORMAT_NOTIFICATIONS.newOrderPos, notification.orderNickname, orderHandler.orderList[notification.orderNickname].id, orderHandler.orderList[notification.orderNickname].distance)
-							elseif orderHandler.orderList[notification.orderNickname].direction<0 then
-							 notification.text = string.format(FORMAT_NOTIFICATIONS.newOrderNeg, notification.orderNickname, orderHandler.orderList[notification.orderNickname].id, orderHandler.orderList[notification.orderNickname].distance)
-							end
+				if notification.active then
+					count = count + 1
+					if notification.time + 3.000 >= os.clock() then
+						if (notification.time - os.clock()) / 1.0 > 0.95 then
+							imgui.PushStyleVar(imgui.StyleVar.Alpha, 0.95)
+						else
+							imgui.PushStyleVar(imgui.StyleVar.Alpha, (notification.time - os.clock()) / 1.0)
 						end
-					end
-					imgui.TextColoredRGB(notification.text)
-					imgui.Dummy(vec(0,5))
-					if notification.button then
-						local acceptOrderText = "Принять вызов"
-						if orderHandler.lastCorrectOrderNickname == notification.orderNickname then
-							if ini.settings.hotKeys then
-								if ini.settings.key2 ~= 0 then
-									acceptOrderText = acceptOrderText .. " [" ..vkeys.id_to_name(ini.settings.key2)
-									if ini.settings.key2add ~= 0 then
-										acceptOrderText = acceptOrderText .. " + " ..vkeys.id_to_name(ini.settings.key2add)
+							push = true
+						end
+
+						local notfPos = 0
+						if orderHandler.currentOrder then
+							notfPos = 37
+						end
+						local notificationTitle = '{4296f9}Taximate notification\t\t\t\t\t{FFFFFF}'.. notification.date
+
+						notfList.pos = { x = ini.settings.hudPosX, y = notfList.pos.y - (notfList.size.y + 15 + sizeWithButton)}
+						imgui.SetNextWindowPos(imgui.ImVec2(toScreenX(notfList.pos.x),toScreenY(notfList.pos.y-notfPos)))
+						imgui.SetNextWindowSize(vec(105, sizeWithButton + notfList.size.y + imgui.GetStyle().ItemSpacing.y + imgui.GetStyle().WindowPadding.y - 5))
+							imgui.Begin('message #' .. notificationIndex, _, imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize + imgui.WindowFlags.NoScrollbar + imgui.WindowFlags.NoMove + imgui.WindowFlags.NoTitleBar)
+							imgui.TextColoredRGB(notificationTitle)
+							imgui.Dummy(vec(0,5))
+							if notification.button then
+								if orderHandler.orderList[notification.orderNickname] then
+									if orderHandler.orderList[notification.orderNickname].direction>0 then
+									 notification.text = string.format(FORMAT_NOTIFICATIONS.newOrderPos, notification.orderNickname, orderHandler.orderList[notification.orderNickname].id, orderHandler.orderList[notification.orderNickname].distance)
+									elseif orderHandler.orderList[notification.orderNickname].direction<0 then
+									 notification.text = string.format(FORMAT_NOTIFICATIONS.newOrderNeg, notification.orderNickname, orderHandler.orderList[notification.orderNickname].id, orderHandler.orderList[notification.orderNickname].distance)
 									end
-									acceptOrderText = acceptOrderText .. ']'
 								end
 							end
-						end
-						if imgui.Button(acceptOrderText, vec(100, 10)) then
-							orderHandler.acceptOrder(notification.orderNickname, orderHandler.orderList[notification.orderNickname].time)
+							imgui.TextColoredRGB(notification.text)
 							imgui.Dummy(vec(0,5))
+							if notification.button then
+								local acceptOrderText = "Принять вызов"
+								if orderHandler.lastCorrectOrderNickname == notification.orderNickname then
+									if ini.settings.hotKeys then
+										if ini.settings.key2 ~= 0 then
+											acceptOrderText = acceptOrderText .. " [" ..vkeys.id_to_name(ini.settings.key2)
+											if ini.settings.key2add ~= 0 then
+												acceptOrderText = acceptOrderText .. " + " ..vkeys.id_to_name(ini.settings.key2add)
+											end
+											acceptOrderText = acceptOrderText .. ']'
+										end
+									end
+								end
+								if imgui.Button(acceptOrderText, vec(100, 10)) then
+									orderHandler.acceptOrder(notification.orderNickname, orderHandler.orderList[notification.orderNickname].time)
+									imgui.Dummy(vec(0,5))
+								end
+							end
+						imgui.End()
+						if push then
+							imgui.PopStyleVar()
+						end
+						if not notification.active then
+							notification = nil
 						end
 					end
-				imgui.End()
-				if push then
-					imgui.PopStyleVar()
-				end
-				if not notification.active then
-					notification = nil
 				end
 			end
 		end
-	end
-	notfList = {
-		pos = {
-			x = ini.settings.hudPosX,
-			y = ini.settings.hudPosY
-		},
-		size = {
-			x = 100,
-			y = 33
+		notfList = {
+			pos = {
+				x = ini.settings.hudPosX,
+				y = ini.settings.hudPosY
+			},
+			size = {
+				x = 100,
+				y = 33
+			}
 		}
-	}
 end
 
 function imgui.onRenderSettings()
