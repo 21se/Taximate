@@ -1,7 +1,7 @@
 script_name('Taximate')
 script_author("21se(pivo)")
-script_version('1.2.5')
-script_version_number(22)
+script_version('1.2.6')
+script_version_number(23)
 script_url("https://21se.github.io/Taximate")
 script.update = false
 
@@ -741,6 +741,7 @@ defaultSettings = {}
 	defaultSettings.markers = true
 	defaultSettings.ordersDistanceUpdate = true
 	defaultSettings.ordersDistanceUpdateTimer = 5
+	defaultSettings.soundVolume = 50
 
 soundManager = {}
 	soundManager.soundsList = {}
@@ -751,6 +752,7 @@ soundManager = {}
 
 	function soundManager.playSound(soundName)
 		if soundManager.soundsList[soundName] then
+			setAudioStreamVolume(soundManager.soundsList[soundName], ini.settings.soundVolume/100)
 			setAudioStreamState(soundManager.soundsList[soundName], as_action.PLAY)
 		end
 	end
@@ -1035,6 +1037,7 @@ function imgui.initBuffers()
 	imgui.maxDistanceToAcceptOrder = imgui.ImInt(ini.settings.maxDistanceToAcceptOrder)
 	imgui.maxDistanceToGetOrder = imgui.ImInt(ini.settings.maxDistanceToGetOrder)
 	imgui.ordersDistanceUpdateTimer = imgui.ImInt(ini.settings.ordersDistanceUpdateTimer)
+	imgui.soundVolume = imgui.ImInt(ini.settings.soundVolume)
 end
 
 function imgui.OnDrawFrame()
@@ -1558,9 +1561,35 @@ function imgui.onRenderSettings()
 					inicfg.save(ini,'Taximate/settings.ini')
 				end
 				imgui.SameLine()
-				if imgui.Checkbox("Звуковые уведомления", imgui.ImBool(ini.settings.notifications and ini.settings.sounds)) then
+				if imgui.Checkbox("Звуковые уведомления, ", imgui.ImBool(ini.settings.notifications and ini.settings.sounds)) then
 					ini.settings.sounds = not ini.settings.sounds
 					inicfg.save(ini,'Taximate/settings.ini')
+				end
+				if imgui.IsItemHovered() then
+					imgui.BeginTooltip()
+					imgui.PushTextWrapPos(toScreenX(100))
+					imgui.TextUnformatted("Если звук отсутствует, требуется выставить минимальную громкость игрового радио и перезагрузить игру")
+					imgui.PopTextWrapPos()
+					imgui.EndTooltip()
+				end
+				imgui.SameLine()
+				imgui.Text("громкость: ")
+				imgui.SameLine()
+				imgui.SameLine()
+				imgui.PushItemWidth(toScreenX(40))
+				if imgui.SliderInt("", imgui.soundVolume, 0, 100) then
+					if imgui.soundVolume.v < 0 or imgui.soundVolume.v > 100 then
+						imgui.soundVolume.v = defaultSettings.soundVolume
+					end
+					ini.settings.soundVolume = imgui.soundVolume.v
+					inicfg.save(ini,'Taximate/settings.ini')
+				end
+				if imgui.IsItemHovered() then
+					imgui.BeginTooltip()
+					imgui.PushTextWrapPos(toScreenX(100))
+					imgui.TextUnformatted("Если звук отсутствует, требуется выставить минимальную громкость игрового радио и перезагрузить игру")
+					imgui.PopTextWrapPos()
+					imgui.EndTooltip()
 				end
 				if imgui.Checkbox("Автоматическая отправка СМС клиенту раз в", imgui.ImBool(ini.settings.sendSMS)) then
 					ini.settings.sendSMS = not ini.settings.sendSMS
