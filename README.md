@@ -1,4 +1,4 @@
-Ky)
+# [Скачать Taximate](https://github.com/21se/Taximate/releases)
 
 ## Зависимости (установить перед запуском скрипта)
 -   [CLEO 4](https://cleo.li)
