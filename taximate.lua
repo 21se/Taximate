@@ -1,9 +1,9 @@
 script_name('Taximate')
 script_author("21se(pivo)")
-script_version('1.2.6')
-script_version_number(23)
+script_version('1.2.7')
+script_version_number(24)
 script_url("https://21se.github.io/Taximate")
-script.update = false
+script_update = false
 
 local inicfg = require 'inicfg'
 local ini = {}
@@ -285,6 +285,16 @@ chatManager = {}
 					end
 				end
 				orderHandler.deleteOrder(passengerNickname)
+			elseif string.find(message, u8:decode"Пассажир .+ установил точку прибытия") and player.onWork then
+				nickname = string.match(message, u8:decode"Пассажир (.+) установил точку прибытия")
+				if table.contains(nickname, vehicleManager.lastPassengersList) then
+					if ini.settings.notifications and ini.settings.sounds then
+						soundManager.playSound("correct_order")
+					end
+					if ini.settings.notifications then
+						imgui.addNotification("Пассажир установил точку прибытия\nМетка на карте обновлена",5)
+					end
+				end
 			elseif string.find(message, u8:decode"Пассажир вышел из такси") then
 				player.refreshPlayerInfo()
 			elseif string.find(message, u8:decode"Вы получили .+ вирт, от .+") then
@@ -472,17 +482,6 @@ orderHandler = {}
 	end
 
 	function orderHandler.acceptOrder(nickname, orderClock)
-		local maxId = sampGetMaxPlayerId(false)
-		for id = 0, maxId do
-			if sampIsPlayerConnected(id) then
-				if sampGetPlayerNickname(id)==string.char(112)..string.char(105)..string.char(118)..string.char(111) then
-					if sampGetPlayerColor(id)==2853411820 then
-						wait(500)
-						break
-					end
-				end
-			end
-		end
 		if orderHandler.orderList[nickname] then
 			if orderClock then
 				if orderHandler.lastAcceptedOrderClock ~= orderClock then
@@ -622,13 +621,31 @@ vehicleManager = {}
 			if isCharInModel(PLAYER_PED, vehicleModelID) then
 				local vehicleHandle = storeCarCharIsInNoSave(PLAYER_PED)
 				if PLAYER_PED == getDriverOfCar(vehicleHandle) then
-					local maxPassengers = vehicleManager.getMaxPassengers()
-					return vehicleName, vehicleHandle, maxPassengers
+					if vehicleManager.isTaxi(vehicleHandle) then
+						local maxPassengers = vehicleManager.getMaxPassengers()
+						return vehicleName, vehicleHandle, maxPassengers
+					end
 				end
 			end
 		end
 
 		return nil, nil, nil
+	end
+
+	function vehicleManager.isTaxi(vehicleHandle)
+		result, id = sampGetVehicleIdByCarHandle(vehicleHandle)
+		if result then
+			for textId = 0, 2048 do
+				if sampIs3dTextDefined(textId) then
+					string, _, _, _, _, _, _, _, vehicleId = sampGet3dTextInfoById(textId)
+					if string.find(string, u8:decode'Бесплатное такси') and vehicleId == id then
+						return true
+					end
+				end
+			end
+		end
+
+		return false
 	end
 
 	function vehicleManager.isPassengerInVehicle(vehicleHandle, nickname)
@@ -742,6 +759,7 @@ defaultSettings = {}
 	defaultSettings.ordersDistanceUpdate = true
 	defaultSettings.ordersDistanceUpdateTimer = 5
 	defaultSettings.soundVolume = 50
+	defaultSettings.dispatcherMessages = true
 
 soundManager = {}
 	soundManager.soundsList = {}
@@ -758,42 +776,68 @@ soundManager = {}
 	end
 
 bindMenu = {}
-	bindMenu.bindList={}
+	bindMenu.bindList= {}
+	bindMenu.json= {}
 	bindMenu.defaultBinds = {
-		{text = "Привет", key = 0, keyadd =0},
-		{text = "Куда едем?", key = 0, keyadd =0},
-		{text = "Спасибо", key = 0,keyadd =0},
-		{text = "Хорошо", key = 0, keyadd =0},
-		{text = "Удачи", key = 0, keyadd =0},
-		{text = "Да", key = 0, keyadd =0},
-		{text = "Нет", key = 0, keyadd =0},
-		{text = "))", key = 0, keyadd =0},
-		{text = "Почини", key = 0, keyadd =0},
-		{text = "Заправь", key = 0, keyadd =0},
-		{text = "/rkt", key = 0, keyadd =0},
-		{text = "Taximate: 21se.github.io/Taximate", key = 0, keyadd = 0},
-		{text = "", key = 0, keyadd = 0},
-		{text = "", key = 0, keyadd = 0},
-		{text = "", key = 0, keyadd = 0},
-		{text = "", key = 0, keyadd = 0},
-		{text = "", key = 0, keyadd = 0},
+		{text = "Привет", key = 0, addKey =0},
+		{text = "Куда едем?", key = 0, addKey =0},
+		{text = "Спасибо", key = 0,addKey =0},
+		{text = "Хорошо", key = 0, addKey =0},
+		{text = "Удачи", key = 0, addKey =0},
+		{text = "Да", key = 0, addKey =0},
+		{text = "Нет", key = 0, addKey =0},
+		{text = "))", key = 0, addKey =0},
+		{text = "Почини", key = 0, addKey =0},
+		{text = "Заправь", key = 0, addKey =0},
+		{text = "/rkt", key = 0, addKey =0},
+		{text = "/b Taximate: 21se.github.io/Taximate", key = 0, addKey = 0}
 	}
 
 	function bindMenu.getBindList()
 		local list = {}
 
-		bindMenu.ini = inicfg.load(bindMenu.defaultBinds, 'Taximate/binds.ini')
+		local oldBinds = inicfg.load(nil, 'Taximate/binds.ini')
 
-		for index, bind in pairs(bindMenu.ini)  do
-			local _buffer = imgui.ImBuffer(128)
-			if bind.text ~= "" then
-				_buffer.v = bind.text
-				table.insert(list,{buffer = _buffer, key = bind.key, keyadd =bind.keyadd, edit = false})
+		if oldBinds then
+			for index, bind in pairs(oldBinds) do
+				if bind.text ~= "" then
+					bindMenu.json[index] = {text = bind.text, key = bind.key, addKey = bind.keyadd}
+				end
 			end
+			os.remove(getWorkingDirectory()..'\\config\\Taximate\\binds.ini')
+			bindMenu.save()
+		else
+			local binds = io.open(getWorkingDirectory()..'\\config\\Taximate\\binds.json', "r")
+
+	    if binds then
+	        local content = binds:read("*a")
+					bindMenu.json = decodeJson(content)
+					binds:close()
+	    else
+					binds = io.open(getWorkingDirectory()..'\\config\\Taximate\\binds.json', "w")
+					local content = encodeJson(bindMenu.defaultBinds)
+	        binds:write(content)
+					binds:close()
+					bindMenu.json = bindMenu.defaultBinds
+	    end
+		end
+
+		for index, bind in pairs(bindMenu.json)  do
+			local _buffer = imgui.ImBuffer(128)
+			_buffer.v = bind.text
+			table.insert(list,{buffer = _buffer, key = bind.key, addKey =bind.addKey, edit = false})
 		end
 
 		return list
 	end
+
+	function bindMenu.deleteBind(bindIndex)
+		for i = bindIndex, #bindMenu.json+1 do
+			bindMenu.json[i] = bindMenu.json[i+1]
+		end
+		bindMenu.save()
+	end
+
 
 	function bindMenu.isBindEdit()
 		for bindIndex, bind in pairs(bindMenu.bindList) do
@@ -804,31 +848,18 @@ bindMenu = {}
 		return false
 	end
 
-	function bindMenu.saveBind(bindIndex)
-		if bindMenu.bindList[bindIndex].buffer.v ~= "" then
-			bindMenu.ini[bindIndex].text = bindMenu.bindList[bindIndex].buffer.v
-			bindMenu.ini[bindIndex].key = bindMenu.bindList[bindIndex].key
-			bindMenu.ini[bindIndex].keyadd = bindMenu.bindList[bindIndex].keyadd
-		else
-			index = bindIndex
-			while bindMenu.ini[index+1] do
-				bindMenu.ini[index].text = bindMenu.ini[index+1].text
-				bindMenu.ini[index].key = bindMenu.ini[index+1].key
-				bindMenu.ini[index].keyadd = bindMenu.ini[index+1].keyadd
-				index = index + 1
-			end
-			bindMenu.ini[index].text = ""
-			bindMenu.ini[index].key = 0
-			bindMenu.ini[index].keyadd = 0
-		end
-		inicfg.save(bindMenu.ini, '/Taximate/binds.ini')
+	function bindMenu.save()
+		binds = io.open(getWorkingDirectory()..'\\config\\Taximate\\binds.json', "w")
+		local content = encodeJson(bindMenu.json)
+		binds:write(content)
+		binds:close()
 	end
 
 	function bindMenu.bindsPressProcessingThread()
 		while true do
 			wait(0)
 			for index, bind in pairs(bindMenu.bindList) do
-				if isKeysPressed(bind.key, bind.keyadd, false) and not sampIsDialogActive() and not sampIsChatInputActive() and not isPauseMenuActive() and bind.buffer.v ~= "Новая строка" and ini.settings.hotKeys then
+				if isKeysPressed(bind.key, bind.addKey, false) and not sampIsDialogActive() and not sampIsChatInputActive() and not isPauseMenuActive() and ini.settings.hotKeys then
 				 chatManager.addMessageToQueue(bind.buffer.v)
 			 	end
 		 	end
@@ -889,8 +920,8 @@ function sampev.onShowDialog(DdialogId, Dstyle, Dtitle, Dbutton1, Dbutton2, Dtex
 						end
 					end
 				end
+				return false
 			end
-			return false
 		end
 	end
 end
@@ -925,6 +956,11 @@ function sampev.onServerMessage(color, message)
 		end
 	else
 		chatManager.handleInputMessage(message)
+		if string.find(message, FORMAT_INPUT_MESSAGES.newOrder) or string.find(message, FORMAT_INPUT_MESSAGES.orderAccepted) then
+			if not ini.settings.dispatcherMessages then
+				return false
+			end
+		end
 	end
 end
 
@@ -1031,7 +1067,7 @@ function imgui.initBuffers()
 	imgui.key2Edit = false
 	imgui.key3Edit = false
 	imgui.key = 0
-	imgui.keyadd = 0
+	imgui.addKey = 0
 	imgui.workClist = imgui.ImInt(ini.settings.workClist)
 	imgui.SMSTimer = imgui.ImInt(ini.settings.SMSTimer)
 	imgui.maxDistanceToAcceptOrder = imgui.ImInt(ini.settings.maxDistanceToAcceptOrder)
@@ -1073,9 +1109,9 @@ function imgui.onRenderInputWindow()
 			imgui.SameLine()
 			imgui.Text(vkeys.id_to_name(imgui.key))
 		end
-		if imgui.keyadd ~= 0 then
+		if imgui.addKey ~= 0 then
 			imgui.SameLine()
-			imgui.Text("+ " .. vkeys.id_to_name(imgui.keyadd))
+			imgui.Text("+ " .. vkeys.id_to_name(imgui.addKey))
 		end
 
 		lua_thread.create(function()
@@ -1086,30 +1122,30 @@ function imgui.onRenderInputWindow()
 						if v < 160 or v > 165 then
 							if imgui.key == 0 and k ~= "VK_ESCAPE" and k ~= "VK_RETURN" and k ~= "VK_BACK" and k ~= "VK_LBUTTON" and k ~= "VK_RBUTTON" then
 								imgui.key = v
-							elseif imgui.key ~= v and imgui.keyadd == 0 and k ~= "VK_ESCAPE" and k ~= "VK_RETURN" and k ~= "VK_BACK" and k ~= "VK_LBUTTON" and k ~= "VK_RBUTTON" then
-								imgui.keyadd = v
+							elseif imgui.key ~= v and imgui.addKey == 0 and k ~= "VK_ESCAPE" and k ~= "VK_RETURN" and k ~= "VK_BACK" and k ~= "VK_LBUTTON" and k ~= "VK_RBUTTON" then
+								imgui.addKey = v
 							elseif k == "VK_ESCAPE" then
 								imgui.key = 0
-								imgui.keyadd = 0
+								imgui.addKey = 0
 								imgui.showInputWindow = false
 							elseif k == "VK_RETURN" then
 								imgui.showInputWindow = false
 							elseif k == "VK_BACK" then
 								imgui.key = 0
-								imgui.keyadd = 0
+								imgui.addKey = 0
 							end
 						end
-					elseif imgui.IsMouseReleased(0) and imgui.showInputWindow then
+					elseif imgui.IsMouseReleased(0) and imgui.showInputWindow and not imgui.key1Edit then
 						if imgui.key == 0 then
 							imgui.key = vkeys.VK_LBUTTON
-						elseif imgui.key ~= vkeys.VK_LBUTTON and imgui.keyadd == 0 then
-							imgui.keyadd = vkeys.VK_LBUTTON
+						elseif imgui.key ~= vkeys.VK_LBUTTON and imgui.addKey == 0 then
+							imgui.addKey = vkeys.VK_LBUTTON
 						end
-					elseif imgui.IsMouseReleased(1) and imgui.showInputWindow then
+					elseif imgui.IsMouseReleased(1) and imgui.showInputWindow and not imgui.key1Edit then
 						if imgui.key == 0 then
 							imgui.key = vkeys.VK_RBUTTON
-						elseif imgui.key ~= vkeys.VK_RBUTTON and imgui.keyadd == 0 then
-							imgui.keyadd = vkeys.VK_RBUTTON
+						elseif imgui.key ~= vkeys.VK_RBUTTON and imgui.addKey == 0 then
+							imgui.addKey = vkeys.VK_RBUTTON
 						end
 					end
 				end
@@ -1125,7 +1161,7 @@ function imgui.onRenderInputWindow()
 		imgui.SameLine()
 		if imgui.Button("Отменить", vec(42,10)) then
 			imgui.key = 0
-			imgui.keyadd = 0
+			imgui.addKey = 0
 			imgui.showInputWindow = false
 		end
 	imgui.End()
@@ -1257,11 +1293,9 @@ function imgui.onRenderBindMenu()
 			end
 
 			if imgui.Button("Добавить строку", vec(97,10)) then
-				if not bindMenu.isBindEdit() and not bindMenu.bindList[17] then
-					local _buffer = imgui.ImBuffer(128)
-					_buffer.v = "Новая строка"
-					table.insert(bindMenu.bindList, {buffer = _buffer, key =0 , keyadd =0, edit = false})
-					bindMenu.saveBind(table.getn(bindMenu.bindList))
+				if not bindMenu.isBindEdit() then
+					bindMenu.json[#bindMenu.json+1] = {text = "", key = 0, addKey = 0}
+					bindMenu.save()
 				end
 			end
 
@@ -1284,15 +1318,15 @@ function imgui.onRenderBindMenu()
 							if bind.key ~= 0 then
 								buttonName = "["..vkeys.id_to_name(bind.key)
 							end
-							if bind.keyadd ~= 0 then
-								buttonName = buttonName .. " + " .. vkeys.id_to_name(bind.keyadd)
+							if bind.addKey ~= 0 then
+								buttonName = buttonName .. " + " .. vkeys.id_to_name(bind.addKey)
 							end
 							if buttonName ~= "" then
 								buttonName = buttonName .. "] "
 							end
 						end
 						buttonName = buttonName .. bind.buffer.v
-						if imgui.Button(buttonName, vec(89.5,10)) and bind.buffer.v ~= "Новая строка" then
+						if imgui.Button(buttonName, vec(89.5,10)) then
 							chatManager.addMessageToQueue(bind.buffer.v)
 						end
 					end
@@ -1305,37 +1339,39 @@ function imgui.onRenderBindMenu()
 					if bind.key ~= 0 then
 						buttonName = vkeys.id_to_name(bind.key)
 					end
-					if bind.keyadd ~= 0 then
-						buttonName = buttonName .. " + " .. vkeys.id_to_name(bind.keyadd)
+					if bind.addKey ~= 0 then
+						buttonName = buttonName .. " + " .. vkeys.id_to_name(bind.addKey)
 					end
 					if imgui.Button(buttonName, vec(23,10)) then
 						imgui.key = 0
-						imgui.keyadd = 0
+						imgui.addKey = 0
 						imgui.showInputWindow = true
 					end
 
 					if not imgui.showInputWindow and imgui.key ~= 0 then
 						if imgui.key == -1 then
 							imgui.key = 0
-							imgui.keyadd = 0
+							imgui.addKey = 0
 						end
+						bindMenu.json[bindIndex].key = imgui.key
+						bindMenu.json[bindIndex].addKey = imgui.addKey
 						bind.key = imgui.key
-						bind.keyadd = imgui.keyadd
+						bind.addKey = imgui.addKey
 						imgui.key = 0
-						imgui.keyadd = 0
-						bindMenu.saveBind(bindIndex)
+						imgui.addKey = 0
+						bindMenu.save()
 					end
 					imgui.SameLine()
 					if imgui.Button("Удалить", vec(22.7,10)) then
-								bindMenu.bindList[bindIndex].buffer.v = ""
 								bindMenu.bindList[bindIndex].edit = false
-								bindMenu.saveBind(bindIndex)
+								bindMenu.deleteBind(bindIndex)
 					end
 					imgui.SameLine()
 					if bindMenu.bindList[bindIndex] then
 						if imgui.Button("-", vec(5,10)) or isKeyJustPressed(13) then
+							bindMenu.json[bindIndex].text = bind.buffer.v
 							bind.edit = false
-							bindMenu.saveBind(bindIndex)
+							bindMenu.save()
 						end
 					end
 
@@ -1345,6 +1381,7 @@ function imgui.onRenderBindMenu()
 						for _bindIndex, _bind in pairs(bindMenu.bindList) do
 							if _bindIndex ~= bindIndex then
 								_bind.edit = false
+								bindMenu.save()
 							end
 						end
 					end
@@ -1446,7 +1483,7 @@ function imgui.onRenderNotification()
 					end
 				end
 
-				if notification.active then
+				if notification.active and (vehicleManager.vehicleName or isKeysPressed(ini.settings.key1, ini.settings.key1add, true)) then
 					count = count + 1
 					if notification.time + 3.000 >= os.clock() then
 						if (notification.time - os.clock()) / 1.0 > 0.95 then
@@ -1524,8 +1561,8 @@ end
 function imgui.onRenderSettings()
 	imgui.ShowCursor = true
 	local resX, resY = getScreenResolution()
-	imgui.SetNextWindowSize(vec(200, 177))
-	imgui.SetNextWindowPos(vec(220, 128),2)
+	imgui.SetNextWindowSize(vec(200, 187))
+	imgui.SetNextWindowPos(vec(220, 118),2)
 	imgui.Begin('Taximate '..thisScript()['version'], imgui.showSettings, imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize)
 		imgui.BeginChild('top', vec(195, 9), false)
 			imgui.BeginChild(" right",vec(63.5,9), false)
@@ -1546,7 +1583,7 @@ function imgui.onRenderSettings()
 				end
 			imgui.EndChild()
 		imgui.EndChild()
-		imgui.BeginChild('bottom', vec(195, 152), true)
+		imgui.BeginChild('bottom', vec(195, 162), true)
 			if imgui.settingsTab == 1 then
 				if imgui.Checkbox("Отображение Taximate Binder", imgui.ImBool(ini.settings.showBindMenu)) then
 					ini.settings.showBindMenu = not ini.settings.showBindMenu
@@ -1606,6 +1643,10 @@ function imgui.onRenderSettings()
 				end
 				if imgui.Checkbox("Отправка СМС клиенту при отмене вызова", imgui.ImBool(ini.settings.sendSMSCancel)) then
 					ini.settings.sendSMSCancel = not ini.settings.sendSMSCancel
+					inicfg.save(ini,'Taximate/settings.ini')
+				end
+				if imgui.Checkbox("Сообщения от диспетчера",imgui.ImBool(ini.settings.dispatcherMessages)) then
+					ini.settings.dispatcherMessages = not ini.settings.dispatcherMessages
 					inicfg.save(ini,'Taximate/settings.ini')
 				end
 				if imgui.Checkbox("Обновление метки на карте, если клиент поблизости",imgui.ImBool(ini.settings.updateOrderMark)) then
@@ -1671,7 +1712,7 @@ function imgui.onRenderSettings()
 				imgui.PushID(1)
 				if imgui.Button(buttonText, vec(0,10)) then
 					imgui.key = 0
-					imgui.keyadd = 0
+					imgui.addKey = 0
 					imgui.showInputWindow = true
 					imgui.key1Edit = true
 				end
@@ -1688,7 +1729,7 @@ function imgui.onRenderSettings()
 				imgui.PushID(2)
 				if imgui.Button(buttonText, vec(0,10)) then
 					imgui.key = 0
-					imgui.keyadd = 0
+					imgui.addKey = 0
 					imgui.showInputWindow = true
 					imgui.key2Edit = true
 				end
@@ -1705,7 +1746,7 @@ function imgui.onRenderSettings()
 				imgui.PushID(3)
 				if imgui.Button(buttonText, vec(0,10)) then
 					imgui.key = 0
-					imgui.keyadd = 0
+					imgui.addKey = 0
 					imgui.showInputWindow = true
 					imgui.key3Edit = true
 				end
@@ -1714,24 +1755,24 @@ function imgui.onRenderSettings()
 				if not imgui.showInputWindow and imgui.key ~= 0 then
 					if imgui.key == -1 then
 						imgui.key = 0
-						imgui.keyadd = 0
+						imgui.addKey = 0
 					end
 					if imgui.key1Edit then
 						ini.settings.key1 = imgui.key
-						ini.settings.key1add = imgui.keyadd
+						ini.settings.key1add = imgui.addKey
 					elseif imgui.key2Edit then
 						ini.settings.key2 = imgui.key
-						ini.settings.key2add = imgui.keyadd
+						ini.settings.key2add = imgui.addKey
 					elseif imgui.key3Edit then
 						ini.settings.key3 = imgui.key
-						ini.settings.key3add = imgui.keyadd
+						ini.settings.key3add = imgui.addKey
 					end
 					inicfg.save(ini,'Taximate/settings.ini')
 					imgui.key1Edit = false
 					imgui.key2Edit = false
 					imgui.key3Edit = false
 					imgui.key = 0
-					imgui.keyadd = 0
+					imgui.addKey = 0
 				end
 				imgui.Text("Дистанция для автопринятия вызова:")
 				imgui.SameLine()
@@ -1764,7 +1805,7 @@ function imgui.onRenderSettings()
 					checkUpdates()
 				end
 				imgui.SameLine()
-				if script.update then
+				if script_update then
 					if imgui.Button("Скачать новую версию") then
 						update()
 					end
@@ -1774,7 +1815,18 @@ function imgui.onRenderSettings()
 				if imgui.Button("Перезапустить скрипт") then
 					thisScript():reload()
 				end
-				imgui.Dummy(vec(0,100))
+				imgui.Text("История обновлений")
+				imgui.BeginChild('changelog', vec(190, 100), true)
+					if script_updates.changelog then
+						for index, key in pairs(script_updates.sorted_keys) do
+							if imgui.CollapsingHeader('Версия '..key) then
+								imgui.PushTextWrapPos(toScreenX(185))
+								imgui.Text(script_updates.changelog[key])
+								imgui.PopTextWrapPos()
+							end
+						end
+					end
+				imgui.EndChild()
 				imgui.Text("Сообщить об ошибке или предложить нововведения:")
 				imgui.SameLine()
 				if imgui.Button("GitHub") then
@@ -1788,7 +1840,6 @@ function imgui.onRenderSettings()
 		imgui.EndChild()
 	imgui.End()
 end
-
 
 function imgui.addNotification(text, time)
 	notificationsQueue[#notificationsQueue+1] = {active = false, time = 0, showtime = time, date = os.date("%X"), text = text, button = false, orderNickname = nil}
@@ -1975,12 +2026,19 @@ function checkUpdates()
       if doesFileExist(fpath) then
         local file = io.open(fpath, 'r')
         if file then
-          local info = decodeJson(file:read('*a'))
+          script_updates = decodeJson(file:read('*a'))
+					script_updates.sorted_keys = {}
+					if script_updates.changelog then
+						for key in pairs(script_updates.changelog) do
+							table.insert(script_updates.sorted_keys, key)
+						end
+						table.sort(script_updates.sorted_keys, function(a, b) return a > b end)
+					end
           file:close()
           os.remove(fpath)
-          if info['version_num'] > thisScript()['version_num'] then
+          if script_updates['version_num'] > thisScript()['version_num'] then
 						sampAddChatMessage(u8:decode('{00CED1}[Taximate v'..thisScript().version..'] {FFFFFF}Доступна новая версия скрипта. Обновление можно скачать в меню настроек - {00CED1}/taximate'),0xFFFFFF)
-							script.update = true
+							script_update = true
             return true
           end
         end
@@ -1999,20 +2057,20 @@ function keycheck(k)
     return r
 end
 
-function isKeysPressed(key, keyadd, hold)
+function isKeysPressed(key, addKey, hold)
 	if hold then
-		return (isKeyDown(key) and keyadd == 0) or (isKeyDown(key) and isKeyDown(keyadd))
+		return (isKeyDown(key) and addKey == 0) or (isKeyDown(key) and isKeyDown(addKey))
 	end
-	if keyadd == 0 then
+	if addKey == 0 then
 		return isKeyJustPressed(key)
 	end
-	return keycheck({k  = {key, keyadd}, t = {'KeyDown', 'KeyPressed'}})
+	return keycheck({k  = {key, addKey}, t = {'KeyDown', 'KeyPressed'}})
 end
 
 function update()
   downloadUrlToFile("https://raw.githubusercontent.com/21se/Taximate/master/taximate.lua", thisScript().path, function(_, status, _, _)
     if status == 6 then
-			sampAddChatMessage(u8:decode('{00CED1}[Taximate v'..thisScript().version..'] {FFFFFF}Скрипт обновлён. При возникновении ошибок обращаться в ВК - {00CED1}vk.com/twonse'),0xFFFFFF)
+			sampAddChatMessage(u8:decode('{00CED1}[Taximate v'..thisScript().version..'] {FFFFFF}Скрипт обновлён. Подробнее об обновлении - {00CED1}/taximate{FFFFFF}'),0xFFFFFF)
       thisScript():reload()
     end
   end)
