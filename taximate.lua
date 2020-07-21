@@ -1,7 +1,7 @@
 script_name('Taximate')
 script_author("21se(pivo)")
-script_version('1.2.7')
-script_version_number(25)
+script_version('1.2.8')
+script_version_number(27)
 script_url("https://21se.github.io/Taximate")
 script_update = false
 script_updates = {}
@@ -192,33 +192,55 @@ chatManager = {}
 	chatManager.messagesQueue = {}
 	chatManager.messagesQueueSize = 10
 	chatManager.antifloodClock = os.clock()
+	chatManager.lastMessage = ""
+	chatManager.antifloodDelay = 0.6
 
 	function chatManager.updateAntifloodClock()
 		chatManager.antifloodClock = os.clock()
+		if string.sub(chatManager.lastMessage, 1, 4) == '/sms' then
+			chatManager.antifloodClock = chatManager.antifloodClock + 0.5
+		end
 	end
 
 	function chatManager.checkMessagesQueueThread()
 		while true do
 			wait(0)
 			for messageIndex = 1, chatManager.messagesQueueSize do
-				if chatManager.messagesQueue[messageIndex].message ~= '' and os.clock() - chatManager.antifloodClock > 1 then
-					if chatManager.messagesQueue[messageIndex].hideResult then
-						if string.find(chatManager.messagesQueue[messageIndex].message, '/jskill') then
-							player.skillCheck = true
-						elseif string.find(chatManager.messagesQueue[messageIndex].message,'/paycheck') then
-							player.payCheck = true
-						elseif string.find(chatManager.messagesQueue[messageIndex].message,'/clist') then
-							player.clistEnable = true
-						elseif string.find(chatManager.messagesQueue[messageIndex].message,'/gps') then
-							player.removeGPSmark = true
-						elseif string.find(chatManager.messagesQueue[messageIndex].message,'/service') then
-							player.updateDistance = true
-						end
+				if chatManager.messagesQueue[messageIndex].message ~= '' then
+					if string.sub(chatManager.lastMessage, 1, 1) ~= '/' and string.sub(chatManager.messagesQueue[messageIndex].message, 1, 1) ~= '/' then
+						chatManager.antifloodDelay = chatManager.antifloodDelay + 0.5
 					end
-					sampSendChat(u8:decode(chatManager.messagesQueue[messageIndex].message))
-					chatManager.messagesQueue[messageIndex].message = ''
-					chatManager.messagesQueue[messageIndex].hideResult = false
-					chatManager.updateAntifloodClock()
+					if os.clock() - chatManager.antifloodClock > chatManager.antifloodDelay then
+
+						if string.find(chatManager.messagesQueue[messageIndex].message,'/service ac taxi') then
+							player.acceptOrder = true
+						end
+
+						if chatManager.messagesQueue[messageIndex].hideResult then
+							if string.find(chatManager.messagesQueue[messageIndex].message, '/jskill') then
+								player.skillCheck = true
+							elseif string.find(chatManager.messagesQueue[messageIndex].message,'/paycheck') then
+								player.payCheck = true
+							elseif string.find(chatManager.messagesQueue[messageIndex].message,'/clist') then
+								player.clistEnable = true
+							elseif string.find(chatManager.messagesQueue[messageIndex].message,'/gps') then
+								player.removeGPSmark = true
+							elseif string.find(chatManager.messagesQueue[messageIndex].message,'/service') then
+								player.updateDistance = true
+							end
+						end
+						if not (sampIsDialogActive() and (player.skillCheck or player.removeGPSmark or player.updateDistance)) then
+							chatManager.lastMessage = u8:decode(chatManager.messagesQueue[messageIndex].message)
+							sampSendChat(u8:decode(chatManager.messagesQueue[messageIndex].message))
+						else
+							player.skillCheck = false
+							player.removeGPSmark = false
+							player.updateDistance = false
+						end
+						chatManager.messagesQueue[messageIndex].message = ''
+						chatManager.messagesQueue[messageIndex].hideResult = false
+					end
+					chatManager.antifloodDelay = 0.6
 				end
 			end
 		end
@@ -246,11 +268,14 @@ chatManager = {}
 			if string.find(message, INPUT_MESSAGES.newOrder) and player.onWork then
 				local time = os.clock()
 				local nickname, id, distance = string.match(message, FORMAT_INPUT_MESSAGES.newOrder)
-				distance = string2Meters(distance)
+				distance = stringToMeters(distance)
 				orderHandler.addOrder(nickname, id, distance, time)
 			elseif string.find(message, INPUT_MESSAGES.orderAccepted) and player.onWork then
 				local driverNickname, passengerNickname = string.match(message, FORMAT_INPUT_MESSAGES.orderAccepted)
 				if driverNickname == player.nickname then
+					if player.acceptOrder then
+						player.acceptOrder = false
+					end
 					if orderHandler.currentOrder then
 						if orderHandler.currentOrder.nickname ~= passengerNickname then
 							if ini.settings.notifications and ini.settings.sounds then
@@ -261,6 +286,9 @@ chatManager = {}
 							end
 						else
 							orderHandler.currentOrder.repeatCount = orderHandler.currentOrder.repeatCount + 1
+
+							orderHandler.updateMark()
+
 						end
 					elseif orderHandler.orderList[passengerNickname] then
 						if ini.settings.notifications and ini.settings.sounds then
@@ -272,17 +300,7 @@ chatManager = {}
 						orderHandler.currentOrder = orderHandler.orderList[passengerNickname]
 						orderHandler.currentOrder.SMSClock = os.clock()
 
-						wait(500)
-
-						local result, posX, posY, posZ = getGPSMarkCoords3d()
-						if result then
-							orderHandler.currentOrder.pos.x = posX
-							orderHandler.currentOrder.pos.y = posY
-							orderHandler.currentOrder.pos.z = posZ
-							orderHandler.currentOrder.distance = getDistanceToCoords3d(orderHandler.currentOrder.pos.x,orderHandler.currentOrder.pos.y,orderHandler.currentOrder.pos.z)
-							orderHandler.currentOrder.currentDistance = orderHandler.currentOrder.distance
-							orderHandler.currentOrder.showMark = true
-						end
+						orderHandler.updateMark()
 					end
 				end
 				orderHandler.deleteOrder(passengerNickname)
@@ -372,15 +390,30 @@ orderHandler = {}
 			removeBlip(orderHandler.currentOrderBlip)
 			orderHandler.currentOrderBlip = nil
 			orderHandler.currentOrderCheckpoint = nil
-		elseif not sampIsDialogActive() then
+		else
 			chatManager.addMessageToQueue("/gps", true, true)
+		end
+	end
+
+	function orderHandler.updateMark()
+		wait(500)
+		if orderHandler.currentOrder then
+			local result, posX, posY, posZ = getGPSMarkCoords3d()
+			if result then
+				orderHandler.currentOrder.pos.x = posX
+				orderHandler.currentOrder.pos.y = posY
+				orderHandler.currentOrder.pos.z = posZ
+				orderHandler.currentOrder.distance = getDistanceToCoords3d(orderHandler.currentOrder.pos.x,orderHandler.currentOrder.pos.y,orderHandler.currentOrder.pos.z)
+				orderHandler.currentOrder.currentDistance = orderHandler.currentOrder.distance
+				orderHandler.currentOrder.showMark = true
+			end
 		end
 	end
 
 	function orderHandler.updateOrdersDistance()
 		if vehicleManager.vehicleName then
 			if orderHandler.updateOrdersDistanceClock < os.clock() then
-				if not sampIsDialogActive() and not orderHandler.currentOrder then
+				if not orderHandler.currentOrder then
 					chatManager.addMessageToQueue("/service",true,true)
 				end
 				orderHandler.updateOrdersDistanceClock = os.clock() + ini.settings.ordersDistanceUpdateTimer
@@ -423,9 +456,7 @@ orderHandler = {}
 								orderHandler.currentOrderBlip = addBlipForCoord(orderHandler.currentOrder.pos.x, orderHandler.currentOrder.pos.y, orderHandler.currentOrder.pos.z)
 								changeBlipColour(orderHandler.currentOrderBlip, 0xBB0000FF)
 								orderHandler.currentOrderCheckpoint = createCheckpoint(1, orderHandler.currentOrder.pos.x, orderHandler.currentOrder.pos.y, orderHandler.currentOrder.pos.z, orderHandler.currentOrder.pos.x, orderHandler.currentOrder.pos.y, orderHandler.currentOrder.pos.z, 2.99)
-								if not sampIsDialogActive() then
-									chatManager.addMessageToQueue("/gps", true, true)
-								end
+								chatManager.addMessageToQueue("/gps", true, true)
 								if ini.settings.notifications then
 									imgui.addNotification("Клиент поблизости\nМетка на карте обновлена",5)
 								end
@@ -497,8 +528,8 @@ orderHandler = {}
 		while true do
 			wait(0)
 			for nickname, order in pairs(orderHandler.orderList) do
-				if os.clock() - order.time > 30 or not sampIsPlayerConnected(order.id) or not sampGetPlayerNickname(order.id)==order.nickname then
-					orderHandler.orderList[nickname] = nil
+				if os.clock() - order.time > 600 or not sampIsPlayerConnected(order.id) or not sampGetPlayerNickname(order.id)==order.nickname then
+					orderHandler.deleteOrder(nickname)
 				end
 			end
 		end
@@ -518,11 +549,11 @@ orderHandler = {}
 			if not table.contains(orderNickname, vehicleManager.lastPassengersList) or ini.settings.acceptLastPassengersOrders then
 				if table.isEmpty(vehicleManager.passengersList) then
 					if orderHandler.autoAccept then
-						if orderDistance <= ini.settings.maxDistanceToAcceptOrder then
+						if orderDistance <= ini.settings.maxDistanceToAcceptOrder and os.clock() - 60 < orderClock then
 							orderHandler.acceptOrder(orderNickname, orderClock)
 						end
 					else
-						if orderDistance <= ini.settings.maxDistanceToGetOrder then
+						if orderDistance <= ini.settings.maxDistanceToGetOrder and os.clock() - 60 < orderClock then
 							if not orderHandler.orderList[orderNickname].correct then
 								orderHandler.orderList[orderNickname].correct = true
 								if ini.settings.notifications and ini.settings.sounds then
@@ -537,7 +568,7 @@ orderHandler = {}
 						end
 					end
 				else
-					if orderDistance <= ini.settings.maxDistanceToGetOrder then
+					if orderDistance <= ini.settings.maxDistanceToGetOrder and os.clock() - 60 < orderClock then
 						if not orderHandler.orderList[orderNickname].correct then
 							orderHandler.orderList[orderNickname].correct = true
 							if ini.settings.notifications and ini.settings.sounds then
@@ -720,12 +751,13 @@ player = {}
 	player.salaryLimit = 0
 	player.tips = 0
 	player.updateDistance = false
+	player.connected = false
+	player.acceptOrder = false
 
 	function player.refreshPlayerInfo()
 		chatManager.addMessageToQueue("/paycheck",true , true)
-		if not sampIsDialogActive() then
-			chatManager.addMessageToQueue("/jskill", true, true)
-		end
+		chatManager.addMessageToQueue("/jskill", true, true)
+		player.connected = true
 	end
 
 defaultSettings = {}
@@ -868,59 +900,56 @@ bindMenu = {}
 	end
 
 function sampev.onShowDialog(DdialogId, Dstyle, Dtitle, Dbutton1, Dbutton2, Dtext)
-	if Dstyle == 0 and string.find(Dtext, u8:decode"Таксист") then
-		lua_thread.create(function()
-			local line = 0
-			for string in string.gmatch(Dtext, '[^\n]+') do
-				line = line + 1
-				if line == 5 then
-					player.skill, player.skillExp = string.match(string, u8:decode"Скилл: (%d+)	Опыт: .+ (%d+%.%d+)%%")
-				end
-				if line == 6 then
-					player.rank, player.rankExp = string.match(string, u8:decode"Ранг: (%d+)  	Опыт: .+ (%d+%.%d+)%%")
-				end
-			end
-		end)
-		if player.skillCheck then
-			player.skillCheck = false
-			return false
-		end
-	elseif string.find(Dtitle, "GPS") then
-		if player.removeGPSmark then
-			player.removeGPSmark = false
-			return false
-		else
-			if orderHandler.currentOrderBlip then
-				orderHandler.currentOrder.showMark = false
-				removeBlip(orderHandler.currentOrderBlip)
-				deleteCheckpoint(orderHandler.currentOrderCheckpoint)
-				orderHandler.currentOrderBlip = nil
-				orderHandler.currentOrderCheckpoint = nil
-			end
-		end
-	elseif string.find(Dtitle, u8:decode"Вызовы") then
-		if player.onWork then
-			if player.updateDistance then
-				player.updateDistance = false
+	if player.connected then
+		if Dstyle == 0 and string.find(Dtext, u8:decode"Таксист") then
+			lua_thread.create(function()
+				local line = 0
 				for string in string.gmatch(Dtext, '[^\n]+') do
-					if string.find(string, u8:decode"сек") then
-						local nickname, id, time, distance = string.match(string, u8:decode"%[%d+%] (.+)%[ID:(%d+)%]	(%d+) сек	(.+)")
-						time = tonumber(time)
-						distance = string2Meters(distance)
-						if time < 30 then
-							if orderHandler.orderList[nickname] then
-								if distance < orderHandler.orderList[nickname].distance then
-									orderHandler.orderList[nickname].direction = 1
-								elseif distance > orderHandler.orderList[nickname].distance then
-									orderHandler.orderList[nickname].direction = -1
-								end
-								orderHandler.orderList[nickname].distance = distance
-							else
-								orderHandler.addOrder(nickname, id, distance, os.clock())
-							end
-						end
+					line = line + 1
+					if line == 5 then
+						player.skill, player.skillExp = string.match(string, u8:decode"Скилл: (%d+)	Опыт: .+ (%d+%.%d+)%%")
+					end
+					if line == 6 then
+						player.rank, player.rankExp = string.match(string, u8:decode"Ранг: (%d+)  	Опыт: .+ (%d+%.%d+)%%")
 					end
 				end
+			end)
+			if player.skillCheck then
+				player.skillCheck = false
+				return false
+			end
+		elseif string.find(Dtitle, "GPS") then
+			if player.removeGPSmark then
+				player.removeGPSmark = false
+				return false
+			else
+				if orderHandler.currentOrderBlip then
+					orderHandler.currentOrder.showMark = false
+					removeBlip(orderHandler.currentOrderBlip)
+					deleteCheckpoint(orderHandler.currentOrderCheckpoint)
+					orderHandler.currentOrderBlip = nil
+					orderHandler.currentOrderCheckpoint = nil
+				end
+			end
+		elseif string.find(Dtitle, u8:decode"Вызовы") then
+			for string in string.gmatch(Dtext, '[^\n]+') do
+				local nickname, id, time, distance = string.match(string, u8:decode"%[%d+%] (.+)%[ID:(%d+)%]	(.+)	(.+)")
+				time = stringToSeconds(time)
+				distance = stringToMeters(distance)
+				if orderHandler.orderList[nickname] then
+					if distance < orderHandler.orderList[nickname].distance then
+						orderHandler.orderList[nickname].direction = 1
+					elseif distance > orderHandler.orderList[nickname].distance then
+						orderHandler.orderList[nickname].direction = -1
+					end
+					orderHandler.orderList[nickname].distance = distance
+					orderHandler.orderList[nickname].time = os.clock() - time
+				else
+					orderHandler.addOrder(nickname, id, distance, os.clock() - time)
+				end
+			end
+			if player.updateDistance then
+				player.updateDistance = false
 				return false
 			end
 		end
@@ -928,48 +957,59 @@ function sampev.onShowDialog(DdialogId, Dstyle, Dtitle, Dbutton1, Dbutton2, Dtex
 end
 
 function sampev.onServerMessage(color, message)
-	if string.find(message, REMOVE_INPUT_MESSAGES.serviceNotice) then
-		return false
-	elseif string.find(message, INPUT_MESSAGES.payCheck) then
-		player.salary, player.salaryLimit = string.match(message, FORMAT_INPUT_MESSAGES.payCheck)
-		if not player.salary then
-			player.salary = 0
-			player.salaryLimit = 0
-		end
-		if player.payCheck then
-			player.payCheck = false
-			return false
-		end
-	elseif string.find(message, u8:decode" Цвет выбран") then
-		if player.clistEnable then
-			player.clistEnable = false
-			return false
-		end
-	elseif string.find(message, u8:decode" Вызовов не поступало") then
-		if player.updateDistance then
-			player.updateDistance = false
-			return false
-		end
-	elseif string.find(message, u8:decode" Введите: /service ") then
-		if player.updateDistance then
-			player.updateDistance = false
-			return false
-		end
-	else
-		chatManager.handleInputMessage(message)
-		if string.find(message, FORMAT_INPUT_MESSAGES.newOrder) or string.find(message, FORMAT_INPUT_MESSAGES.orderAccepted) then
+	if player.connected then
+		if string.find(message, REMOVE_INPUT_MESSAGES.serviceNotice) then
 			if not ini.settings.dispatcherMessages then
 				return false
+			end
+		elseif string.find(message, INPUT_MESSAGES.payCheck) then
+			player.salary, player.salaryLimit = string.match(message, FORMAT_INPUT_MESSAGES.payCheck)
+			if not player.salary then
+				player.salary = 0
+				player.salaryLimit = 0
+			end
+			if player.payCheck then
+				player.payCheck = false
+				return false
+			end
+		elseif string.find(message, u8:decode" Цвет выбран") then
+			if player.clistEnable then
+				player.clistEnable = false
+				return false
+			end
+		elseif string.find(message, u8:decode" Вызовов не поступало") then
+			if player.updateDistance then
+				player.updateDistance = false
+				return false
+			end
+		elseif string.find(message, u8:decode" Введите: /service ") then
+			if player.updateDistance then
+				player.updateDistance = false
+				return false
+			end
+		elseif string.find(message, u8:decode" Диспетчер: вызов от этого человека не поступал") then
+			if player.acceptOrder then
+				player.acceptOrder = false
+				return false
+			end
+		else
+			chatManager.handleInputMessage(message)
+			if string.find(message, FORMAT_INPUT_MESSAGES.newOrder) or string.find(message, FORMAT_INPUT_MESSAGES.orderAccepted) then
+				if not ini.settings.dispatcherMessages then
+					return false
+				end
 			end
 		end
 	end
 end
 
 function sampev.onSendChat(message)
+	chatManager.lastMessage = message
 	chatManager.updateAntifloodClock()
 end
 
 function sampev.onSendCommand(command)
+	chatManager.lastMessage = command
 	chatManager.updateAntifloodClock()
 end
 
@@ -990,17 +1030,21 @@ function onScriptTerminate(script, quitGame)
 	end
 end
 
-function string2Meters(string)
-	local meters
-
+function stringToMeters(string)
 	if string.find(string, u8:decode" м") then
-		meters = tonumber(string.match(string, u8:decode"(%d+) м"))
-		return meters
+		return tonumber(string.match(string, u8:decode"(%d+) м"))
 	else
-		meters = tonumber(string.match(string, u8:decode"(.+) км"))
+		return tonumber(string.match(string, u8:decode"(.+) км")) * 1000
 	end
+end
 
-	return meters * 1000
+function stringToSeconds(string)
+	if string.find(string, u8:decode" мин") then
+		local minutes, seconds = string.match(string, u8:decode"(%d+):(%d+) мин")
+		return minutes * 60 + seconds
+	else
+		return tonumber(string.match(string, u8:decode"(.+) сек"))
+	end
 end
 
 function table.spairs(_table, order)
@@ -1293,6 +1337,57 @@ function imgui.onRenderBindMenu()
 				inicfg.save(ini,'Taximate/settings.ini')
 			end
 
+			if orderHandler.currentOrder then
+				imgui.NewLine()
+				imgui.SameLine(toScreenX(3))
+				if imgui.CollapsingHeader('Отправить СМС клиенту', vec(97, 10)) then
+					imgui.NewLine()
+					imgui.SameLine(toScreenX(10))
+					if imgui.Button('Скоро буду', vec(89, 10)) then
+						chatManager.addMessageToQueue("/sms "..orderHandler.currentOrder.id.. ' [Taxi] Скоро буду')
+					end
+					imgui.NewLine()
+					imgui.SameLine(toScreenX(10))
+					if imgui.Button('Вызов отменён', vec(89, 10)) then
+						chatManager.addMessageToQueue("/sms "..orderHandler.currentOrder.id.. ' [Taxi] Вызов отменён, закажите новое такси')
+					end
+					imgui.NewLine()
+					imgui.SameLine(toScreenX(10))
+					if imgui.Button('Да', vec(89, 10)) then
+						chatManager.addMessageToQueue("/sms "..orderHandler.currentOrder.id.. ' [Taxi] Да')
+					end
+					imgui.NewLine()
+					imgui.SameLine(toScreenX(10))
+					if imgui.Button('Нет', vec(89, 10)) then
+						chatManager.addMessageToQueue("/sms "..orderHandler.currentOrder.id.. ' [Taxi] Нет')
+					end
+				end
+			end
+
+			if not table.isEmpty(vehicleManager.passengersList) then
+				imgui.NewLine()
+				imgui.SameLine(toScreenX(3))
+				if vehicleManager.maxPassengers then
+					if imgui.CollapsingHeader('Меню действий с пассажирами') then
+						for passengerIndex = 0, vehicleManager.maxPassengers-1 do
+							if vehicleManager.passengersList[passengerIndex] then
+								imgui.NewLine()
+								imgui.SameLine(toScreenX(11))
+								if imgui.CollapsingHeader(vehicleManager.passengersList[passengerIndex].nickname..'['..vehicleManager.passengersList[passengerIndex].id..']', vec(89, 10)) then
+									imgui.NewLine()
+									imgui.SameLine(toScreenX(20))
+									imgui.PushID(passengerIndex)
+									if imgui.Button('Выкинуть из автомобиля', vec(79, 10)) then
+										chatManager.addMessageToQueue("/eject "..vehicleManager.passengersList[passengerIndex].id)
+									end
+									imgui.PopID()
+								end
+							end
+						end
+					end
+				end
+			end
+
 			if imgui.Button("Добавить строку", vec(97,10)) then
 				if not bindMenu.isBindEdit() then
 					bindMenu.json[#bindMenu.json+1] = {text = "", key = 0, addKey = 0}
@@ -1391,58 +1486,6 @@ function imgui.onRenderBindMenu()
 				imgui.PopID()
 			end
 		end
-
-		if orderHandler.currentOrder then
-				imgui.NewLine()
-				imgui.SameLine(toScreenX(4))
-				if imgui.CollapsingHeader('Отправить СМС клиенту', vec(97, 10)) then
-					imgui.NewLine()
-					imgui.SameLine(toScreenX(10))
-					if imgui.Button('Скоро буду', vec(89, 10)) then
-						chatManager.addMessageToQueue("/sms "..orderHandler.currentOrder.id.. ' [Taxi] Скоро буду')
-					end
-					imgui.NewLine()
-					imgui.SameLine(toScreenX(10))
-					if imgui.Button('Вызов отменён', vec(89, 10)) then
-						chatManager.addMessageToQueue("/sms "..orderHandler.currentOrder.id.. ' [Taxi] Вызов отменён, закажите новое такси')
-					end
-					imgui.NewLine()
-					imgui.SameLine(toScreenX(10))
-					if imgui.Button('Да', vec(89, 10)) then
-						chatManager.addMessageToQueue("/sms "..orderHandler.currentOrder.id.. ' [Taxi] Да')
-					end
-					imgui.NewLine()
-					imgui.SameLine(toScreenX(10))
-					if imgui.Button('Нет', vec(89, 10)) then
-						chatManager.addMessageToQueue("/sms "..orderHandler.currentOrder.id.. ' [Taxi] Нет')
-					end
-				end
-			end
-
-			if not table.isEmpty(vehicleManager.passengersList) then
-				imgui.NewLine()
-				imgui.SameLine(toScreenX(4))
-				if vehicleManager.maxPassengers then
-					if imgui.CollapsingHeader('Меню действий с пассажирами') then
-						for passengerIndex = 0, vehicleManager.maxPassengers-1 do
-							if vehicleManager.passengersList[passengerIndex] then
-								imgui.NewLine()
-								imgui.SameLine(toScreenX(11))
-								if imgui.CollapsingHeader(vehicleManager.passengersList[passengerIndex].nickname..'['..vehicleManager.passengersList[passengerIndex].id..']', vec(89, 10)) then
-									imgui.NewLine()
-									imgui.SameLine(toScreenX(20))
-									imgui.PushID(passengerIndex)
-									if imgui.Button('Выкинуть из автомобиля', vec(89, 10)) then
-										chatManager.addMessageToQueue("/eject "..vehicleManager.passengersList[passengerIndex].id)
-									end
-									imgui.PopID()
-								end
-							end
-						end
-					end
-				end
-			end
-
 		imgui.End()
 		imgui.PopStyleVar()
 	end
@@ -1817,6 +1860,15 @@ function imgui.onRenderSettings()
 				if imgui.Button("Перезапустить скрипт") then
 					thisScript():reload()
 				end
+				imgui.Text("Сообщить об ошибке или предложить нововведения:")
+				imgui.SameLine()
+				if imgui.Button("GitHub") then
+					os.execute("start https://github.com/21se/Taximate/issues/new")
+				end
+				imgui.SameLine()
+				if imgui.Button("VK") then
+					os.execute("start https://vk.com/twonse")
+				end
 				imgui.Text("История обновлений")
 				imgui.BeginChild('changelog', vec(190, 100), true)
 					if script_updates.changelog then
@@ -1829,15 +1881,6 @@ function imgui.onRenderSettings()
 						end
 					end
 				imgui.EndChild()
-				imgui.Text("Сообщить об ошибке или предложить нововведения:")
-				imgui.SameLine()
-				if imgui.Button("GitHub") then
-					os.execute("start https://github.com/21se/Taximate/issues/new")
-				end
-				imgui.SameLine()
-				if imgui.Button("VK") then
-					os.execute("start https://vk.com/twonse")
-				end
 			end
 		imgui.EndChild()
 	imgui.End()
@@ -2072,7 +2115,7 @@ end
 function update()
   downloadUrlToFile("https://raw.githubusercontent.com/21se/Taximate/master/taximate.lua", thisScript().path, function(_, status, _, _)
     if status == 6 then
-			sampAddChatMessage(u8:decode('{00CED1}[Taximate v'..thisScript().version..'] {FFFFFF}Скрипт обновлён. Подробнее об обновлении - {00CED1}/taximate{FFFFFF}'),0xFFFFFF)
+			sampAddChatMessage(u8:decode('{00CED1}[Taximate v'..thisScript().version..'] {FFFFFF}Скрипт обновлён. В случае возникновения ошибок обращаться в ВК - {00CED1}vk.com/twonse{FFFFFF}'),0xFFFFFF)
       thisScript():reload()
     end
   end)
