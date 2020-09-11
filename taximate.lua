@@ -1,7 +1,7 @@
 script_name('Taximate')
 script_author("21se(pivo)")
 script_version('1.3.0 dev')
-script_version_number(29)
+script_version_number(30)
 script_url("https://21se.github.io/Taximate")
 script_updates = {}
 script_updates.update = false
@@ -237,11 +237,26 @@ chatManager = {}
 							else
 								if not sampIsDialogActive() then
 									if string.find(chatManager.messagesQueue[messageIndex].message, '/jskill') then
-										player.skillCheck = true
+										if not player.skillCheck then
+											player.skillCheck = true
+										else
+											sendMessage = false
+										end
 									elseif string.find(chatManager.messagesQueue[messageIndex].message,'/gps') then
-										player.removeGPSmark = true
+										if not player.removeGPSmark then
+											player.removeGPSmark = true
+										else
+											sendMessage = false
+										end
 									elseif string.find(chatManager.messagesQueue[messageIndex].message,'/service') then
-										player.updateDistance = true
+										if not player.updateDistance then
+											player.updateDistance = true
+										else
+											sendMessage = false
+											player.updateDistance = false
+											player.lagClock = os.clock() + 3
+											sampAddChatMessage("lag", 0xFF0000)
+										end
 									end
 								else
 									sendMessage = false
@@ -251,8 +266,6 @@ chatManager = {}
 						if sendMessage then
 							chatManager.lastMessage = u8:decode(chatManager.messagesQueue[messageIndex].message)
 							sampSendChat(u8:decode(chatManager.messagesQueue[messageIndex].message))
-						else
-							chatManager.addMessageToQueue(chatManager.messagesQueue[messageIndex].message, true, true)
 						end
 						chatManager.messagesQueue[messageIndex].hideResult = false
 						chatManager.messagesQueue[messageIndex].message = ''
@@ -841,6 +854,7 @@ player = {}
 	player.updateDistance = false
 	player.connected = false
 	player.acceptOrder = false
+	player.lagClock = os.clock()
 
 	function player.refreshPlayerInfo()
 		chatManager.addMessageToQueue("/paycheck",true , true)
@@ -1010,56 +1024,64 @@ function sampev.onShowDialog(DdialogId, Dstyle, Dtitle, Dbutton1, Dbutton2, Dtex
 				player.removeGPSmark = false
 				return false
 			else
-				if orderHandler.currentOrderBlip then
-					orderHandler.currentOrder.showMark = false
-					removeBlip(orderHandler.currentOrderBlip)
-					deleteCheckpoint(orderHandler.currentOrderCheckpoint)
-					orderHandler.currentOrderBlip = nil
-					orderHandler.currentOrderCheckpoint = nil
-				end
+				lua_thread.create(function()
+					if orderHandler.currentOrderBlip then
+						orderHandler.currentOrder.showMark = false
+						removeBlip(orderHandler.currentOrderBlip)
+						deleteCheckpoint(orderHandler.currentOrderCheckpoint)
+						orderHandler.currentOrderBlip = nil
+						orderHandler.currentOrderCheckpoint = nil
+					end
+				end)
 			end
 		elseif string.find(Dtitle, u8:decode"Вызовы") then
-			for string in string.gmatch(Dtext, '[^\n]+') do
-				local nickname, id, time, distance = string.match(string, u8:decode"%[%d+%] (.+)%[ID:(%d+)%]	(.+)	(.+)")
-				time = stringToSeconds(time)
-				distance = stringToMeters(distance)
-				if orderHandler.orderList[nickname] then
-					if distance < orderHandler.orderList[nickname].distance then
-						orderHandler.orderList[nickname].direction = 1
-					elseif distance > orderHandler.orderList[nickname].distance then
-						orderHandler.orderList[nickname].direction = -1
-					end
-					orderHandler.orderList[nickname].distance = distance
-					orderHandler.orderList[nickname].time = os.clock() - time
-				else
-					orderHandler.addOrder(nickname, id, distance, os.clock() - time)
-				end
-
-				local posX, posY = getCharCoordinates(PLAYER_PED)
-				if not orderHandler.orderList[nickname].tempCircles[1] then
-					orderHandler.orderList[nickname].tempCircles[1] = {x = posX, y = posY, radius = distance}
-				elseif not orderHandler.orderList[nickname].tempCircles[2] then
-					if math.abs(orderHandler.orderList[nickname].tempCircles[1].x - posX) > 15 or math.abs(orderHandler.orderList[nickname].tempCircles[1].y - posY) > 15 then
-						orderHandler.orderList[nickname].tempCircles[2] = {x = posX, y = posY, radius = distance}
-					end
-				elseif not orderHandler.orderList[nickname].tempCircles[3] then
-					if (math.abs(orderHandler.orderList[nickname].tempCircles[1].x - posX) > 15 or math.abs(orderHandler.orderList[nickname].tempCircles[1].y - posY) > 15) and
-					(math.abs(orderHandler.orderList[nickname].tempCircles[2].x - posX) > 15 or math.abs(orderHandler.orderList[nickname].tempCircles[2].y - posY) > 15) then
-						orderHandler.orderList[nickname].tempCircles[3] = {x = posX, y = posY, radius = distance}
-						local result, calcX, calcY  = orderHandler.calculate2dCoords(orderHandler.orderList[nickname].tempCircles[1], orderHandler.orderList[nickname].tempCircles[2], orderHandler.orderList[nickname].tempCircles[3])
-						if result then
-							orderHandler.orderList[nickname].pos = {x = calcX, y = calcY, z = 30}
-							orderHandler.orderList[nickname].zone = getZone(calcX, calcY)
+			lua_thread.create(function()
+				for string in string.gmatch(Dtext, '[^\n]+') do
+					local nickname, id, time, distance = string.match(string, u8:decode"%[%d+%] (.+)%[ID:(%d+)%]	(.+)	(.+)")
+					time = stringToSeconds(time)
+					distance = stringToMeters(distance)
+					if orderHandler.orderList[nickname] then
+						if distance < orderHandler.orderList[nickname].distance then
+							orderHandler.orderList[nickname].direction = 1
+						elseif distance > orderHandler.orderList[nickname].distance then
+							orderHandler.orderList[nickname].direction = -1
 						end
+						orderHandler.orderList[nickname].distance = distance
+						orderHandler.orderList[nickname].time = os.clock() - time
+					else
+						orderHandler.addOrder(nickname, id, distance, os.clock() - time)
+					end
 
-						orderHandler.orderList[nickname].tempCircles[1] = nil
-						orderHandler.orderList[nickname].tempCircles[2] = nil
-						orderHandler.orderList[nickname].tempCircles[3] = nil
+					local posX, posY = getCharCoordinates(PLAYER_PED)
+					if not orderHandler.orderList[nickname].tempCircles[1] then
+						orderHandler.orderList[nickname].tempCircles[1] = {x = posX, y = posY, radius = distance}
+					elseif not orderHandler.orderList[nickname].tempCircles[2] then
+						if math.abs(orderHandler.orderList[nickname].tempCircles[1].x - posX) > 15 or math.abs(orderHandler.orderList[nickname].tempCircles[1].y - posY) > 15 then
+							orderHandler.orderList[nickname].tempCircles[2] = {x = posX, y = posY, radius = distance}
+						end
+					elseif not orderHandler.orderList[nickname].tempCircles[3] then
+						if (math.abs(orderHandler.orderList[nickname].tempCircles[1].x - posX) > 15 or math.abs(orderHandler.orderList[nickname].tempCircles[1].y - posY) > 15) and
+						(math.abs(orderHandler.orderList[nickname].tempCircles[2].x - posX) > 15 or math.abs(orderHandler.orderList[nickname].tempCircles[2].y - posY) > 15) then
+							orderHandler.orderList[nickname].tempCircles[3] = {x = posX, y = posY, radius = distance}
+							local result, calcX, calcY  = orderHandler.calculate2dCoords(orderHandler.orderList[nickname].tempCircles[1], orderHandler.orderList[nickname].tempCircles[2], orderHandler.orderList[nickname].tempCircles[3])
+							if result then
+								orderHandler.orderList[nickname].pos = {x = calcX, y = calcY, z = 30}
+								orderHandler.orderList[nickname].zone = getZone(calcX, calcY)
+							end
 
+							orderHandler.orderList[nickname].tempCircles[1] = nil
+							orderHandler.orderList[nickname].tempCircles[2] = nil
+							orderHandler.orderList[nickname].tempCircles[3] = nil
+
+						end
 					end
 				end
+			end)
+			if player.lagClock > os.clock() then
+				chatManager.addChatMessage("dialog block")
 			end
-			if player.updateDistance then
+			if player.updateDistance or player.lagClock > os.clock() then
+				player.updateDistance = false
 				return false
 			end
 		end
@@ -1088,12 +1110,18 @@ function sampev.onServerMessage(color, message)
 				return false
 			end
 		elseif string.find(message, u8:decode" Вызовов не поступало") then
-			if player.updateDistance then
+			if player.lagClock > os.clock() then
+				chatManager.addChatMessage("chat block")
+			end
+			if player.updateDistance or player.lagClock > os.clock() then
 				player.updateDistance = false
 				return false
 			end
 		elseif string.find(message, u8:decode" Введите: /service ") then
-			if player.updateDistance then
+			if player.lagClock > os.clock() then
+				chatManager.addChatMessage("chat block")
+			end
+			if player.updateDistance or player.lagClock > os.clock() then
 				player.updateDistance = false
 				return false
 			end
@@ -2319,6 +2347,7 @@ function sampev.onSetRaceCheckpoint(type, position)
 end
 
 function getGPSMarkCoords3d()
+	wait(500)
 	local found = false
 	if vehicleManager.GPSMark then
 		found = os.clock() - vehicleManager.GPSMark.time <= 5
