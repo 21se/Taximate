@@ -1,10 +1,12 @@
 script_name('Taximate')
 script_author("21se(pivo)")
 script_version('1.3.0 dev')
-script_version_number(30)
+script_version_number(31)
 script_url("https://21se.github.io/Taximate")
 script_updates = {}
 script_updates.update = false
+
+-- TODO: дополнить метки на карте, автопррием заправки починки
 
 local inicfg = require 'inicfg'
 local ini = {}
@@ -127,34 +129,16 @@ function main()
 			if result then
 				orderHandler.handleOrder(orderNickname, orderDistance, orderClock)
 			end
-		end
 
-		if player.onWork then
 			orderHandler.autoAccept = table.isEmpty(vehicleManager.passengersList) and not orderHandler.currentOrder
-		else
-			orderHandler.autoAccept = false
-		end
 
-		if player.onWork then
 			orderHandler.refreshCurrentOrder()
-		elseif orderHandler.currentOrder then
-			orderHandler.cancelCurrentOrder()
-		end
 
-		if ini.settings.markers then
-			vehicleManager.drawMarkers()
-		else
-			vehicleManager.clearMarkers()
-		end
-
-		if ini.settings.ordersDistanceUpdate then
-			if player.onWork then
+			if ini.settings.ordersDistanceUpdate then
 				orderHandler.updateOrdersDistance()
 			end
-		end
 
-		if isKeysPressed(ini.settings.key3, ini.settings.key3add, false) and ini.settings.hotKeys then
-			if player.onWork then
+			if isKeysPressed(ini.settings.key3, ini.settings.key3add, false) and ini.settings.hotKeys then
 				player.onWork = false
 				if ini.settings.autoClist then
 					chatManager.addMessageToQueue("/clist 0", true,true)
@@ -162,23 +146,14 @@ function main()
 				if orderHandler.currentOrder then
 					orderHandler.cancelCurrentOrder()
 				end
-			else
-				player.onWork = true
-				if ini.settings.autoClist then
-					chatManager.addMessageToQueue("/clist "..ini.settings.workClist,true,true)
-				end
 			end
-		end
 
-		if isKeyJustPressed(vkeys.VK_2) then
-			if player.onWork then
+			if isKeyJustPressed(vkeys.VK_2) then
 				if vehicleManager.maxPassengers then
 					chatManager.antifloodClock = os.clock()
 				end
 			end
-		end
 
-		if player.onWork then
 			if not orderHandler.currentOrder then
 				if orderHandler.lastCorrectOrderNickname then
 					if isKeysPressed(ini.settings.key2, ini.settings.key2add, false) and ini.settings.hotKeys then
@@ -190,6 +165,24 @@ function main()
 					orderHandler.cancelCurrentOrder()
 				end
 			end
+
+		elseif orderHandler.currentOrder then
+			orderHandler.cancelCurrentOrder()
+		else
+			orderHandler.autoAccept = false
+
+			if isKeysPressed(ini.settings.key3, ini.settings.key3add, false) and ini.settings.hotKeys then
+				player.onWork = true
+				if ini.settings.autoClist then
+					chatManager.addMessageToQueue("/clist "..ini.settings.workClist,true,true)
+				end
+			end
+		end
+
+		if ini.settings.markers then
+			vehicleManager.drawMarkers()
+		else
+			vehicleManager.clearMarkers()
 		end
 
 	end
@@ -203,7 +196,7 @@ chatManager = {}
 	chatManager.antifloodDelay = 0.6
 
   function chatManager.addChatMessage(message)
-		sampAddChatMessage(u8:decode(message), 0xFFFFFF)
+		sampAddChatMessage(u8:decode(tostring(message)), 0xFFFFFF)
 	end
 
 	function chatManager.updateAntifloodClock()
@@ -231,36 +224,25 @@ chatManager = {}
 
 						if chatManager.messagesQueue[messageIndex].hideResult then
 							if string.find(chatManager.messagesQueue[messageIndex].message,'/paycheck') then
-								player.payCheck = true
+								player.payCheck = not player.payCheck
 							elseif string.find(chatManager.messagesQueue[messageIndex].message,'/clist') then
-								player.clistEnable = true
+								player.clistEnable = not player.clistEnable
 							else
 								if not sampIsDialogActive() then
 									if string.find(chatManager.messagesQueue[messageIndex].message, '/jskill') then
-										if not player.skillCheck then
-											player.skillCheck = true
-										else
-											sendMessage = false
-										end
+										player.skillCheck = not player.skillCheck
 									elseif string.find(chatManager.messagesQueue[messageIndex].message,'/gps') then
-										if not player.removeGPSmark then
-											player.removeGPSmark = true
-										else
-											sendMessage = false
-										end
+										player.removeGPSmark = not player.removeGPSmark
 									elseif string.find(chatManager.messagesQueue[messageIndex].message,'/service') then
-										if not player.updateDistance then
-											player.updateDistance = true
-										else
-											sendMessage = false
-											player.updateDistance = false
-											player.lagClock = os.clock() + 3
-											sampAddChatMessage("lag", 0xFF0000)
-										end
+										player.updateDistance = not player.updateDistance
 									end
 								else
 									sendMessage = false
 								end
+							end
+							if not (player.payCheck or player.clistEnable or player.skillCheck or player.removeGPSmark or player.updateDistance) then
+								player.lagClock = os.clock() + 5
+								sampAddChatMessage("lag", 0xFF0000)
 							end
 						end
 						if sendMessage then
@@ -334,24 +316,7 @@ chatManager = {}
 					end
 				end
 				orderHandler.deleteOrder(passengerNickname)
-			elseif string.find(message, u8:decode"^ Пассажир .+ установил точку прибытия %(%( Для отключения введите /gps %)%)$") and player.onWork then
-				nickname = string.match(message, u8:decode"Пассажир (.+) установил точку прибытия")
-				if table.contains(nickname, vehicleManager.lastPassengersList) then
-					local text = "Пассажир установил точку прибытия"
-					local result, x, y= getGPSMarkCoords3d()
-					if result then
-						text = text .. '\nРайон: {4296f9}' .. getZone(x, y)
-					else
-						text = text .. '\nМетка на карте обновлена'
-					end
-					if ini.settings.notifications and ini.settings.sounds then
-						soundManager.playSound("correct_order")
-					end
-					if ini.settings.notifications then
-						imgui.addNotification(text,5)
-					end
-				end
-			elseif string.find(message, u8:decode"^ 'Дом' помечено на карте красной меткой. Дистанция .+ метров$") and player.onWork then
+			elseif string.find(message, u8:decode"^ '.+' помечено на карте красной меткой. Дистанция .+ метров$") and player.onWork then
 				local text = "Метка на карте обновлена"
 				local result, x, y= getGPSMarkCoords3d()
 				if result then
@@ -363,10 +328,14 @@ chatManager = {}
 						imgui.addNotification(text,5)
 					end
 				end
-
+			elseif string.find(message, u8:decode"^ {00A86B}Используйте телефон {FFFFFF}%(%( /call %)%){00A86B} чтобы вызвать механика / таксиста$") and player.onWork and ini.settings.finishWork and not orderHandler.currentOrder then
+				player.onWork = false
+				if ini.settings.autoClist then
+					chatManager.addMessageToQueue("/clist 0", true, true)
+				end
 			elseif string.find(message, u8:decode"^ Пассажир вышел из такси. Использован купон на бесплатный проезд$") or string.find(message, u8:decode"^ Пассажир вышел из такси. Деньги будут зачислены во время зарплаты$") then
 				player.refreshPlayerInfo()
-			elseif string.find(message, u8:decode"Вы получили (%d+) вирт, от [a-zA-Z0-9_]+%[%d+%]") then
+			elseif string.find(message, u8:decode"^ Вы получили (%d+) вирт, от [a-zA-Z0-9_]+%[%d+%]$") then
 				local sum, nickname = string.match(message, u8:decode"Вы получили (%d+) вирт, от (.+)%[")
 				if table.contains(nickname, vehicleManager.lastPassengersList) then
 					player.tips = player.tips + sum
@@ -446,17 +415,15 @@ orderHandler = {}
 	end
 
 	function orderHandler.updateMark()
-		if orderHandler.currentOrder then
-			local result, posX, posY, posZ = getGPSMarkCoords3d()
-			if result then
-				orderHandler.currentOrder.pos.x = posX
-				orderHandler.currentOrder.pos.y = posY
-				orderHandler.currentOrder.pos.z = posZ
-				orderHandler.currentOrder.zone = getZone(posX, posY)
-				orderHandler.currentOrder.distance = getDistanceToCoords3d(orderHandler.currentOrder.pos.x,orderHandler.currentOrder.pos.y,orderHandler.currentOrder.pos.z)
-				orderHandler.currentOrder.currentDistance = orderHandler.currentOrder.distance
-				orderHandler.currentOrder.showMark = true
-			end
+		local result, posX, posY, posZ = getGPSMarkCoords3d()
+		if orderHandler.currentOrder and result then
+			orderHandler.currentOrder.pos.x = posX
+			orderHandler.currentOrder.pos.y = posY
+			orderHandler.currentOrder.pos.z = posZ
+			orderHandler.currentOrder.zone = getZone(posX, posY)
+			orderHandler.currentOrder.distance = getDistanceToCoords3d(orderHandler.currentOrder.pos.x,orderHandler.currentOrder.pos.y,orderHandler.currentOrder.pos.z)
+			orderHandler.currentOrder.currentDistance = orderHandler.currentOrder.distance
+			orderHandler.currentOrder.showMark = true
 		end
 	end
 
@@ -875,7 +842,7 @@ defaultSettings = {}
 	defaultSettings.workClist = 25
 	defaultSettings.acceptLastPassengersOrders = false
 	defaultSettings.hotKeys = true
-	defaultSettings.SMSTimer = 15
+	defaultSettings.SMSTimer = 30
 	defaultSettings.maxDistanceToAcceptOrder = 1400
 	defaultSettings.maxDistanceToGetOrder = 1000
 	defaultSettings.fastMapCompatibility = true
@@ -894,6 +861,7 @@ defaultSettings = {}
 	defaultSettings.ordersDistanceUpdateTimer = 3
 	defaultSettings.soundVolume = 50
 	defaultSettings.dispatcherMessages = true
+	defaultSettings.finishWork = true
 
 soundManager = {}
 	soundManager.soundsList = {}
@@ -1745,8 +1713,8 @@ end
 function imgui.onDrawSettings()
 	imgui.ShowCursor = true
 	local resX, resY = getScreenResolution()
-	imgui.SetNextWindowSize(vec(200, 187))
-	imgui.SetNextWindowPos(vec(220, 118),2)
+	imgui.SetNextWindowSize(vec(200, 195))
+	imgui.SetNextWindowPos(vec(220, 110),2)
 	imgui.Begin('Taximate '..thisScript()['version'], imgui.showSettings, imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize)
 		imgui.BeginChild('top', vec(195, 9), false)
 			imgui.BeginChild(" right",vec(63.5,9), false)
@@ -1767,7 +1735,7 @@ function imgui.onDrawSettings()
 				end
 			imgui.EndChild()
 		imgui.EndChild()
-		imgui.BeginChild('bottom', vec(195, 162), true)
+		imgui.BeginChild('bottom', vec(195, 170), true)
 			if imgui.settingsTab == 1 then
 				if imgui.Checkbox("Отображение Taximate Binder", imgui.ImBool(ini.settings.showBindMenu)) then
 					ini.settings.showBindMenu = not ini.settings.showBindMenu
@@ -1846,6 +1814,10 @@ function imgui.onDrawSettings()
 				end
 				if imgui.Checkbox("Показывать на карте игроков в транспорте",imgui.ImBool(ini.settings.markers)) then
 					ini.settings.markers = not ini.settings.markers
+					inicfg.save(ini,'Taximate/settings.ini')
+				end
+				if imgui.Checkbox("Заканчивать рабочий день при поломке/пустом баке",imgui.ImBool(ini.settings.finishWork)) then
+					ini.settings.finishWork = not ini.settings.finishWork
 					inicfg.save(ini,'Taximate/settings.ini')
 				end
 				if imgui.Checkbox("Обновление дистанции всех вызовов раз в", imgui.ImBool(ini.settings.ordersDistanceUpdate)) then
@@ -2017,7 +1989,7 @@ function imgui.onDrawSettings()
 					end
 				end
 				imgui.Text("История обновлений")
-				imgui.BeginChild('changelog', vec(190, 100), true)
+				imgui.BeginChild('changelog', vec(190, 108), true)
 					if script_updates.changelog then
 						for index, key in pairs(script_updates.sorted_keys) do
 							if imgui.CollapsingHeader('Версия '..key) then
