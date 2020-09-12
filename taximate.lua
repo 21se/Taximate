@@ -1,12 +1,13 @@
 script_name('Taximate')
 script_author("21se(pivo)")
 script_version('1.3.0 dev')
-script_version_number(31)
+script_version_number(32)
 script_url("https://21se.github.io/Taximate")
 script_updates = {}
 script_updates.update = false
 
 -- TODO: дополнить метки на карте, автопррием заправки починки
+--       /seeme /seedo
 
 local inicfg = require 'inicfg'
 local ini = {}
@@ -54,7 +55,7 @@ local FORMAT_TAXI_SMS = {
 	arrived = "/sms %d [Taxi] Жёлтый %s прибыл на место вызова"
 }
 
-local FORMAT_NOTIFICATIONS ={
+local FORMAT_NOTIFICATIONS = {
 	newOrder = "Вызов от {4296f9}%s[%s]\nДистанция: {4296f9}%s {FFFFFF}м",
 	newOrderPos = "Вызов от {4296f9}%s[%s]\nДистанция: {42ff96}%s {FFFFFF}м",
 	newOrderNeg = "Вызов от {4296f9}%s[%s]\nДистанция: {d44331}%s {FFFFFF}м",
@@ -194,6 +195,13 @@ chatManager = {}
 	chatManager.antifloodClock = os.clock()
 	chatManager.lastMessage = ""
 	chatManager.antifloodDelay = 0.6
+	chatManager.hideResultMessages = {
+		["/service"] = {bool = false, dialog = true},
+		["/paycheck"] = {bool = false, dialog = false},
+		["/clist"] = {bool = false, dialog = false},
+		["/jskill"] = {bool = false, dialog = true},
+		["/gps"] = {bool = false, dialog = true},
+	}
 
   function chatManager.addChatMessage(message)
 		sampAddChatMessage(u8:decode(tostring(message)), 0xFFFFFF)
@@ -210,47 +218,29 @@ chatManager = {}
 		while true do
 			wait(0)
 			for messageIndex = 1, chatManager.messagesQueueSize do
-				if chatManager.messagesQueue[messageIndex].message ~= '' then
-					if string.sub(chatManager.lastMessage, 1, 1) ~= '/' and string.sub(chatManager.messagesQueue[messageIndex].message, 1, 1) ~= '/' then
+				local message = chatManager.messagesQueue[messageIndex]
+				if message.message ~= '' then
+					if string.sub(chatManager.lastMessage, 1, 1) ~= '/' and string.sub(message.message, 1, 1) ~= '/' then
 						chatManager.antifloodDelay = chatManager.antifloodDelay + 0.5
 					end
 					if os.clock() - chatManager.antifloodClock > chatManager.antifloodDelay then
 
-						if string.find(chatManager.messagesQueue[messageIndex].message,'/service ac taxi') then
+						if string.find(message.message,'/service ac taxi') then
 							player.acceptOrder = true
 						end
 
-						local sendMessage = true
+						if message.hideResult then
+							local command = string.match(message.message, "^(/[^ ]*).*")
+							if chatManager.hideResultMessages[command] then
+								chatManager.hideResultMessages[command].bool = not sampIsDialogActive() or not chatManager.hideResultMessages[command].dialog
+							end
+						end
 
-						if chatManager.messagesQueue[messageIndex].hideResult then
-							if string.find(chatManager.messagesQueue[messageIndex].message,'/paycheck') then
-								player.payCheck = not player.payCheck
-							elseif string.find(chatManager.messagesQueue[messageIndex].message,'/clist') then
-								player.clistEnable = not player.clistEnable
-							else
-								if not sampIsDialogActive() then
-									if string.find(chatManager.messagesQueue[messageIndex].message, '/jskill') then
-										player.skillCheck = not player.skillCheck
-									elseif string.find(chatManager.messagesQueue[messageIndex].message,'/gps') then
-										player.removeGPSmark = not player.removeGPSmark
-									elseif string.find(chatManager.messagesQueue[messageIndex].message,'/service') then
-										player.updateDistance = not player.updateDistance
-									end
-								else
-									sendMessage = false
-								end
-							end
-							if not (player.payCheck or player.clistEnable or player.skillCheck or player.removeGPSmark or player.updateDistance) then
-								player.lagClock = os.clock() + 5
-								sampAddChatMessage("lag", 0xFF0000)
-							end
-						end
-						if sendMessage then
-							chatManager.lastMessage = u8:decode(chatManager.messagesQueue[messageIndex].message)
-							sampSendChat(u8:decode(chatManager.messagesQueue[messageIndex].message))
-						end
-						chatManager.messagesQueue[messageIndex].hideResult = false
-						chatManager.messagesQueue[messageIndex].message = ''
+						chatManager.lastMessage = u8:decode(message.message)
+						sampSendChat(u8:decode(message.message))
+
+						message.hideResult = false
+						message.message = ''
 					end
 					chatManager.antifloodDelay = 0.6
 				end
@@ -330,7 +320,7 @@ chatManager = {}
 				end
 			elseif string.find(message, u8:decode"^ {00A86B}Используйте телефон {FFFFFF}%(%( /call %)%){00A86B} чтобы вызвать механика / таксиста$") and player.onWork and ini.settings.finishWork and not orderHandler.currentOrder then
 				player.onWork = false
-				if ini.settings.autoClist then
+				if ini.settings.autoClist and chatManager.hideResultMessages["/clist"].bool then
 					chatManager.addMessageToQueue("/clist 0", true, true)
 				end
 			elseif string.find(message, u8:decode"^ Пассажир вышел из такси. Использован купон на бесплатный проезд$") or string.find(message, u8:decode"^ Пассажир вышел из такси. Деньги будут зачислены во время зарплаты$") then
@@ -345,6 +335,11 @@ chatManager = {}
 				player.refreshPlayerInfo()
 			elseif string.find(message, u8:decode"^ Не флуди!$") then
 				chatManager.updateAntifloodClock()
+
+				for qMessage in pairs(chatManager.hideResultMessages) do
+					chatManager.hideResultMessages[qMessage].bool = false
+				end
+
 			end
 		end)
 	end
@@ -404,6 +399,10 @@ orderHandler = {}
 			chatManager.addMessageToQueue("/sms "..orderHandler.currentOrder.id.. ' [Taxi] Вызов отменён, закажите новое такси')
 		end
 		orderHandler.currentOrder = nil
+		orderHandler.removeGPSMark()
+	end
+
+	function orderHandler.removeGPSMark()
 		if orderHandler.currentOrderBlip then
 			deleteCheckpoint(orderHandler.currentOrderCheckpoint)
 			removeBlip(orderHandler.currentOrderBlip)
@@ -477,8 +476,10 @@ orderHandler = {}
 		if vehicleManager.vehicleName then
 			if orderHandler.updateOrdersDistanceClock < os.clock() then
 				if not orderHandler.currentOrder then
-					chatManager.addMessageToQueue("/service",true,true)
-					orderHandler.updateOrdersDistanceClock = os.clock() + ini.settings.ordersDistanceUpdateTimer
+					if not chatManager.hideResultMessages["/service"].bool then
+						chatManager.addMessageToQueue("/service",true,true)
+						orderHandler.updateOrdersDistanceClock = os.clock() + ini.settings.ordersDistanceUpdateTimer
+					end
 				end
 			end
 		end
@@ -567,6 +568,7 @@ orderHandler = {}
 					soundManager.playSound("correct_order")
 				end
 				orderHandler.currentOrder = nil
+				orderHandler.removeGPSMark()
 			end
 		else
 			removeBlip(orderHandler.currentOrderBlip)
@@ -584,8 +586,10 @@ orderHandler = {}
 		if orderHandler.orderList[nickname] then
 			if orderClock then
 				if orderHandler.lastAcceptedOrderClock ~= orderClock then
-					chatManager.addMessageToQueue("/service ac taxi "..orderHandler.orderList[nickname].id)
-					orderHandler.lastAcceptedOrderClock = orderHandler.orderList[nickname].time
+					if not player.acceptOrder then
+						chatManager.addMessageToQueue("/service ac taxi "..orderHandler.orderList[nickname].id)
+						orderHandler.lastAcceptedOrderClock = orderHandler.orderList[nickname].time
+					end
 				end
 			end
 		end
@@ -808,9 +812,6 @@ player = {}
 	player.id = nil
 	player.nickname = nil
 	player.onWork = false
-	player.removeGPSmark = false
-	player.payCheck = false
-	player.skillCheck = false
 	player.skill = 1
 	player.skillExp = 0
 	player.rank = 1
@@ -818,14 +819,16 @@ player = {}
 	player.salary = 0
 	player.salaryLimit = 0
 	player.tips = 0
-	player.updateDistance = false
 	player.connected = false
 	player.acceptOrder = false
-	player.lagClock = os.clock()
 
 	function player.refreshPlayerInfo()
-		chatManager.addMessageToQueue("/paycheck",true , true)
-		chatManager.addMessageToQueue("/jskill", true, true)
+		if not chatManager.hideResultMessages["/paycheck"].bool then
+			chatManager.addMessageToQueue("/paycheck",true , true)
+		end
+		if not chatManager.hideResultMessages["/jskill"].bool then
+			chatManager.addMessageToQueue("/jskill", true, true)
+		end
 	end
 
 defaultSettings = {}
@@ -983,13 +986,13 @@ function sampev.onShowDialog(DdialogId, Dstyle, Dtitle, Dbutton1, Dbutton2, Dtex
 					end
 				end
 			end)
-			if player.skillCheck then
-				player.skillCheck = false
+			if chatManager.hideResultMessages["/jskill"].bool then
+				chatManager.hideResultMessages["/jskill"].bool = false
 				return false
 			end
 		elseif string.find(Dtitle, "GPS") then
-			if player.removeGPSmark then
-				player.removeGPSmark = false
+			if chatManager.hideResultMessages["/gps"].bool then
+				chatManager.hideResultMessages["/gps"].bool = false
 				return false
 			else
 				lua_thread.create(function()
@@ -1045,11 +1048,8 @@ function sampev.onShowDialog(DdialogId, Dstyle, Dtitle, Dbutton1, Dbutton2, Dtex
 					end
 				end
 			end)
-			if player.lagClock > os.clock() then
-				chatManager.addChatMessage("dialog block")
-			end
-			if player.updateDistance or player.lagClock > os.clock() then
-				player.updateDistance = false
+			if chatManager.hideResultMessages["/service"].bool then
+				chatManager.hideResultMessages["/service"].bool = false
 				return false
 			end
 		end
@@ -1068,29 +1068,18 @@ function sampev.onServerMessage(color, message)
 				player.salary = 0
 				player.salaryLimit = 0
 			end
-			if player.payCheck then
-				player.payCheck = false
+			if chatManager.hideResultMessages["/paycheck"].bool then
+				chatManager.hideResultMessages["/paycheck"].bool = false
 				return false
 			end
 		elseif string.find(message, u8:decode" Цвет выбран") then
-			if player.clistEnable then
-				player.clistEnable = false
+			if chatManager.hideResultMessages["/clist"].bool then
+				chatManager.hideResultMessages["/clist"].bool = false
 				return false
 			end
-		elseif string.find(message, u8:decode" Вызовов не поступало") then
-			if player.lagClock > os.clock() then
-				chatManager.addChatMessage("chat block")
-			end
-			if player.updateDistance or player.lagClock > os.clock() then
-				player.updateDistance = false
-				return false
-			end
-		elseif string.find(message, u8:decode" Введите: /service ") then
-			if player.lagClock > os.clock() then
-				chatManager.addChatMessage("chat block")
-			end
-			if player.updateDistance or player.lagClock > os.clock() then
-				player.updateDistance = false
+		elseif string.find(message, u8:decode" Вызовов не поступало") or string.find(message, u8:decode" Введите: /service ") then
+			if chatManager.hideResultMessages["/service"].bool then
+				chatManager.hideResultMessages["/service"].bool = false
 				return false
 			end
 		elseif string.find(message, u8:decode" Диспетчер: вызов от этого человека не поступал") then
@@ -1121,7 +1110,7 @@ end
 
 function sampev.onSendSpawn()
 	if player.onWork then
-		if ini.settings.autoClist then
+		if ini.settings.autoClist and not chatManager.hideResultMessages["/clist"].bool then
 			chatManager.addMessageToQueue("/clist "..ini.settings.workClist,true,true)
 		end
 	end
