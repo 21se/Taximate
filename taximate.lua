@@ -1,16 +1,16 @@
 script_name('Taximate')
 script_author("21se(pivo)")
 script_version('1.3.0 dev')
-script_version_number(34)
-script_url("https://21se.github.io/Taximate")
+script_version_number(36)
+script_url("21se.github.io/Taximate")
 script_updates = {}
 script_updates.update = false
 
 -- TODO: автопррием заправки починки
---       /seeme /seedo
-
-local inicfg = require 'inicfg'
+--      проверка на либы
+--      добавить в lib utf8lib
 local ini = {}
+local inicfg = require 'inicfg'
 local sampev = require 'lib.samp.events'
 local vkeys = require 'lib.vkeys'
 local imgui = require 'imgui'
@@ -18,6 +18,7 @@ local as_action = require 'moonloader'.audiostream_state
 local encoding = require 'encoding'
 			encoding.default = 'CP1251'
 local u8 = encoding.UTF8
+local utf8 = require 'utf8lib'
 local notificationsQueue = {}
 local fastMapKey = 0
 
@@ -50,11 +51,6 @@ local REMOVE_INPUT_MESSAGES = {
 	serviceNotice = u8:decode"^ %(%( Введите '/service' чтобы принять вызов %)%)$"
 }
 
-local FORMAT_TAXI_SMS = {
-	onWay = "/sms %d [Taxi] Жёлтый %s в пути. Дистанция: %d м",
-	arrived = "/sms %d [Taxi] Жёлтый %s прибыл на место вызова"
-}
-
 local FORMAT_NOTIFICATIONS = {
 	newOrder = "Вызов от {4296f9}%s[%s]\nДистанция: {4296f9}%s {FFFFFF}м",
 	newOrderPos = "Вызов от {4296f9}%s[%s]\nДистанция: {42ff96}%s {FFFFFF}м",
@@ -62,26 +58,28 @@ local FORMAT_NOTIFICATIONS = {
 	orderAccepted = "Принят вызов от {4296f9}%s[%s]\nДистанция: {4296f9}%s {FFFFFF}м",
 }
 
-
 function main()
 	if not isSampLoaded() or not isSampfuncsLoaded() then return end
 	while not isSampAvailable() do wait(100) end
 
 	repeat
 		wait(100)
-		local _, playerID = sampGetPlayerIdByCharHandle(PLAYER_PED)
-		player.nickname = sampGetPlayerNickname(playerID)
-		player.id = playerID
-	until sampGetPlayerScore(player.id) ~= 0 and sampGetCurrentServerName() ~= 'Samp-Rp.Ru'
+	until sampGetCurrentServerName() ~= 'SA-MP'
+
+	local _, playerID = sampGetPlayerIdByCharHandle(PLAYER_PED)
+	player.nickname = sampGetPlayerNickname(playerID)
+	player.id = playerID
 
 	server = sampGetCurrentServerName():gsub("|", "")
   server = (server:find("02") and "two" or (server:find("Revolution") and "revolution" or (server:find("Legacy") and "legacy" or (server:find("Classic") and "classic" or ""))))
+
   if server == "" then
+		unload = true
     thisScript():unload()
 		return
   end
 
-	chatManager.addChatMessage('{00CED1}[Taximate v'..thisScript().version..']{FFFFFF} Меню настроек скрипта - {00CED1}/taximate{FFFFFF}, страница скрипта: {00CED1}'.. thisScript().url:gsub('https://', ''))
+	chatManager.addChatMessage('{00CED1}[Taximate v'..thisScript().version..']{FFFFFF} Меню настроек скрипта - {00CED1}/tm{FFFFFF}, страница скрипта: {00CED1}'.. thisScript().url)
 
 	if not doesDirectoryExist(getWorkingDirectory()..'\\config') then
 		createDirectory(getWorkingDirectory()..'\\config')
@@ -89,15 +87,13 @@ function main()
 	if not doesDirectoryExist(getWorkingDirectory()..'\\config\\Taximate') then
 		createDirectory(getWorkingDirectory()..'\\config\\Taximate')
 	end
-	ini = inicfg.load({settings = defaultSettings}, 'Taximate/settings.ini')
+	ini = inicfg.load({settings = ini.settings}, 'Taximate/settings.ini')
 	imgui.initBuffers()
 	soundManager.loadSound("new_order")
 	soundManager.loadSound("correct_order")
 	soundManager.loadSound("new_passenger")
 	imgui.ApplyCustomStyle()
-	imgui.GetIO().Fonts:Clear()
 	imgui.GetIO().Fonts:AddFontFromFileTTF("C:\\Windows\\Fonts\\arial.ttf", 18/(1920/getScreenResolution()), nil, imgui.GetIO().Fonts:GetGlyphRangesCyrillic())
-	imgui.RebuildFonts()
 	imgui.Process = true
 	chatManager.initQueue()
 	player.refreshPlayerInfo()
@@ -109,6 +105,7 @@ function main()
 	lua_thread.create(orderHandler.deleteUnacceptedOrdersThread)
 
 	sampRegisterChatCommand("taximate", function() imgui.showSettings.v = not imgui.showSettings.v end)
+	sampRegisterChatCommand("tm", function() imgui.showSettings.v = not imgui.showSettings.v end)
 
 	if ini.settings.checkUpdates then
 		lua_thread.create(checkUpdates)
@@ -195,6 +192,7 @@ chatManager = {}
 	chatManager.antifloodClock = os.clock()
 	chatManager.lastMessage = ""
 	chatManager.antifloodDelay = 0.6
+	chatManager.dialogClock = os.clock()
 	chatManager.hideResultMessages = {
 		["/service"] = {bool = false, dialog = true},
 		["/paycheck"] = {bool = false, dialog = false},
@@ -229,19 +227,20 @@ chatManager = {}
 							player.acceptOrder = true
 						end
 
+						local sendMessage = true
+
 						local command = string.match(message.message, "^(/[^ ]*).*")
 
 						if message.hideResult then
 							if chatManager.hideResultMessages[command] then
-								chatManager.hideResultMessages[command].bool = not sampIsDialogActive() or not chatManager.hideResultMessages[command].dialog
+								chatManager.hideResultMessages[command].bool = (not sampIsDialogActive() or not chatManager.hideResultMessages[command].dialog) and chatManager.dialogClock < os.clock()
+								sendMessage = chatManager.hideResultMessages[command].bool
 							end
 						end
 
-						if command then
-							if chatManager.hideResultMessages[command].bool then
-								chatManager.lastMessage = u8:decode(message.message)
-								sampSendChat(u8:decode(message.message))
-							end
+						if sendMessage then
+							chatManager.lastMessage = u8:decode(message.message)
+							sampSendChat(u8:decode(message.message))
 						end
 
 						message.hideResult = false
@@ -253,14 +252,28 @@ chatManager = {}
 		end
 	end
 
+	function chatManager.subSMSText(text)
+		if orderHandler.currentOrder then
+			text = text:gsub("{distance}", tostring(orderHandler.currentOrder.currentDistance))
+		else
+			text = text:gsub("{distance}", "1234")
+		end
+		if vehicleManager.maxPassengers then
+			text = text:gsub("{carname}", vehicleManager.vehicleName)
+		else
+			text = text:gsub("{carname}", "Sentinel")
+		end
+		return text
+	end
+
 	function chatManager.sendTaxiNotification(currentOrder)
 		if ini.settings.sendSMS then
 			if not currentOrder.arrived and currentOrder.showMark then
-				if currentOrder.currentDistance < 30 then
-					chatManager.addMessageToQueue(string.format(FORMAT_TAXI_SMS.arrived, currentOrder.id, vehicleManager.vehicleName))
+				if currentOrder.currentDistance < 30 and ini.settings.SMSArrival ~= "" then
+					chatManager.addMessageToQueue(string.format("/t %d %s", currentOrder.id, chatManager.subSMSText(ini.settings.SMSPrefix..ini.settings.SMSArrival)))
 					currentOrder.arrived = true
-				elseif currentOrder.SMSClock < os.clock() and currentOrder.updateDistance then
-					chatManager.addMessageToQueue(string.format(FORMAT_TAXI_SMS.onWay, currentOrder.id, vehicleManager.vehicleName, currentOrder.currentDistance))
+				elseif currentOrder.SMSClock < os.clock() and currentOrder.updateDistance and ini.settings.SMSText ~= "" then
+					chatManager.addMessageToQueue(string.format("/t %d %s", currentOrder.id, chatManager.subSMSText(ini.settings.SMSPrefix..ini.settings.SMSText)))
 					currentOrder.SMSClock = os.clock() + ini.settings.SMSTimer
 					if currentOrder.pos.x == nil then
 						currentOrder.updateDistance = false
@@ -323,6 +336,10 @@ chatManager = {}
 						imgui.addNotification(text,5)
 					end
 				end
+			elseif string.find(message, u8:decode"^ Механик [a-zA-Z0-9_]+ хочет отремонтировать ваш автомобиль за %d+ вирт{FFFFFF} %(%( Нажмите Y/N для принятия/отмены %)%)$") and player.onWork then
+
+			elseif string.find(message, u8:decode"^ Механик [a-zA-Z0-9_]+ хочет заправить ваш автомобиль за %d+ вирт{FFFFFF} %(%( Нажмите Y/N для принятия/отмены %)%)$") and player.onWork then
+
 			elseif string.find(message, u8:decode"^ {00A86B}Используйте телефон {FFFFFF}%(%( /call %)%){00A86B} чтобы вызвать механика / таксиста$") and player.onWork and ini.settings.finishWork and not orderHandler.currentOrder then
 				player.onWork = false
 				if ini.settings.autoClist and chatManager.hideResultMessages["/clist"].bool then
@@ -344,7 +361,6 @@ chatManager = {}
 				for qMessage in pairs(chatManager.hideResultMessages) do
 					chatManager.hideResultMessages[qMessage].bool = false
 				end
-
 			end
 		end)
 	end
@@ -400,8 +416,8 @@ orderHandler = {}
 		if ini.settings.notifications then
 			imgui.addNotification("Вызов отменён\nМетка на карте удалена",5)
 		end
-		if ini.settings.sendSMSCancel then
-			chatManager.addMessageToQueue("/sms "..orderHandler.currentOrder.id.. ' [Taxi] Вызов отменён, закажите новое такси')
+		if ini.settings.sendSMSCancel and ini.settings.SMSCancel ~= "" then
+			chatManager.addMessageToQueue(string.format("/t %d %s%s", orderHandler.currentOrder.id, ini.settings.SMSPrefix, ini.settings.SMSCancel))
 		end
 		orderHandler.currentOrder = nil
 		orderHandler.removeGPSMark()
@@ -622,39 +638,30 @@ orderHandler = {}
 
 	function orderHandler.handleOrder(orderNickname, orderDistance, orderClock)
 		if not orderHandler.currentOrder  then
-			if not table.contains(orderNickname, vehicleManager.lastPassengersList) or ini.settings.acceptLastPassengersOrders then
+			if not table.contains(orderNickname, vehicleManager.lastPassengersList) then
 				if table.isEmpty(vehicleManager.passengersList) then
 					if orderHandler.autoAccept then
 						if orderDistance <= ini.settings.maxDistanceToAcceptOrder and os.clock() - 60 < orderClock then
 							orderHandler.acceptOrder(orderNickname, orderClock)
-						end
-					else
-						if orderDistance <= ini.settings.maxDistanceToGetOrder and os.clock() - 60 < orderClock then
-							if not orderHandler.orderList[orderNickname].correct then
-								orderHandler.orderList[orderNickname].correct = true
-								if ini.settings.notifications and ini.settings.sounds then
-									soundManager.playSound("correct_order")
-								end
-								if ini.settings.notifications then
-									imgui.addNotificationWithButton(string.format(FORMAT_NOTIFICATIONS.newOrder, orderNickname, orderHandler.orderList[orderNickname].id, orderDistance, orderHandler.orderList[orderNickname].zone), 15, orderNickname)
-								end
-								orderHandler.lastCorrectOrderNickname = orderNickname
-								orderHandler.lastCorrectOrderClock = os.clock()
-							end
 						end
 					end
 				else
 					if orderDistance <= ini.settings.maxDistanceToGetOrder and os.clock() - 60 < orderClock then
 						if not orderHandler.orderList[orderNickname].correct then
 							orderHandler.orderList[orderNickname].correct = true
-							if ini.settings.notifications and ini.settings.sounds then
-								soundManager.playSound("correct_order")
-							end
-							if ini.settings.notifications then
-								imgui.addNotificationWithButton(string.format(FORMAT_NOTIFICATIONS.newOrder, orderNickname, orderHandler.orderList[orderNickname].id, orderDistance, orderHandler.orderList[orderNickname].zone), 15, orderNickname)
-							end
 							orderHandler.lastCorrectOrderNickname = orderNickname
 							orderHandler.lastCorrectOrderClock = os.clock()
+							lua_thread.create(function()
+								wait(500)
+								if orderHandler.orderList[orderNickname] then
+									if ini.settings.notifications and ini.settings.sounds then
+										soundManager.playSound("correct_order")
+									end
+									if ini.settings.notifications then
+										imgui.addNotificationWithButton(string.format(FORMAT_NOTIFICATIONS.newOrder, orderNickname, orderHandler.orderList[orderNickname].id, orderDistance, orderHandler.orderList[orderNickname].zone), 15, orderNickname)
+									end
+								end
+							end)
 						end
 					end
 				end
@@ -836,40 +843,57 @@ player = {}
 		end
 	end
 
-defaultSettings = {}
-	defaultSettings.checkUpdates = true
-	defaultSettings.showHUD = true
-	defaultSettings.showBindMenu = true
-	defaultSettings.sounds = true
-	defaultSettings.notifications = true
-	defaultSettings.sendSMS = true
-	defaultSettings.sendSMSCancel = true
-	defaultSettings.updateOrderMark = true
-	defaultSettings.acceptRepeatOrder = true
-	defaultSettings.autoClist = true
-	defaultSettings.workClist = 25
-	defaultSettings.acceptLastPassengersOrders = false
-	defaultSettings.hotKeys = true
-	defaultSettings.SMSTimer = 30
-	defaultSettings.maxDistanceToAcceptOrder = 1400
-	defaultSettings.maxDistanceToGetOrder = 1000
-	defaultSettings.fastMapCompatibility = true
-	defaultSettings.key1 = 88
-	defaultSettings.key1add = 0
-	defaultSettings.key2 = 16
-	defaultSettings.key2add = 88
-	defaultSettings.key3 = 88
-	defaultSettings.key3add = 82
-	defaultSettings.binderPosX = 36
-	defaultSettings.binderPosY = 103
-	defaultSettings.hudPosX = 498
-	defaultSettings.hudPosY = 310
-	defaultSettings.markers = true
-	defaultSettings.ordersDistanceUpdate = true
-	defaultSettings.ordersDistanceUpdateTimer = 3
-	defaultSettings.soundVolume = 50
-	defaultSettings.dispatcherMessages = true
-	defaultSettings.finishWork = true
+ini = {
+	settings = {
+		checkUpdates = true,
+		showHUD = true,
+		showBindMenu = true,
+		sounds = true,
+		notifications = true,
+		sendSMS = true,
+		sendSMSCancel = true,
+		updateOrderMark = true,
+		acceptRepeatOrder = true,
+		autoClist = true,
+		workClist = 25,
+		acceptLastPassengersOrders = false,
+		hotKeys = true,
+		SMSTimer = 30,
+		maxDistanceToAcceptOrder = 1400,
+		maxDistanceToGetOrder = 1000,
+		fastMapCompatibility = true,
+		key1 = 88,
+		key1add = 0,
+		key2 = 16,
+		key2add = 88,
+		key3 = 88,
+		key3add = 82,
+		binderPosX = 36,
+		binderPosY = 103,
+		hudPosX = 498,
+		hudPosY = 310,
+		markers = true,
+		ordersDistanceUpdate = true,
+		ordersDistanceUpdateTimer = 5,
+		soundVolume = 50,
+		dispatcherMessages = true,
+		finishWork = true,
+		unloadNotify = true,
+		SMSPrefix = "[Taxi] ",
+		SMSText = "Жёлтый {carname} в пути. Дистанция: {distance} м",
+		SMSArrival = "Жёлтый {carname} прибыл на место вызова",
+		SMSCancel = "Вызов отменён, закажите новое такси"
+	}
+}
+
+defaults = {
+	maxDistanceToAcceptOrder = 1400,
+	maxDistanceToGetOrder = 1000,
+	SMSTimer = 30,
+	ordersDistanceUpdateTimer = 5,
+	soundVolume = 50,
+	workClist = 25
+}
 
 soundManager = {}
 	soundManager.soundsList = {}
@@ -1013,7 +1037,12 @@ function sampev.onShowDialog(DdialogId, Dstyle, Dtitle, Dbutton1, Dbutton2, Dtex
 		elseif string.find(Dtitle, u8:decode"Вызовы") then
 			lua_thread.create(function()
 				for string in string.gmatch(Dtext, '[^\n]+') do
-					local nickname, id, time, distance = string.match(string, u8:decode"%[%d+%] (.+)%[ID:(%d+)%]	(.+)	(.+)")
+					local nickname, id, time, distance
+					if string:find("/service ac taxi") then
+						nickname, id, time, distance = string.match(string, u8:decode"%[%d+%] (.+)%[ID:(%d+)%]	(.+)	(.+)	")
+					else
+						nickname, id, time, distance = string.match(string, u8:decode"%[%d+%] (.+)%[ID:(%d+)%]	(.+)	(.+)")
+					end
 					time = stringToSeconds(time)
 					distance = stringToMeters(distance)
 					if orderHandler.orderList[nickname] then
@@ -1059,6 +1088,10 @@ function sampev.onShowDialog(DdialogId, Dstyle, Dtitle, Dbutton1, Dbutton2, Dtex
 			end
 		end
 	end
+end
+
+function sampev.onSendDialogResponse(dialogId, button, listboxId, input)
+	chatManager.dialogClock = os.clock() + 1
 end
 
 function sampev.onServerMessage(color, message)
@@ -1128,8 +1161,10 @@ function onScriptTerminate(script, quitGame)
 		vehicleManager.clearMarkers()
 		imgui.Process = false
 		if not quitGame then
-	    if not reload then
-				chatManager.addChatMessage('{00CED1}[Taximate v'..thisScript().version..'] {FF6633}Скрипт прекратил работу. В случае возникновения ошибок обращаться в ВК - {00CED1}vk.com/twonse')
+	    if not unload then
+				if ini.settings.unloadNotify then
+					chatManager.addChatMessage('{00CED1}[Taximate v'..thisScript().version..'] {FF6633}Скрипт прекратил работу. В случае возникновения ошибок обращаться в ВК - {00CED1}vk.com/twonse')
+				end
 			end
 		end
 	end
@@ -1218,6 +1253,14 @@ function imgui.initBuffers()
 	imgui.key3Edit = false
 	imgui.key = 0
 	imgui.addKey = 0
+	imgui.SMSPrefix = imgui.ImBuffer(126)
+	imgui.SMSPrefix.v = ini.settings.SMSPrefix
+	imgui.SMSText = imgui.ImBuffer(126)
+	imgui.SMSText.v = ini.settings.SMSText
+	imgui.SMSArrival = imgui.ImBuffer(126)
+	imgui.SMSArrival.v = ini.settings.SMSArrival
+	imgui.SMSCancel = imgui.ImBuffer(126)
+	imgui.SMSCancel.v = ini.settings.SMSCancel
 	imgui.workClist = imgui.ImInt(ini.settings.workClist)
 	imgui.SMSTimer = imgui.ImInt(ini.settings.SMSTimer)
 	imgui.maxDistanceToAcceptOrder = imgui.ImInt(ini.settings.maxDistanceToAcceptOrder)
@@ -1441,22 +1484,22 @@ function imgui.onDrawBindMenu()
 					imgui.NewLine()
 					imgui.SameLine(toScreenX(10))
 					if imgui.Button('Скоро буду', vec(89, 10)) then
-						chatManager.addMessageToQueue("/sms "..orderHandler.currentOrder.id.. ' [Taxi] Скоро буду')
+						chatManager.addMessageToQueue(string.format("/t %d %sСкоро буду", orderHandler.currentOrder.id, ini.settings.SMSPrefix))
 					end
 					imgui.NewLine()
 					imgui.SameLine(toScreenX(10))
 					if imgui.Button('Вызов отменён', vec(89, 10)) then
-						chatManager.addMessageToQueue("/sms "..orderHandler.currentOrder.id.. ' [Taxi] Вызов отменён, закажите новое такси')
+						chatManager.addMessageToQueue(string.format("/t %d %sВызов отменён, закажите новое такси", orderHandler.currentOrder.id, ini.settings.SMSPrefix))
 					end
 					imgui.NewLine()
 					imgui.SameLine(toScreenX(10))
 					if imgui.Button('Да', vec(89, 10)) then
-						chatManager.addMessageToQueue("/sms "..orderHandler.currentOrder.id.. ' [Taxi] Да')
+						chatManager.addMessageToQueue(string.format("/t %d %sДа", orderHandler.currentOrder.id, ini.settings.SMSPrefix))
 					end
 					imgui.NewLine()
 					imgui.SameLine(toScreenX(10))
 					if imgui.Button('Нет', vec(89, 10)) then
-						chatManager.addMessageToQueue("/sms "..orderHandler.currentOrder.id.. ' [Taxi] Нет')
+						chatManager.addMessageToQueue(string.format("/t %d %sНет", orderHandler.currentOrder.id, ini.settings.SMSPrefix))
 					end
 				end
 			end
@@ -1725,7 +1768,7 @@ function imgui.onDrawSettings()
 			imgui.SameLine()
 			imgui.BeginChild("info",vec(64,9), false)
 			if imgui.Selectable('\t\t\tИнформация', imgui.settingsTab == 3) then
-				if imgui.settingsTab ~= 3 then
+				if imgui.settingsTab ~= 3 and ini.settings.checkUpdates then
 					checkUpdates()
 				end
 				imgui.settingsTab = 3
@@ -1757,7 +1800,7 @@ function imgui.onDrawSettings()
 				imgui.PushItemWidth(toScreenX(43))
 				if imgui.SliderInt("", imgui.soundVolume, 0, 100) then
 					if imgui.soundVolume.v < 0 or imgui.soundVolume.v > 100 then
-						imgui.soundVolume.v = defaultSettings.soundVolume
+						imgui.soundVolume.v = defaults.soundVolume
 					end
 					ini.settings.soundVolume = imgui.soundVolume.v
 					inicfg.save(ini,'Taximate/settings.ini')
@@ -1771,7 +1814,7 @@ function imgui.onDrawSettings()
 				imgui.PushItemWidth(toScreenX(53))
 				if imgui.SliderInt("сек", imgui.SMSTimer, 15, 90) then
 					if imgui.SMSTimer.v < 15 or imgui.SMSTimer.v > 90 then
-						imgui.SMSTimer.v = defaultSettings.SMSTimer
+						imgui.SMSTimer.v = defaults.SMSTimer
 					end
 					ini.settings.SMSTimer = imgui.SMSTimer.v
 					inicfg.save(ini,'Taximate/settings.ini')
@@ -1800,7 +1843,7 @@ function imgui.onDrawSettings()
 				imgui.PushItemWidth(toScreenX(28))
 				if imgui.SliderInt(" ", imgui.workClist, 0, 33) then
 					if imgui.workClist.v < 0 or imgui.workClist.v > 33 then
-						imgui.workClist.v = defaultSettings.workClist
+						imgui.workClist.v = defaults.workClist
 					end
 					ini.settings.workClist = imgui.workClist.v
 					inicfg.save(ini,'Taximate/settings.ini')
@@ -1825,7 +1868,7 @@ function imgui.onDrawSettings()
 				imgui.PushItemWidth(toScreenX(59))
 				if imgui.SliderInt("сeк", imgui.ordersDistanceUpdateTimer, 1, 30) then
 					if imgui.ordersDistanceUpdateTimer.v < 1 or imgui.ordersDistanceUpdateTimer.v > 30 then
-						imgui.ordersDistanceUpdateTimer.v = defaultSettings.ordersDistanceUpdateTimer
+						imgui.ordersDistanceUpdateTimer.v = defaults.ordersDistanceUpdateTimer
 					end
 					ini.settings.ordersDistanceUpdateTimer = imgui.ordersDistanceUpdateTimer.v
 					inicfg.save(ini,'Taximate/settings.ini')
@@ -1920,7 +1963,7 @@ function imgui.onDrawSettings()
 				imgui.PushItemWidth(toScreenX(85))
 				if imgui.SliderInt("м", imgui.maxDistanceToAcceptOrder, 0, 7000) then
 					if imgui.maxDistanceToAcceptOrder.v < 0 or imgui.maxDistanceToAcceptOrder.v > 7000 then
-						imgui.maxDistanceToAcceptOrder.v = defaultSettings.maxDistanceToAcceptOrder
+						imgui.maxDistanceToAcceptOrder.v = defaults.maxDistanceToAcceptOrder
 					end
 					ini.settings.maxDistanceToAcceptOrder = imgui.maxDistanceToAcceptOrder.v
 					inicfg.save(ini,'Taximate/settings.ini')
@@ -1928,19 +1971,54 @@ function imgui.onDrawSettings()
 				imgui.Text("Дистанция для получения доп. вызова:")
 				imgui.SameLine()
 				imgui.PushItemWidth(toScreenX(85))
-				if imgui.SliderInt("м ", imgui.maxDistanceToGetOrder, 0, 7000) then
-					if imgui.maxDistanceToGetOrder.v < 0 or imgui.maxDistanceToGetOrder.v > 7000 then
-						imgui.maxDistanceToGetOrder.v = defaultSettings.maxDistanceToGetOrder
+				if imgui.SliderInt("м ", imgui.maxDistanceToGetOrder, 0, 2000) then
+					if imgui.maxDistanceToGetOrder.v < 0 or imgui.maxDistanceToGetOrder.v > 2000 then
+						imgui.maxDistanceToGetOrder.v = defaults.maxDistanceToGetOrder
 					end
 					ini.settings.maxDistanceToGetOrder = imgui.maxDistanceToGetOrder.v
 					inicfg.save(ini,'Taximate/settings.ini')
 				end
+				imgui.Text("СМС префикс:")
+				imgui.SameLine()
+				imgui.PushItemWidth(toScreenX(60))
+				if imgui.InputText(' ', imgui.SMSPrefix) then
+					ini.settings.SMSPrefix = imgui.SMSPrefix.v
+					inicfg.save(ini,'Taximate/settings.ini')
+				end
+				imgui.Text("СМС доклад:")
+				imgui.SameLine()
+				imgui.PushItemWidth(toScreenX(120))
+				if imgui.InputText('  ', imgui.SMSText) then
+					ini.settings.SMSText = imgui.SMSText.v
+					inicfg.save(ini,'Taximate/settings.ini')
+				end
+				imgui.TextColoredRGB("{A0A0A0}" .. string.utf8sub(chatManager.subSMSText(ini.settings.SMSPrefix .. ini.settings.SMSText), 1, 63))
+				imgui.Text("СМС о прибытии:")
+				imgui.SameLine()
+				imgui.PushItemWidth(toScreenX(120))
+				if imgui.InputText('   ', imgui.SMSArrival) then
+					ini.settings.SMSArrival = imgui.SMSArrival.v
+					inicfg.save(ini,'Taximate/settings.ini')
+				end
+				imgui.TextColoredRGB("{A0A0A0}" .. string.utf8sub(chatManager.subSMSText(ini.settings.SMSPrefix .. ini.settings.SMSArrival), 1, 63))
+				imgui.Text("СМС об отмене вызова:")
+				imgui.SameLine()
+				imgui.PushItemWidth(toScreenX(120))
+				if imgui.InputText('    ', imgui.SMSCancel) then
+					ini.settings.SMSCancel = imgui.SMSCancel.v
+					inicfg.save(ini,'Taximate/settings.ini')
+				end
+				imgui.TextColoredRGB("{A0A0A0}" .. string.utf8sub(chatManager.subSMSText(ini.settings.SMSPrefix .. ini.settings.SMSCancel), 1, 63))
 			else
 				if imgui.Checkbox("Автоматическая проверка обновлений", imgui.ImBool(ini.settings.checkUpdates)) then
 					ini.settings.checkUpdates = not ini.settings.checkUpdates
 					inicfg.save(ini,'Taximate/settings.ini')
 				end
 				imgui.setTooltip("Антистиллеры и прочие скрипты могут блокировать проверку обновлений", 90)
+				if imgui.Checkbox("Уведомлять при внезапном прекращении работы скрипта", imgui.ImBool(ini.settings.unloadNotify)) then
+					ini.settings.unloadNotify = not ini.settings.unloadNotify
+					inicfg.save(ini,'Taximate/settings.ini')
+				end
 				if imgui.Button("Проверить обновления") then
 					checkUpdates()
 				end
@@ -1955,7 +2033,7 @@ function imgui.onDrawSettings()
 				end
 				imgui.setTooltip("Антистиллеры и прочие скрипты могут блокировать проверку обновлений", 90)
 				if imgui.Button("Перезапустить скрипт") then
-					reload = true
+					unload = true
 					thisScript():reload()
 				end
 				imgui.Text("Связь:")
@@ -1986,7 +2064,7 @@ function imgui.onDrawSettings()
 					end
 				end
 				imgui.Text("История обновлений")
-				imgui.BeginChild('changelog', vec(190, 112), true)
+				imgui.BeginChild('changelog', vec(190, 102), true)
 					if script_updates.changelog then
 						for index, key in pairs(script_updates.sorted_keys) do
 							if imgui.CollapsingHeader('Версия '..key) then
@@ -2189,7 +2267,7 @@ local zones = {
 	["Колесо обозрения"] = {x = 371.21142578125, y = -2036.2333984375},
 	["Vinewoоd"] = {x = 217.96139526367, y = -1269.2333984375},
 	["Back O Beyond"] = {x = -652.17919921875, y = -2188},
-	["Такси 15+ ЛВ"] = {x = 2448.4223632813, y = 1337.5726318359},
+	["Стоянка такси ЛВ"] = {x = 2448.4223632813, y = 1337.5726318359},
 	["Аэропорт ЛВ"] = {x = 1350.8845214844, y = 1375.6596679688},
 	["Northstar Rock"] = {x = 2272, y = -507.87426757813},
 	["Vinewоod"] = {x = 1404, y = -686.48815917969},
@@ -2197,7 +2275,7 @@ local zones = {
 	["Обсерватория"] = {x = 1108.71875, y = -2032.654296875},
 	["Аэропорт ЛС"] = {x = 1684, y = -2531.5048828125},
 	["Армия ЛС"] = {x = 2734, y = -2449.25},
-	["Такси 15+ СФ"] = {x = -2267.4973144531, y = 123.14111328125},
+	["Стоянка такси СФ"] = {x = -2267.4973144531, y = 123.14111328125},
 	["Админ. деревня"] = {x = 2845.7473144531, y = 2765.578125},
 	["Foster Valley"] = {x = -1922.984375, y = -938.43969726563},
 	["Shady Creeks"] = {x = -1655.234375, y = -1922.6591796875},
@@ -2391,7 +2469,7 @@ function checkUpdates()
           file:close()
           os.remove(fpath)
           if script_updates['version_num'] > thisScript()['version_num'] then
-						chatManager.addChatMessage('{00CED1}[Taximate v'..thisScript().version..'] {FFFFFF}Доступна новая версия скрипта. Обновление можно скачать в меню настроек - {00CED1}/taximate')
+						chatManager.addChatMessage('{00CED1}[Taximate v'..thisScript().version..'] {FFFFFF}Доступна новая версия скрипта. Обновление можно скачать в меню настроек - {00CED1}/tm')
 							script_updates.update = true
             return true
           end
@@ -2409,7 +2487,7 @@ function keycheck(k)
       r = r and PressType[k.t[i]](k.k[i])
     end
     return r
-end
+end 
 
 function isKeysPressed(key, addKey, hold)
 	if hold then
@@ -2425,7 +2503,7 @@ function update()
   downloadUrlToFile("https://raw.githubusercontent.com/21se/Taximate/dev/taximate.lua", thisScript().path, function(_, status, _, _)
     if status == 6 then
 			chatManager.addChatMessage('{00CED1}[Taximate v'..thisScript().version..'] {FFFFFF}Скрипт обновлён. В случае возникновения ошибок обращаться в ВК - {00CED1}vk.com/twonse{FFFFFF}')
-			reload = true
+			unload = true
       thisScript():reload()
     end
   end)
