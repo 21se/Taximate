@@ -1,15 +1,11 @@
 script_name("Taximate")
 script_author("21se(pivo)")
 script_version("1.3.0 dev")
-script_version_number(38)
+script_version_number(40)
 script_moonloader(26)
 script_url("21se.github.io/Taximate")
 script_updates = {}
 script_updates.update = false
-
--- количество пассажиров
--- цветовая гамма
--- try libs 
 
 local inicfg = require "inicfg"
 local sampev = require "lib.samp.events"
@@ -102,6 +98,7 @@ function main()
     if not isSampLoaded() or not isSampfuncsLoaded() then
         return
     end
+
     while not isSampAvailable() do
         wait(100)
     end
@@ -132,11 +129,15 @@ function main()
                 "]{FFFFFF} Меню настроек скрипта - {00CED1}/tm{FFFFFF}, страница скрипта: {00CED1}" .. thisScript().url
     )
 
-    if not doesDirectoryExist(getWorkingDirectory() .. "\\config") then
-        createDirectory(getWorkingDirectory() .. "\\config")
+		repeat
+			wait(100)
+		until sampGetPlayerScore(player.id) ~= 0
+
+    if not doesDirectoryExist(getWorkingDirectory() .. "/config") then
+        createDirectory(getWorkingDirectory() .. "/config")
     end
-    if not doesDirectoryExist(getWorkingDirectory() .. "\\config\\Taximate") then
-        createDirectory(getWorkingDirectory() .. "\\config\\Taximate")
+    if not doesDirectoryExist(getWorkingDirectory() .. "/config/Taximate") then
+        createDirectory(getWorkingDirectory() .. "/config/Taximate")
     end
 
     ini = inicfg.load({settings = ini.settings}, "Taximate/settings.ini")
@@ -146,7 +147,7 @@ function main()
     soundManager.loadSound("new_passenger")
     imgui.ApplyCustomStyle()
     imgui.GetIO().Fonts:AddFontFromFileTTF(
-        "C:\\Windows\\Fonts\\arial.ttf",
+        "C:/Windows/Fonts/arial.ttf",
         18 / (1920 / getScreenResolution()),
         nil,
         imgui.GetIO().Fonts:GetGlyphRangesCyrillic()
@@ -176,6 +177,7 @@ function main()
 		sampRegisterChatCommand(
 				"tmup",
 				function()
+						checkUpdates()
 						update()
 				end
 		)
@@ -184,8 +186,8 @@ function main()
         lua_thread.create(checkUpdates)
     end
 
-    if doesFileExist(getGameDirectory() .. "\\map.asi") and doesFileExist(getGameDirectory() .. "\\map.ini") then
-        local fastMap = inicfg.load(_, getGameDirectory() .. "\\map.ini")
+    if doesFileExist(getGameDirectory() .. "/map.asi") and doesFileExist(getGameDirectory() .. "/map.ini") then
+        local fastMap = inicfg.load(_, getGameDirectory() .. "/map.ini")
         fastMapKey = fastMap.MAP.key
         fastMap = nil
     end
@@ -281,7 +283,7 @@ end
 
 function chatManager.updateAntifloodClock()
     chatManager.antifloodClock = os.clock()
-    if string.sub(chatManager.lastMessage, 1, 4) == "/sms" then
+    if string.sub(chatManager.lastMessage, 1, 5) == "/sms " or string.sub(chatManager.lastMessage, 1, 3) == "/t " then
         chatManager.antifloodClock = chatManager.antifloodClock + 0.5
     end
 end
@@ -519,7 +521,7 @@ end
 
 orderHandler = {}
 orderHandler.orderList = {}
-
+orderHandler.GPSMark = nil
 orderHandler.autoAccept = false
 orderHandler.lastAcceptedOrderClock = os.clock()
 orderHandler.lastCorrectOrderNickname = nil
@@ -538,7 +540,7 @@ function orderHandler.cancelCurrentOrder()
     end
     if ini.settings.sendSMSCancel and ini.settings.SMSCancel ~= "" then
         chatManager.addMessageToQueue(
-            string.format("/t %d %s%s", orderHandler.currentOrder.id, ini.settings.SMSPrefix, ini.settings.SMSCancel)
+            string.format("/t %d %s", orderHandler.currentOrder.id, chatManager.subSMSText(ini.settings.SMSPrefix, ini.settings.SMSCancel))
         )
     end
     orderHandler.currentOrder = nil
@@ -863,7 +865,6 @@ vehicleManager.maxPassengers = nil
 vehicleManager.vehicleName = nil
 vehicleManager.vehicleHandle = nil
 vehicleManager.markers = {}
-vehicleManager.GPSMark = nil
 
 function vehicleManager.refreshVehicleInfoThread()
     while true do
@@ -1010,6 +1011,7 @@ player.nickname = nil
 player.onWork = false
 player.skill = 1
 player.skillExp = 0
+player.skillClients = 0
 player.rank = 1
 player.rankExp = 0
 player.salary = 0
@@ -1082,7 +1084,7 @@ soundManager = {}
 soundManager.soundsList = {}
 
 function soundManager.loadSound(soundName)
-    soundManager.soundsList[soundName] = loadAudioStream(getWorkingDirectory() .. "\\rsc\\" .. soundName .. ".mp3")
+    soundManager.soundsList[soundName] = loadAudioStream(getWorkingDirectory() .. "/rsc/" .. soundName .. ".mp3")
 end
 
 function soundManager.playSound(soundName)
@@ -1123,17 +1125,17 @@ function bindMenu.getBindList()
                 bindMenu.json[index] = {text = bind.text, key = bind.key, addKey = bind.keyadd}
             end
         end
-        os.remove(getWorkingDirectory() .. "\\config\\Taximate\\binds.ini")
+        os.remove(getWorkingDirectory() .. "/config/Taximate/binds.ini")
         bindMenu.save()
     else
-        local binds = io.open(getWorkingDirectory() .. "\\config\\Taximate\\binds.json", "r")
+        local binds = io.open(getWorkingDirectory() .. "/config/Taximate/binds.json", "r")
 
         if binds then
             local content = binds:read("*a")
             bindMenu.json = decodeJson(content)
             binds:close()
         else
-            binds = io.open(getWorkingDirectory() .. "\\config\\Taximate\\binds.json", "w")
+            binds = io.open(getWorkingDirectory() .. "/config/Taximate/binds.json", "w")
             local content = encodeJson(bindMenu.defaultBinds)
             binds:write(content)
             binds:close()
@@ -1167,7 +1169,7 @@ function bindMenu.isBindEdit()
 end
 
 function bindMenu.save()
-    binds = io.open(getWorkingDirectory() .. "\\config\\Taximate\\binds.json", "w")
+    binds = io.open(getWorkingDirectory() .. "/config/Taximate/binds.json", "w")
     local content = encodeJson(bindMenu.json)
     binds:write(content)
     binds:close()
@@ -1200,6 +1202,7 @@ function sampev.onShowDialog(DdialogId, Dstyle, Dtitle, Dbutton1, Dbutton2, Dtex
                         if line == 5 then
                             player.skill, player.skillExp =
                                 string.match(string, u8:decode "Скилл: (%d+)	Опыт: .+ (%d+%.%d+)%%")
+														player.skillClients = math.ceil((100 - player.skillExp) / (((9600 / 100 * (1.1 ^ (50 - player.skill))) * 100) / (10000 * (1.1 ^ player.skill))))
                         end
                         if line == 6 then
                             player.rank, player.rankExp =
@@ -1540,8 +1543,8 @@ function imgui.OnDrawFrame()
 end
 
 function imgui.onDrawInputWindow()
-    imgui.SetNextWindowPos(vec(290, 180))
-    imgui.SetNextWindowSize(vec(90, 91))
+    imgui.SetNextWindowPos(vec(280, 165))
+    imgui.SetNextWindowSize(vec(90, 76))
     imgui.Begin(
         "Горячие клавиши",
         imgui.showInputWindow,
@@ -1623,13 +1626,18 @@ imgui.hudHovered = false
 function imgui.onDrawHUD()
     if vehicleManager.vehicleName or isKeysPressed(ini.settings.key1, ini.settings.key1add, true) then
         local windowPosY = 0
+				local zone = nil
+				local gps = nil
         if orderHandler.currentOrder then
-            windowPosY = 37
-        end
+            windowPosY = windowPosY + 37
+        elseif orderHandler.GPSMark then
+					windowPosY = windowPosY + 9.5
+					zone = getZone(orderHandler.GPSMark.x, orderHandler.GPSMark.y)
+					gps = {x = orderHandler.GPSMark.x, y = orderHandler.GPSMark.y}
+				end
 
-        if
-            not (imgui.hudHovered and imgui.IsMouseDragging(0) and
-                isKeysPressed(ini.settings.key1, ini.settings.key1add, true)) or orderHandler.currentOrder
+        if not (imgui.hudHovered and imgui.IsMouseDragging(0) and
+                isKeysPressed(ini.settings.key1, ini.settings.key1add, true)) or orderHandler.currentOrder or orderHandler.GPSMark
          then
             imgui.SetNextWindowPos(vec(ini.settings.hudPosX, ini.settings.hudPosY - windowPosY))
             imgui.SetNextWindowSize(vec(105, 42 + windowPosY))
@@ -1652,7 +1660,7 @@ function imgui.onDrawHUD()
                 imgui.IsRootWindowOrAnyChildFocused() and
                 imgui.IsMouseDragging(0) and
                 imgui.IsRootWindowOrAnyChildHovered() and
-                not orderHandler.currentOrder
+                not (orderHandler.currentOrder or orderHandler.GPSMark)
          then
             ini.settings.hudPosX = math.ceil(savePosX)
             ini.settings.hudPosY = math.ceil(savePosY)
@@ -1694,18 +1702,27 @@ function imgui.onDrawHUD()
                 end
             end
         end
-        imgui.BeginChild("", vec(50, 8), false, imgui.WindowFlags.NoScrollbar)
+				if zone then
+					local posX, posY = getCharCoordinates(PLAYER_PED)
+					imgui.BeginChild("##up", vec(100, 8), false, imgui.WindowFlags.NoScrollbar)
+					imgui.TextColoredRGB("GPS: {4296f9}" .. zone .. "{FFFFFF}, {4296f9}" .. math.ceil(getDistanceBetweenCoords2d(posX, posY, gps.x, gps.y)) .. "{FFFFFF} м")
+					imgui.EndChild()
+				end
+        imgui.BeginChild("##midleft", vec(56, 8), false, imgui.WindowFlags.NoScrollbar)
         imgui.TextColoredRGB("Скилл: {4296f9}" .. player.skill .. " {FFFFFF}(" .. player.skillExp .. "%)")
+				imgui.SameLine()
+				imgui.TextDisabled("(?)")
+				imgui.SetTooltip("До след. уровня: " .. player.skillClients .. " клиентов", 48)
         imgui.EndChild()
         imgui.SameLine()
-        imgui.BeginChild("right", vec(50, 8), false, imgui.WindowFlags.NoScrollbar)
+        imgui.BeginChild("##midright", vec(44, 8), false, imgui.WindowFlags.NoScrollbar)
         imgui.TextColoredRGB("Ранг: {4296f9}" .. player.rank .. " {FFFFFF}(" .. player.rankExp .. "%)")
         imgui.EndChild()
-        imgui.BeginChild("bottom", vec(56.5, 8), false, imgui.WindowFlags.NoScrollbar)
+        imgui.BeginChild("##bottomleft", vec(56.5, 8), false, imgui.WindowFlags.NoScrollbar)
         imgui.TextColoredRGB("ЗП: {4296f9}" .. player.salary .. " / " .. player.salaryLimit .. "{FFFFFF} вирт")
         imgui.EndChild()
         imgui.SameLine()
-        imgui.BeginChild("bottom ", vec(43.5, 8), false, imgui.WindowFlags.NoScrollbar)
+        imgui.BeginChild("##bottomright ", vec(43.5, 8), false, imgui.WindowFlags.NoScrollbar)
         imgui.TextColoredRGB("Чай: {4296f9}" .. player.tips .. "{FFFFFF} вирт")
         imgui.EndChild()
 
@@ -1734,7 +1751,6 @@ function imgui.onDrawHUD()
             end
             imgui.EndChild()
         end
-
         imgui.End()
         imgui.PopStyleVar()
     end
@@ -1785,7 +1801,7 @@ function imgui.onDrawBindMenu()
                 imgui.SameLine(toScreenX(10))
                 if imgui.Button("Скоро буду", vec(89, 10)) then
                     chatManager.addMessageToQueue(
-                        string.format("/t %d %sСкоро буду", orderHandler.currentOrder.id, ini.settings.SMSPrefix)
+                        string.format("/t %d %s Скоро буду", orderHandler.currentOrder.id, ini.settings.SMSPrefix)
                     )
                 end
                 imgui.NewLine()
@@ -1793,7 +1809,7 @@ function imgui.onDrawBindMenu()
                 if imgui.Button("Вызов отменён", vec(89, 10)) then
                     chatManager.addMessageToQueue(
                         string.format(
-                            "/t %d %sВызов отменён, закажите новое такси",
+                            "/t %d %s Вызов отменён, закажите новое такси",
                             orderHandler.currentOrder.id,
                             ini.settings.SMSPrefix
                         )
@@ -1803,14 +1819,14 @@ function imgui.onDrawBindMenu()
                 imgui.SameLine(toScreenX(10))
                 if imgui.Button("Да", vec(89, 10)) then
                     chatManager.addMessageToQueue(
-                        string.format("/t %d %sДа", orderHandler.currentOrder.id, ini.settings.SMSPrefix)
+                        string.format("/t %d %s Да", orderHandler.currentOrder.id, ini.settings.SMSPrefix)
                     )
                 end
                 imgui.NewLine()
                 imgui.SameLine(toScreenX(10))
                 if imgui.Button("Нет", vec(89, 10)) then
                     chatManager.addMessageToQueue(
-                        string.format("/t %d %sНет", orderHandler.currentOrder.id, ini.settings.SMSPrefix)
+                        string.format("/t %d %s Нет", orderHandler.currentOrder.id, ini.settings.SMSPrefix)
                     )
                 end
             end
@@ -1958,7 +1974,7 @@ function imgui.onDrawNotification()
         local sizeWithButton = 0
 
         if notification.button then
-            sizeWithButton = 12
+            sizeWithButton = sizeWithButton + 16
         end
 
         if notification.active and (notification.time < os.clock() or (notification.button and not isOrderExist)) then
@@ -2003,13 +2019,15 @@ function imgui.onDrawNotification()
 
                     local notfPos = 0
                     if orderHandler.currentOrder then
-                        notfPos = 37
-                    end
+                        notfPos = notfPos + 37
+										elseif orderHandler.GPSMark then
+                        notfPos = notfPos + 9.5
+										end
                     local notificationTitle = "{4296f9}Taximate notification\t\t\t\t\t{FFFFFF}" .. notification.date
 
                     notfList.pos = {
                         x = ini.settings.hudPosX,
-                        y = notfList.pos.y - (notfList.size.y + 15 + sizeWithButton)
+                        y = notfList.pos.y - (notfList.size.y + 10 + sizeWithButton)
                     }
                     imgui.SetNextWindowPos(imgui.ImVec2(toScreenX(notfList.pos.x), toScreenY(notfList.pos.y - notfPos)))
                     imgui.SetNextWindowSize(
@@ -2099,7 +2117,7 @@ function imgui.onDrawNotification()
         },
         size = {
             x = 100,
-            y = 33
+            y = 29
         }
     }
 end
@@ -2160,7 +2178,7 @@ function imgui.onDrawSettings()
             ini.settings.sounds = not ini.settings.sounds
             inicfg.save(ini, "Taximate/settings.ini")
         end
-        imgui.setTooltip("Для работы требуется выставить минимальную громкость игрового радио и перезапустить игру", 90)
+        imgui.SetTooltip("Для работы требуется выставить минимальную громкость игрового радио и перезапустить игру", 90)
         imgui.SameLine()
         imgui.SameLine()
         imgui.PushItemWidth(toScreenX(43))
@@ -2171,7 +2189,7 @@ function imgui.onDrawSettings()
             ini.settings.soundVolume = imgui.soundVolume.v
             inicfg.save(ini, "Taximate/settings.ini")
         end
-        imgui.setTooltip("Для работы требуется выставить минимальную громкость игрового радио и перезапустить игру", 90)
+        imgui.SetTooltip("Для работы требуется выставить минимальную громкость игрового радио и перезапустить игру", 90)
         if imgui.Checkbox("Автоматическая отправка СМС клиенту раз в", imgui.ImBool(ini.settings.sendSMS)) then
             ini.settings.sendSMS = not ini.settings.sendSMS
             inicfg.save(ini, "Taximate/settings.ini")
@@ -2334,7 +2352,7 @@ function imgui.onDrawSettings()
         imgui.SameLine()
         imgui.Dummy(vec(1.8, 0))
         imgui.SameLine()
-        imgui.PushItemWidth(toScreenX(85))
+        imgui.PushItemWidth(toScreenX(84))
         if imgui.SliderInt("м", imgui.maxDistanceToAcceptOrder, 0, 7000) then
             if imgui.maxDistanceToAcceptOrder.v < 0 or imgui.maxDistanceToAcceptOrder.v > 7000 then
                 imgui.maxDistanceToAcceptOrder.v = defaults.maxDistanceToAcceptOrder
@@ -2344,7 +2362,7 @@ function imgui.onDrawSettings()
         end
         imgui.Text("Дистанция для получения доп. вызова:")
         imgui.SameLine()
-        imgui.PushItemWidth(toScreenX(85))
+        imgui.PushItemWidth(toScreenX(84))
         if imgui.SliderInt("м ", imgui.maxDistanceToGetOrder, 0, 2000) then
             if imgui.maxDistanceToGetOrder.v < 0 or imgui.maxDistanceToGetOrder.v > 2000 then
                 imgui.maxDistanceToGetOrder.v = defaults.maxDistanceToGetOrder
@@ -2362,7 +2380,7 @@ function imgui.onDrawSettings()
         end
         imgui.Text("СМС доклад:")
         imgui.SameLine()
-        imgui.PushItemWidth(toScreenX(150))
+        imgui.PushItemWidth(toScreenX(155))
         if imgui.InputText("##SMSText", imgui.SMSText) then
             ini.settings.SMSText = imgui.SMSText.v
             inicfg.save(ini, "Taximate/settings.ini")
@@ -2372,7 +2390,7 @@ function imgui.onDrawSettings()
         )
         imgui.Text("СМС о прибытии:")
         imgui.SameLine()
-        imgui.PushItemWidth(toScreenX(120))
+        imgui.PushItemWidth(toScreenX(144))
         if imgui.InputText("##SMSArrival", imgui.SMSArrival) then
             ini.settings.SMSArrival = imgui.SMSArrival.v
             inicfg.save(ini, "Taximate/settings.ini")
@@ -2382,7 +2400,7 @@ function imgui.onDrawSettings()
         )
         imgui.Text("СМС об отмене вызова:")
         imgui.SameLine()
-        imgui.PushItemWidth(toScreenX(120))
+        imgui.PushItemWidth(toScreenX(128))
         if imgui.InputText("##SMSCancel", imgui.SMSCancel) then
             ini.settings.SMSCancel = imgui.SMSCancel.v
             inicfg.save(ini, "Taximate/settings.ini")
@@ -2395,7 +2413,7 @@ function imgui.onDrawSettings()
             ini.settings.checkUpdates = not ini.settings.checkUpdates
             inicfg.save(ini, "Taximate/settings.ini")
         end
-        imgui.setTooltip("Антистиллеры и прочие скрипты могут блокировать проверку обновлений", 90)
+        imgui.SetTooltip("Антистиллеры и прочие скрипты могут блокировать проверку обновлений", 90)
         if
             imgui.Checkbox(
                 "Уведомлять при внезапном прекращении работы скрипта",
@@ -2408,7 +2426,7 @@ function imgui.onDrawSettings()
         if imgui.Button("Проверить обновления") then
             checkUpdates()
         end
-        imgui.setTooltip("Антистиллеры и прочие скрипты могут блокировать проверку обновлений", 90)
+        imgui.SetTooltip("Антистиллеры и прочие скрипты могут блокировать проверку обновлений", 90)
         imgui.SameLine()
         if script_updates.update then
             if imgui.Button("Скачать новую версию") then
@@ -2417,7 +2435,7 @@ function imgui.onDrawSettings()
         else
             imgui.Text("Обновления отсутствуют")
         end
-        imgui.setTooltip("Антистиллеры и прочие скрипты могут блокировать проверку обновлений", 90)
+        imgui.SetTooltip("Антистиллеры и прочие скрипты могут блокировать проверку обновлений", 90)
         if imgui.Button("Перезапустить скрипт") then
             unload = true
             thisScript():reload()
@@ -2484,7 +2502,7 @@ function imgui.addNotification(text, time)
     }
 end
 
-function imgui.setTooltip(text, width)
+function imgui.SetTooltip(text, width)
     if imgui.IsItemHovered() then
         imgui.BeginTooltip()
         imgui.PushTextWrapPos(toScreenX(width))
@@ -2830,16 +2848,20 @@ function imgui.TextColoredRGB(text)
 end
 
 function sampev.onSetRaceCheckpoint(type, position)
-    vehicleManager.GPSMark = {x = position.x, y = position.y, z = position.z, time = os.clock()}
+    orderHandler.GPSMark = {x = position.x, y = position.y, z = position.z, time = os.clock()}
+end
+
+function sampev.onDisableRaceCheckpoint()
+		orderHandler.GPSMark = nil
 end
 
 function getGPSMarkCoords3d()
     wait(500)
     local found = false
-    if vehicleManager.GPSMark then
-        found = os.clock() - vehicleManager.GPSMark.time <= 5
+    if orderHandler.GPSMark then
+        found = os.clock() - orderHandler.GPSMark.time <= 5
     end
-    return found, vehicleManager.GPSMark.x, vehicleManager.GPSMark.y, vehicleManager.GPSMark.z
+    return found, orderHandler.GPSMark.x, orderHandler.GPSMark.y, orderHandler.GPSMark.z
 end
 
 function toScreenY(gY)
