@@ -1,19 +1,21 @@
 script_name("Taximate")
 script_author("21se(pivo)")
 script_version("1.3.0 dev")
-script_version_number(40)
+script_version_number(41)
 script_moonloader(26)
 script_url("21se.github.io/Taximate")
 script_updates = {}
 script_updates.update = false
 
-local inicfg = require "inicfg"
-local sampev = require "lib.samp.events"
-local vkeys = require "lib.vkeys"
-local imgui = require "imgui"
+local ffi = require "ffi"
 local moonloader = require "moonloader"
-local utf8 = require "utf8lib"
+local inicfg = require "inicfg"
 local encoding = require "encoding"
+local vkeys = require "vkeys"
+local sampev = require "samp.events"
+local imgui = require "imgui"
+local utf8 = require "utf8lib"
+local effil = require "effil"
 
 encoding.default = "CP1251"
 local u8 = encoding.UTF8
@@ -124,9 +126,7 @@ function main()
     end
 
     chatManager.addChatMessage(
-        "{00CED1}[Taximate v" ..
-            thisScript().version ..
-                "]{FFFFFF} Меню настроек скрипта - {00CED1}/tm{FFFFFF}, страница скрипта: {00CED1}" .. thisScript().url
+        "Меню настроек скрипта - {00CED1}/tm{FFFFFF}, страница скрипта: {00CED1}" .. thisScript().url
     )
 
 		repeat
@@ -278,7 +278,10 @@ chatManager.hideResultMessages = {
 }
 
 function chatManager.addChatMessage(message)
-    sampAddChatMessage(u8:decode(tostring(message)), 0xFFFFFF)
+    sampAddChatMessage(u8:decode("\
+				{00CED1}[Taximate v" ..
+				thisScript().version .. "]{FFFFFF} "
+				.. tostring(message)), 0xFFFFFF)
 end
 
 function chatManager.updateAntifloodClock()
@@ -478,9 +481,8 @@ function chatManager.handleInputMessage(message)
                 player.refreshPlayerInfo()
             elseif string.find(message, u8:decode "^ Не флуди!$") then
                 chatManager.updateAntifloodClock()
-
                 for qMessage in pairs(chatManager.hideResultMessages) do
-                    chatManager.hideResultMessages[qMessage].bool = false
+                		chatManager.hideResultMessages[qMessage].bool = false
                 end
             end
         end
@@ -1064,7 +1066,7 @@ ini = {
         soundVolume = 50,
         dispatcherMessages = true,
         finishWork = true,
-        unloadNotify = true,
+        sendLog = true,
         SMSPrefix = "[Taxi]",
         SMSText = "Жёлтый {carname} в пути. Дистанция: {distance} м",
         SMSArrival = "Жёлтый {carname} прибыл на место вызова",
@@ -1387,18 +1389,53 @@ function onScriptTerminate(script, quitGame)
         deleteCheckpoint(orderHandler.currentOrderCheckpoint)
         vehicleManager.clearMarkers()
         imgui.Process = false
-        if not quitGame then
-            if not unload then
-                if ini.settings.unloadNotify then
-                    chatManager.addChatMessage(
-                        "{00CED1}[Taximate v" ..
-                            thisScript().version ..
-                                "] {FF6633}Скрипт прекратил работу. В случае возникновения ошибок обращаться в ВК - {00CED1}vk.com/twonse"
-                    )
-                end
-            end
-        end
+				if ini.settings.sendLog and not quitGame then
+					sendLog()
+				end
     end
+end
+
+function sendLog()
+	local err = false
+	local log = ''
+	local lines = {}
+
+	logFile = io.open(getWorkingDirectory() .. "/moonloader.log")
+
+	if logFile then
+		for line in logFile:lines() do
+			log = log .. line .. '\n'
+			table.insert(lines, line)
+		end
+		for line = #lines-5, #lines do
+			print(lines[line])
+			if lines[line]:find("%(error%)\t" .. thisScript().name) then
+				err = true
+				break
+			end
+		end
+	end
+
+	logFile:close()
+
+	if err then
+		local date = os.date("*t")
+		local args = {}
+		args.data = encodeJson({
+			server = server,
+			moonloader = getMoonloaderVersion(),
+			taximate = string.format("%s (%d)", thisScript().version, thisScript().version_num),
+			log = log
+		})
+		args.headers = {
+			['Content-Type']='application/json',
+			['secret-key']="$2b$10$K/.ZO1Oly.nhwizYfEzjtOudUnv1GZQIvTIi/Ik8ZLsWYRuJ8eAOq",
+			['collection-id']='5f62551d302a837e9567906a',
+			['private']='false',
+			['name']=string.format("[%s] %s", getVolumeId(), os.date("%c"))
+		}
+		asyncHttpRequest('POST', "https://api.jsonbin.io/b", args)
+	end
 end
 
 function stringToMeters(string)
@@ -1704,8 +1741,16 @@ function imgui.onDrawHUD()
         end
 				if zone then
 					local posX, posY = getCharCoordinates(PLAYER_PED)
-					imgui.BeginChild("##up", vec(100, 8), false, imgui.WindowFlags.NoScrollbar)
+					imgui.BeginChild("##upleft", vec(90, 8), false, imgui.WindowFlags.NoScrollbar)
 					imgui.TextColoredRGB("GPS: {4296f9}" .. zone .. "{FFFFFF}, {4296f9}" .. math.ceil(getDistanceBetweenCoords2d(posX, posY, gps.x, gps.y)) .. "{FFFFFF} м")
+					imgui.EndChild()
+					imgui.SameLine()
+					imgui.BeginChild("##upright", vec(10, 8), false, imgui.WindowFlags.NoScrollbar)
+					imgui.PushStyleVar(imgui.StyleVar.FramePadding, vec(2, 0))
+					if imgui.Button("X") then
+						chatManager.addMessageToQueue("/gps", true, true)
+					end
+					imgui.PopStyleVar()
 					imgui.EndChild()
 				end
         imgui.BeginChild("##midleft", vec(56, 8), false, imgui.WindowFlags.NoScrollbar)
@@ -2385,8 +2430,13 @@ function imgui.onDrawSettings()
             ini.settings.SMSText = imgui.SMSText.v
             inicfg.save(ini, "Taximate/settings.ini")
         end
+				local color = "{FFFF00}"
+				local text = chatManager.subSMSText(ini.settings.SMSPrefix, ini.settings.SMSText)
+				if string.utf8len(text) > 63 then
+					color = "{FF0000}"
+				end
         imgui.TextColoredRGB(
-            "{FFFF00}SMS: " .. string.utf8sub(chatManager.subSMSText(ini.settings.SMSPrefix, ini.settings.SMSText), 1, 63)
+            color .. "SMS: " .. string.utf8sub(text, 1, 63)
         )
         imgui.Text("СМС о прибытии:")
         imgui.SameLine()
@@ -2395,8 +2445,13 @@ function imgui.onDrawSettings()
             ini.settings.SMSArrival = imgui.SMSArrival.v
             inicfg.save(ini, "Taximate/settings.ini")
         end
+				local color = "{FFFF00}"
+				local text = chatManager.subSMSText(ini.settings.SMSPrefix, ini.settings.SMSArrival)
+				if string.utf8len(text) > 63 then
+					color = "{FF0000}"
+				end
         imgui.TextColoredRGB(
-            "{FFFF00}SMS: " .. string.utf8sub(chatManager.subSMSText(ini.settings.SMSPrefix, ini.settings.SMSArrival), 1, 63)
+            color .. "SMS: " .. string.utf8sub(text, 1, 63)
         )
         imgui.Text("СМС об отмене вызова:")
         imgui.SameLine()
@@ -2405,8 +2460,13 @@ function imgui.onDrawSettings()
             ini.settings.SMSCancel = imgui.SMSCancel.v
             inicfg.save(ini, "Taximate/settings.ini")
         end
+				local color = "{FFFF00}"
+				local text = chatManager.subSMSText(ini.settings.SMSPrefix, ini.settings.SMSCancel)
+				if string.utf8len(text) > 63 then
+					color = "{FF0000}"
+				end
         imgui.TextColoredRGB(
-            "{FFFF00}SMS: " .. string.utf8sub(chatManager.subSMSText(ini.settings.SMSPrefix, ini.settings.SMSCancel), 1, 63)
+            color .. "SMS: " .. string.utf8sub(text, 1, 63)
         )
     else
         if imgui.Checkbox("Автоматическая проверка обновлений", imgui.ImBool(ini.settings.checkUpdates)) then
@@ -2416,11 +2476,11 @@ function imgui.onDrawSettings()
         imgui.SetTooltip("Антистиллеры и прочие скрипты могут блокировать проверку обновлений", 90)
         if
             imgui.Checkbox(
-                "Уведомлять при внезапном прекращении работы скрипта",
-                imgui.ImBool(ini.settings.unloadNotify)
+                "Отправлять отчёты об ошибках",
+                imgui.ImBool(ini.settings.sendLog)
             )
          then
-            ini.settings.unloadNotify = not ini.settings.unloadNotify
+            ini.settings.sendLog = not ini.settings.sendLog
             inicfg.save(ini, "Taximate/settings.ini")
         end
         if imgui.Button("Проверить обновления") then
@@ -2458,17 +2518,14 @@ function imgui.onDrawSettings()
                     if sampIsPlayerConnected(id) then
                         if sampGetPlayerNickname(id) == "pivo" then
                             chatManager.addChatMessage(
-                                "{00CED1}[Taximate v" ..
-                                    thisScript().version ..
-                                        "] {FFFFFF}Свяжись с разработчиком прямо в игре - {00CED1}pivo[" .. id .. "]"
+                                "Свяжись с разработчиком прямо в игре - {00CED1}pivo[" .. id .. "]"
                             )
                             found = true
                         end
                     end
                 end
                 if not found then
-                    chatManager.addChatMessage(
-                        "{00CED1}[Taximate v" .. thisScript().version .. "] {FFFFFF}Разработчик сейчас не в сети :("
+                    chatManager.addChatMessage("Разработчик сейчас не в сети :("
                     )
                 end
             end
@@ -2483,7 +2540,9 @@ function imgui.onDrawSettings()
                     imgui.PopTextWrapPos()
                 end
             end
-        end
+        else
+					imgui.Text("История обновлений недоступна...")
+				end
         imgui.EndChild()
     end
     imgui.EndChild()
@@ -2914,9 +2973,7 @@ function checkUpdates()
                         os.remove(fpath)
                         if script_updates["version_num"] > thisScript()["version_num"] then
                             chatManager.addChatMessage(
-                                "{00CED1}[Taximate v" ..
-                                    thisScript().version ..
-                                        "] {FFFFFF}Доступна новая версия скрипта. Команда {00CED1}/tmup{FFFFFF} - скачать обновление"
+                                "Доступна новая версия скрипта. Команда {00CED1}/tmup{FFFFFF} - скачать обновление"
                             )
                             script_updates.update = true
                             return true
@@ -2948,6 +3005,63 @@ function isKeysPressed(key, addKey, hold)
     return keycheck({k = {key, addKey}, t = {"KeyDown", "KeyPressed"}})
 end
 
+function getVolumeId()
+	ffi.cdef[[
+	int __stdcall GetVolumeInformationA(
+	    const char* lpRootPathName,
+	    char* lpVolumeNameBuffer,
+	    uint32_t nVolumeNameSize,
+	    uint32_t* lpVolumeSerialNumber,
+	    uint32_t* lpMaximumComponentLength,
+	    uint32_t* lpFileSystemFlags,
+	    char* lpFileSystemNameBuffer,
+	    uint32_t nFileSystemNameSize
+	);
+	]]
+	local serial = ffi.new("unsigned long[1]", 0)
+	ffi.C.GetVolumeInformationA(nil, nil, 0, serial, nil, nil, nil, 0)
+	return serial[0]
+end
+
+function asyncHttpRequest(method, url, args, resolve, reject)
+   local request_thread = effil.thread(function (method, url, args)
+		 local requests = require 'requests'
+      local result, response = pcall(requests.request, method, url, args)
+      if result then
+         response.json, response.xml = nil, nil
+         return true, response
+      else
+         return false, response
+      end
+   end)(method, url, args)
+
+   if not resolve then resolve = function() end end
+   if not reject then reject = function() end end
+
+   lua_thread.create(function()
+      local runner = request_thread
+      while true do
+         local status, err = runner:status()
+         if not err then
+            if status == 'completed' then
+               local result, response = runner:get()
+               if result then
+                  resolve(response)
+               else
+                  reject(response)
+               end
+               return
+            elseif status == 'canceled' then
+               return reject(status)
+            end
+         else
+            return reject(err)
+         end
+         wait(0)
+      end
+   end)
+end
+
 function update()
 		if script_updates.update then
 	    downloadUrlToFile(
@@ -2956,9 +3070,7 @@ function update()
 	        function(_, status, _, _)
 	            if status == moonloader.download_status.STATUS_ENDDOWNLOADDATA then
 	                chatManager.addChatMessage(
-	                    "{00CED1}[Taximate v" ..
-	                        thisScript().version ..
-	                            "] {FFFFFF}Скрипт обновлён. В случае возникновения ошибок обращаться в ВК - {00CED1}vk.com/twonse{FFFFFF}"
+	                    "Скрипт обновлён. В случае возникновения ошибок обращаться в ВК - {00CED1}vk.com/twonse{FFFFFF}"
 	                )
 	                unload = true
 	                thisScript():reload()
@@ -2967,9 +3079,7 @@ function update()
 	    )
 		else
 			chatManager.addChatMessage(
-					"{00CED1}[Taximate v" ..
-							thisScript().version ..
-									"] {FFFFFF}Обновления не найдены, возможно скрипту заблокирован выход в интернет"
+					"Обновления не найдены, возможно скрипт не получил выход в интернет"
 			)
 		end
 end
