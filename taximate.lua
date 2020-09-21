@@ -1,21 +1,18 @@
 script_name("Taximate")
 script_author("21se(pivo)")
 script_version("1.3.0 dev")
-script_version_number(41)
+script_version_number(42)
 script_moonloader(26)
 script_url("21se.github.io/Taximate")
 script_updates = {}
 script_updates.update = false
 
-local ffi = require "ffi"
 local moonloader = require "moonloader"
 local inicfg = require "inicfg"
 local encoding = require "encoding"
 local vkeys = require "vkeys"
 local sampev = require "samp.events"
 local imgui = require "imgui"
-local utf8 = require "utf8lib"
-local effil = require "effil"
 
 encoding.default = "CP1251"
 local u8 = encoding.UTF8
@@ -120,7 +117,6 @@ function main()
             (server:find("Legacy") and "legacy" or (server:find("Classic") and "classic" or ""))))
 
     if server == "" then
-        unload = true
         thisScript():unload()
         return
     end
@@ -381,14 +377,14 @@ end
 function chatManager.handleInputMessage(message)
     lua_thread.create(
         function()
-            if string.find(message, INPUT_MESSAGES.newOrder) and player.onWork then
+            if string.find(message, INPUT_MESSAGES.newOrder) then
                 local time = os.clock()
                 local nickname, id, distance = string.match(message, FORMAT_INPUT_MESSAGES.newOrder)
                 distance = stringToMeters(distance)
                 orderHandler.addOrder(nickname, id, distance, time)
-            elseif string.find(message, INPUT_MESSAGES.orderAccepted) and player.onWork then
+            elseif string.find(message, INPUT_MESSAGES.orderAccepted) then
                 local driverNickname, passengerNickname = string.match(message, FORMAT_INPUT_MESSAGES.orderAccepted)
-                if driverNickname == player.nickname then
+                if driverNickname == player.nickname and player.onWork then
                     if player.acceptOrder then
                         player.acceptOrder = false
                     end
@@ -1066,7 +1062,6 @@ ini = {
         soundVolume = 50,
         dispatcherMessages = true,
         finishWork = true,
-        sendLog = true,
         SMSPrefix = "[Taxi]",
         SMSText = "Жёлтый {carname} в пути. Дистанция: {distance} м",
         SMSArrival = "Жёлтый {carname} прибыл на место вызова",
@@ -1098,8 +1093,10 @@ end
 
 bindMenu = {}
 bindMenu.bindList = {}
+bindMenu.page = 1
 bindMenu.json = {}
 bindMenu.defaultBinds = {
+	  {text = "/service", key = 0, addKey = 0},
     {text = "Привет", key = 0, addKey = 0},
     {text = "Куда едем?", key = 0, addKey = 0},
     {text = "Спасибо", key = 0, addKey = 0},
@@ -1109,9 +1106,7 @@ bindMenu.defaultBinds = {
     {text = "Нет", key = 0, addKey = 0},
     {text = "))", key = 0, addKey = 0},
     {text = "Почини", key = 0, addKey = 0},
-    {text = "/accept repair", key = 0, addKey = 0},
     {text = "Заправь", key = 0, addKey = 0},
-    {text = "/accept refill", key = 0, addKey = 0},
     {text = "/rkt", key = 0, addKey = 0},
     {text = "/b Скрипт для таксистов - Taximate", key = 0, addKey = 0}
 }
@@ -1389,53 +1384,7 @@ function onScriptTerminate(script, quitGame)
         deleteCheckpoint(orderHandler.currentOrderCheckpoint)
         vehicleManager.clearMarkers()
         imgui.Process = false
-				if ini.settings.sendLog and not quitGame then
-					sendLog()
-				end
     end
-end
-
-function sendLog()
-	local err = false
-	local log = ''
-	local lines = {}
-
-	logFile = io.open(getWorkingDirectory() .. "/moonloader.log")
-
-	if logFile then
-		for line in logFile:lines() do
-			log = log .. line .. '\n'
-			table.insert(lines, line)
-		end
-		for line = #lines-5, #lines do
-			print(lines[line])
-			if lines[line]:find("%(error%)\t" .. thisScript().name) then
-				err = true
-				break
-			end
-		end
-	end
-
-	logFile:close()
-
-	if err then
-		local date = os.date("*t")
-		local args = {}
-		args.data = encodeJson({
-			server = server,
-			moonloader = getMoonloaderVersion(),
-			taximate = string.format("%s (%d)", thisScript().version, thisScript().version_num),
-			log = log
-		})
-		args.headers = {
-			['Content-Type']='application/json',
-			['secret-key']="$2b$10$K/.ZO1Oly.nhwizYfEzjtOudUnv1GZQIvTIi/Ik8ZLsWYRuJ8eAOq",
-			['collection-id']='5f62551d302a837e9567906a',
-			['private']='false',
-			['name']=string.format("[%s] %s", getVolumeId(), os.date("%c"))
-		}
-		asyncHttpRequest('POST', "https://api.jsonbin.io/b", args)
-	end
 end
 
 function stringToMeters(string)
@@ -1528,6 +1477,7 @@ end
 
 function imgui.initBuffers()
     imgui.settingsTab = 1
+		imgui.binderPage = 1
     imgui.showSettings = imgui.ImBool(false)
     imgui.showInputWindow = imgui.ImBool(false)
     imgui.key1Edit = false
@@ -1804,24 +1754,35 @@ end
 imgui.bindHovered = false
 function imgui.onDrawBindMenu()
     if isKeysPressed(ini.settings.key1, ini.settings.key1add, true) or bindMenu.isBindEdit() then
+				local passengers = not table.isEmpty(vehicleManager.passengersList)
+				local order = orderHandler.currentOrder ~= nil
+				local sizeX = 101
+
         if not bindMenu.isBindEdit() then
             bindMenu.bindList = bindMenu.getBindList()
         end
         imgui.ShowCursor = true
+
+				local flags = imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize
+
+				if passengers or order then
+					flags = flags + imgui.WindowFlags.AlwaysVerticalScrollbar
+					sizeX = sizeX + 3
+				end
 
         if
             not (imgui.bindHovered and imgui.IsMouseDragging(0) and
                 (isKeysPressed(ini.settings.key1, ini.settings.key1add, true) or bindMenu.isBindEdit()))
          then
             imgui.SetNextWindowPos(vec(ini.settings.binderPosX, ini.settings.binderPosY))
-            imgui.SetNextWindowSize(vec(105, 228))
+            imgui.SetNextWindowSize(vec(sizeX, 225))
         end
 
         imgui.PushStyleVar(imgui.StyleVar.Alpha, 0.95)
         imgui.Begin(
             "Taximate Binder",
             _,
-            imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize + imgui.WindowFlags.AlwaysVerticalScrollbar
+            flags
         )
         imgui.bindHovered = imgui.IsRootWindowOrAnyChildHovered()
         local newPos = imgui.GetWindowPos()
@@ -1838,7 +1799,7 @@ function imgui.onDrawBindMenu()
             inicfg.save(ini, "Taximate/settings.ini")
         end
 
-        if orderHandler.currentOrder then
+        if order then
             imgui.NewLine()
             imgui.SameLine(toScreenX(3))
             if imgui.CollapsingHeader("Отправить СМС клиенту", vec(97, 10)) then
@@ -1877,7 +1838,7 @@ function imgui.onDrawBindMenu()
             end
         end
 
-        if not table.isEmpty(vehicleManager.passengersList) then
+        if passengers then
             imgui.NewLine()
             imgui.SameLine(toScreenX(3))
             if vehicleManager.maxPassengers then
@@ -1909,15 +1870,49 @@ function imgui.onDrawBindMenu()
             end
         end
 
-        if imgui.Button("Добавить строку", vec(97, 10)) then
-            if not bindMenu.isBindEdit() then
-                bindMenu.json[#bindMenu.json + 1] = {text = "", key = 0, addKey = 0}
-                bindMenu.save()
-            end
-        end
+				imgui.BeginChild("binderPage", vec(97, 10), false)
+				for i = 1, 10 do
+					imgui.BeginChild(tostring(i), vec(8, 10), false)
+					local bindPage = i == 1 and 0 or (i-1) * 16
+					local bindPageText = i < 10 and ' ' .. i or tostring(i)
+					local binderSize = #bindMenu.bindList
+					if binderSize > bindPage or i == 1 then
+						if imgui.Selectable(bindPageText, imgui.binderPage == i, 0, vec(5, 8)) then
+							imgui.binderPage = i
+						end
+					else
+						if imgui.binderPage == i then
+							imgui.binderPage = imgui.binderPage - 1
+						end
+						imgui.TextDisabled(bindPageText)
+					end
+					imgui.EndChild()
+					if i < 10 then
+						imgui.SameLine()
+					end
+				end
+				imgui.EndChild()
 
-        for bindIndex, bind in pairs(bindMenu.bindList) do
-            if bind then
+				if imgui.Button("Добавить строку", vec(97, 10)) then
+						if not bindMenu.isBindEdit() then
+								local num = #bindMenu.json + 1
+								if num <= 160 then
+									bindMenu.json[num] = {text = "", key = 0, addKey = 0}
+									bindMenu.save()
+								end
+						end
+				end
+
+				local beginBind, endBind = 1, 16
+
+				if imgui.binderPage > 1 then
+					beginBind = 17 + (imgui.binderPage - 2) * 16
+					endBind = imgui.binderPage * 16
+				end
+
+        for bindIndex = beginBind, endBind do
+            if bindMenu.bindList[bindIndex] then
+								local bind = bindMenu.bindList[bindIndex]
                 imgui.PushID(bindIndex)
                 if bind.edit then
                     imgui.PushItemWidth(toScreenX(40))
@@ -2178,26 +2173,20 @@ function imgui.onDrawSettings()
         imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize
     )
     imgui.BeginChild("top", vec(195, 9), false)
-    imgui.BeginChild("functions", vec(63.5, 9), false)
-    if imgui.Selectable("\t\t\t  Функции", imgui.settingsTab == 1) then
+    if imgui.Selectable("\t\t\t  Функции", imgui.settingsTab == 1, 0, vec(63, 8)) then
         imgui.settingsTab = 1
     end
-    imgui.EndChild()
     imgui.SameLine()
-    imgui.BeginChild("parameters", vec(63.5, 9), false)
-    if imgui.Selectable("\t\t\tПараметры", imgui.settingsTab == 2) then
+    if imgui.Selectable("\t\t\t Параметры", imgui.settingsTab == 2, 0, vec(63.5, 8)) then
         imgui.settingsTab = 2
     end
-    imgui.EndChild()
     imgui.SameLine()
-    imgui.BeginChild("info", vec(64, 9), false)
-    if imgui.Selectable("\t\t\tИнформация", imgui.settingsTab == 3) then
+    if imgui.Selectable("\t\t\tИнформация", imgui.settingsTab == 3, 0, vec(64, 8)) then
         if imgui.settingsTab ~= 3 and ini.settings.checkUpdates then
             checkUpdates()
         end
         imgui.settingsTab = 3
     end
-    imgui.EndChild()
     imgui.EndChild()
     imgui.BeginChild("bottom", vec(195, 174), true)
     if imgui.settingsTab == 1 then
@@ -2432,11 +2421,11 @@ function imgui.onDrawSettings()
         end
 				local color = "{FFFF00}"
 				local text = chatManager.subSMSText(ini.settings.SMSPrefix, ini.settings.SMSText)
-				if string.utf8len(text) > 63 then
+				if utf8len(text) > 63 then
 					color = "{FF0000}"
 				end
         imgui.TextColoredRGB(
-            color .. "SMS: " .. string.utf8sub(text, 1, 63)
+            color .. "SMS: " .. utf8sub(text, 1, 63)
         )
         imgui.Text("СМС о прибытии:")
         imgui.SameLine()
@@ -2447,11 +2436,11 @@ function imgui.onDrawSettings()
         end
 				local color = "{FFFF00}"
 				local text = chatManager.subSMSText(ini.settings.SMSPrefix, ini.settings.SMSArrival)
-				if string.utf8len(text) > 63 then
+				if utf8len(text) > 63 then
 					color = "{FF0000}"
 				end
         imgui.TextColoredRGB(
-            color .. "SMS: " .. string.utf8sub(text, 1, 63)
+            color .. "SMS: " .. utf8sub(text, 1, 63)
         )
         imgui.Text("СМС об отмене вызова:")
         imgui.SameLine()
@@ -2462,11 +2451,11 @@ function imgui.onDrawSettings()
         end
 				local color = "{FFFF00}"
 				local text = chatManager.subSMSText(ini.settings.SMSPrefix, ini.settings.SMSCancel)
-				if string.utf8len(text) > 63 then
+				if utf8len(text) > 63 then
 					color = "{FF0000}"
 				end
         imgui.TextColoredRGB(
-            color .. "SMS: " .. string.utf8sub(text, 1, 63)
+            color .. "SMS: " .. utf8sub(text, 1, 63)
         )
     else
         if imgui.Checkbox("Автоматическая проверка обновлений", imgui.ImBool(ini.settings.checkUpdates)) then
@@ -2474,15 +2463,6 @@ function imgui.onDrawSettings()
             inicfg.save(ini, "Taximate/settings.ini")
         end
         imgui.SetTooltip("Антистиллеры и прочие скрипты могут блокировать проверку обновлений", 90)
-        if
-            imgui.Checkbox(
-                "Отправлять отчёты об ошибках",
-                imgui.ImBool(ini.settings.sendLog)
-            )
-         then
-            ini.settings.sendLog = not ini.settings.sendLog
-            inicfg.save(ini, "Taximate/settings.ini")
-        end
         if imgui.Button("Проверить обновления") then
             checkUpdates()
         end
@@ -2497,7 +2477,6 @@ function imgui.onDrawSettings()
         end
         imgui.SetTooltip("Антистиллеры и прочие скрипты могут блокировать проверку обновлений", 90)
         if imgui.Button("Перезапустить скрипт") then
-            unload = true
             thisScript():reload()
         end
         imgui.Text("Связь:")
@@ -2531,7 +2510,7 @@ function imgui.onDrawSettings()
             end
         end
         imgui.Text("История обновлений")
-        imgui.BeginChild("changelog", vec(190, 102), true)
+        imgui.BeginChild("changelog", vec(190, 114), true)
         if script_updates.changelog then
             for index, key in pairs(script_updates.sorted_keys) do
                 if imgui.CollapsingHeader("Версия " .. key) then
@@ -3005,63 +2984,6 @@ function isKeysPressed(key, addKey, hold)
     return keycheck({k = {key, addKey}, t = {"KeyDown", "KeyPressed"}})
 end
 
-function getVolumeId()
-	ffi.cdef[[
-	int __stdcall GetVolumeInformationA(
-	    const char* lpRootPathName,
-	    char* lpVolumeNameBuffer,
-	    uint32_t nVolumeNameSize,
-	    uint32_t* lpVolumeSerialNumber,
-	    uint32_t* lpMaximumComponentLength,
-	    uint32_t* lpFileSystemFlags,
-	    char* lpFileSystemNameBuffer,
-	    uint32_t nFileSystemNameSize
-	);
-	]]
-	local serial = ffi.new("unsigned long[1]", 0)
-	ffi.C.GetVolumeInformationA(nil, nil, 0, serial, nil, nil, nil, 0)
-	return serial[0]
-end
-
-function asyncHttpRequest(method, url, args, resolve, reject)
-   local request_thread = effil.thread(function (method, url, args)
-		 local requests = require 'requests'
-      local result, response = pcall(requests.request, method, url, args)
-      if result then
-         response.json, response.xml = nil, nil
-         return true, response
-      else
-         return false, response
-      end
-   end)(method, url, args)
-
-   if not resolve then resolve = function() end end
-   if not reject then reject = function() end end
-
-   lua_thread.create(function()
-      local runner = request_thread
-      while true do
-         local status, err = runner:status()
-         if not err then
-            if status == 'completed' then
-               local result, response = runner:get()
-               if result then
-                  resolve(response)
-               else
-                  reject(response)
-               end
-               return
-            elseif status == 'canceled' then
-               return reject(status)
-            end
-         else
-            return reject(err)
-         end
-         wait(0)
-      end
-   end)
-end
-
 function update()
 		if script_updates.update then
 	    downloadUrlToFile(
@@ -3072,7 +2994,6 @@ function update()
 	                chatManager.addChatMessage(
 	                    "Скрипт обновлён. В случае возникновения ошибок обращаться в ВК - {00CED1}vk.com/twonse{FFFFFF}"
 	                )
-	                unload = true
 	                thisScript():reload()
 	            end
 	        end
@@ -3082,4 +3003,158 @@ function update()
 					"Обновления не найдены, возможно скрипт не получил выход в интернет"
 			)
 		end
+end
+
+-- utf8lib
+function utf8charbytes (s, i)
+	-- argument defaults
+	i = i or 1
+
+	-- argument checking
+	if type(s) ~= "string" then
+		error("bad argument #1 to 'utf8charbytes' (string expected, got ".. type(s).. ")")
+	end
+	if type(i) ~= "number" then
+		error("bad argument #2 to 'utf8charbytes' (number expected, got ".. type(i).. ")")
+	end
+
+	local c = s:byte(i)
+
+	-- determine bytes needed for character, based on RFC 3629
+	-- validate byte 1
+	if c > 0 and c <= 127 then
+		-- UTF8-1
+		return 1
+
+	elseif c >= 194 and c <= 223 then
+		-- UTF8-2
+		local c2 = s:byte(i + 1)
+
+		if not c2 then
+			error("UTF-8 string terminated early")
+		end
+
+		-- validate byte 2
+		if c2 < 128 or c2 > 191 then
+			error("Invalid UTF-8 character")
+		end
+
+		return 2
+
+	elseif c >= 224 and c <= 239 then
+		-- UTF8-3
+		local c2 = s:byte(i + 1)
+		local c3 = s:byte(i + 2)
+
+		if not c2 or not c3 then
+			error("UTF-8 string terminated early")
+		end
+
+		-- validate byte 2
+		if c == 224 and (c2 < 160 or c2 > 191) then
+			error("Invalid UTF-8 character")
+		elseif c == 237 and (c2 < 128 or c2 > 159) then
+			error("Invalid UTF-8 character")
+		elseif c2 < 128 or c2 > 191 then
+			error("Invalid UTF-8 character")
+		end
+
+		-- validate byte 3
+		if c3 < 128 or c3 > 191 then
+			error("Invalid UTF-8 character")
+		end
+
+		return 3
+
+	elseif c >= 240 and c <= 244 then
+		-- UTF8-4
+		local c2 = s:byte(i + 1)
+		local c3 = s:byte(i + 2)
+		local c4 = s:byte(i + 3)
+
+		if not c2 or not c3 or not c4 then
+			error("UTF-8 string terminated early")
+		end
+
+		-- validate byte 2
+		if c == 240 and (c2 < 144 or c2 > 191) then
+			error("Invalid UTF-8 character")
+		elseif c == 244 and (c2 < 128 or c2 > 143) then
+			error("Invalid UTF-8 character")
+		elseif c2 < 128 or c2 > 191 then
+			error("Invalid UTF-8 character")
+		end
+
+		-- validate byte 3
+		if c3 < 128 or c3 > 191 then
+			error("Invalid UTF-8 character")
+		end
+
+		-- validate byte 4
+		if c4 < 128 or c4 > 191 then
+			error("Invalid UTF-8 character")
+		end
+
+		return 4
+
+	else
+		error("Invalid UTF-8 character")
+	end
+end
+
+function utf8len (s)
+	-- argument checking
+	if type(s) ~= "string" then
+		error("bad argument #1 to 'utf8len' (string expected, got ".. type(s).. ")")
+	end
+
+	local pos = 1
+	local bytes = s:len()
+	local len = 0
+
+	while pos <= bytes do
+		len = len + 1
+		pos = pos + utf8charbytes(s, pos)
+	end
+
+	return len
+end
+
+function utf8sub (s, i, j)
+	-- argument defaults
+	j = j or -1
+
+	local pos = 1
+	local bytes = s:len()
+	local len = 0
+
+	-- only set l if i or j is negative
+	local l = (i >= 0 and j >= 0) or s:utf8len()
+	local startChar = (i >= 0) and i or l + i + 1
+	local endChar   = (j >= 0) and j or l + j + 1
+
+	-- can't have start before end!
+	if startChar > endChar then
+		return ""
+	end
+
+	-- byte offsets to pass to string.sub
+	local startByte, endByte = 1, bytes
+
+	while pos <= bytes do
+		len = len + 1
+
+		if len == startChar then
+			startByte = pos
+		end
+
+		pos = pos + utf8charbytes(s, pos)
+
+		if len == endChar then
+			endByte = pos - 1
+			break
+		end
+	end
+
+	return s:sub(startByte, endByte), startByte, endByte
 end
