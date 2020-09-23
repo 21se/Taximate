@@ -259,6 +259,7 @@ function main()
 end
 
 chatManager = {}
+
 chatManager.messagesQueue = {}
 chatManager.messagesQueueSize = 10
 chatManager.antifloodClock = os.clock()
@@ -285,7 +286,7 @@ function chatManager.updateAntifloodClock()
     if string.sub(chatManager.lastMessage, 1, 5) == "/sms " or string.sub(chatManager.lastMessage, 1, 3) == "/t " then
         chatManager.antifloodClock = chatManager.antifloodClock + 0.5
     end
-end
+end	
 
 function chatManager.checkMessagesQueueThread()
     while true do
@@ -527,6 +528,7 @@ function chatManager.addMessageToQueue(string, _nonRepeat, _hideResult)
 end
 
 orderHandler = {}
+
 orderHandler.orderList = {}
 orderHandler.GPSMark = nil
 orderHandler.autoAccept = false
@@ -865,6 +867,7 @@ function orderHandler.handleOrder(orderNickname, orderDistance, orderClock)
 end
 
 vehicleManager = {}
+
 vehicleManager.lastPassengersList = {}
 vehicleManager.lastPassengersListSize = 3
 vehicleManager.passengersList = {}
@@ -1013,6 +1016,7 @@ function vehicleManager.clearMarkers()
 end
 
 player = {}
+
 player.id = nil
 player.nickname = nil
 player.onWork = false
@@ -1087,6 +1091,7 @@ defaults = {
 }
 
 soundManager = {}
+
 soundManager.soundsList = {}
 
 function soundManager.loadSound(soundName)
@@ -1101,6 +1106,7 @@ function soundManager.playSound(soundName)
 end
 
 bindMenu = {}
+
 bindMenu.bindList = {}
 bindMenu.page = 1
 bindMenu.json = {}
