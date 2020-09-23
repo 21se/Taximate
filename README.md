@@ -26,10 +26,9 @@
 
 ## Скриншоты
 
-![ ](https://i.imgur.com/EwHgJvG.png) 
-![ ](https://i.imgur.com/3bmSXLN.png) ![ ](https://i.imgur.com/Ml9Pnvp.png)
-![ ](https://i.imgur.com/1eSK0FH.png) ![ ](https://i.imgur.com/RoBs01l.png)
-![ ](https://i.imgur.com/TVtiPFm.png)
+![ ](https://i.imgur.com/RTmMI61.png)
+![ ](https://i.imgur.com/nyNEWRR.png)
+![ ](https://i.imgur.com/1rDyS6k.png)
 
 ## Связь
 
