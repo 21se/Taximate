@@ -1,7 +1,7 @@
 script_name("Taximate")
 script_author("21se(pivo)")
-script_version("1.3.0 dev")
-script_version_number(42)
+script_version("1.3.0")
+script_version_number(43)
 script_moonloader(26)
 script_url("21se.github.io/Taximate")
 script_updates = {}
@@ -307,11 +307,16 @@ function chatManager.checkMessagesQueueThread()
 
                     if message.hideResult then
                         if chatManager.hideResultMessages[command] then
-                            chatManager.hideResultMessages[command].bool =
-                                (not sampIsDialogActive() or not chatManager.hideResultMessages[command].dialog) and
-                                chatManager.dialogClock < os.clock()
-                            sendMessage = chatManager.hideResultMessages[command].bool
-                        end
+														if chatManager.hideResultMessages[command].bool then
+															chatManager.hideResultMessages[command].bool = false
+															sendMessage = false
+														else
+		                          chatManager.hideResultMessages[command].bool =
+		                              (not sampIsDialogActive() or not chatManager.hideResultMessages[command].dialog) and
+		                              chatManager.dialogClock < os.clock()
+		                          sendMessage = chatManager.hideResultMessages[command].bool
+														end
+	                     end
                     end
 
                     if sendMessage then
@@ -329,6 +334,10 @@ function chatManager.checkMessagesQueueThread()
 end
 
 function chatManager.subSMSText(prefix, text)
+		if text:find("{zone}") then
+			local posX, posY = getCharCoordinates(PLAYER_PED)
+			text = text:gsub("{zone}", getZone(posX, posY))
+		end
     if orderHandler.currentOrder then
         text = text:gsub("{distance}", orderHandler.currentOrder.currentDistance)
     else
@@ -2457,6 +2466,7 @@ function imgui.onDrawSettings()
         imgui.TextColoredRGB(
             color .. "SMS: " .. utf8sub(text, 1, 63)
         )
+				imgui.TextDisabled("Доступные для замены токены: {carname}, {distance}, {zone}")
     else
         if imgui.Checkbox("Автоматическая проверка обновлений", imgui.ImBool(ini.settings.checkUpdates)) then
             ini.settings.checkUpdates = not ini.settings.checkUpdates
