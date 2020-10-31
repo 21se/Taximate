@@ -1119,7 +1119,7 @@ bindMenu.defaultBinds = {
     {text = "Удачи", key = 0, addKey = 0},
     {text = "Да", key = 0, addKey = 0},
     {text = "Нет", key = 0, addKey = 0},
-    {text = "))", key = 0, addKey = 0},
+    {text = ")", key = 0, addKey = 0},
     {text = "Почини", key = 0, addKey = 0},
     {text = "Заправь", key = 0, addKey = 0},
     {text = "/rkt", key = 0, addKey = 0},
