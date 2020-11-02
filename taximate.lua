@@ -1,7 +1,7 @@
 script_name("Taximate")
 script_author("21se(pivo)")
 script_version("1.3.0")
-script_version_number(44)
+script_version_number(43)
 script_moonloader(26)
 script_url("21se.github.io/Taximate")
 script_updates = {}
@@ -286,7 +286,7 @@ function chatManager.updateAntifloodClock()
     if string.sub(chatManager.lastMessage, 1, 5) == "/sms " or string.sub(chatManager.lastMessage, 1, 3) == "/t " then
         chatManager.antifloodClock = chatManager.antifloodClock + 0.5
     end
-end
+end	
 
 function chatManager.checkMessagesQueueThread()
     while true do
@@ -670,10 +670,7 @@ end
 
 function orderHandler.refreshCurrentOrder()
     if orderHandler.currentOrder then
-        if
-            sampIsPlayerConnected(orderHandler.currentOrder.id) and
-                sampGetPlayerNickname(orderHandler.currentOrder.id) == orderHandler.currentOrder.nickname
-         then
+        if sampIsPlayerConnected(orderHandler.currentOrder.id) then
             if vehicleManager.maxPassengers then
                 chatManager.sendTaxiNotification(orderHandler.currentOrder)
                 local charInStream, charHandle = sampGetCharHandleBySampPlayerId(orderHandler.currentOrder.id)
@@ -1119,7 +1116,7 @@ bindMenu.defaultBinds = {
     {text = "Удачи", key = 0, addKey = 0},
     {text = "Да", key = 0, addKey = 0},
     {text = "Нет", key = 0, addKey = 0},
-    {text = ")", key = 0, addKey = 0},
+    {text = "))", key = 0, addKey = 0},
     {text = "Почини", key = 0, addKey = 0},
     {text = "Заправь", key = 0, addKey = 0},
     {text = "/rkt", key = 0, addKey = 0},
@@ -2944,7 +2941,7 @@ function checkUpdates()
         os.remove(fpath)
     end
     downloadUrlToFile(
-        "https://raw.githubusercontent.com/21se/Taximate/master/version.json",
+        "https://raw.githubusercontent.com/21se/Taximate/dev/version.json",
         fpath,
         function(_, status, _, _)
             if status == moonloader.download_status.STATUSEX_ENDDOWNLOAD then
@@ -3003,7 +3000,7 @@ end
 function update()
 		if script_updates.update then
 	    downloadUrlToFile(
-	        "https://raw.githubusercontent.com/21se/Taximate/master/taximate.lua",
+	        "https://raw.githubusercontent.com/21se/Taximate/dev/taximate.lua",
 	        thisScript().path,
 	        function(_, status, _, _)
 	            if status == moonloader.download_status.STATUS_ENDDOWNLOADDATA then
