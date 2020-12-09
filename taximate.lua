@@ -288,6 +288,7 @@ function chatManager.updateAntifloodClock()
     end
 end
 
+
 function chatManager.checkMessagesQueueThread()
     while true do
         wait(0)
