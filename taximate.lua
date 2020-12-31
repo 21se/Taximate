@@ -2346,7 +2346,7 @@ function imgui.onDrawSettings()
 				imgui.SetTooltip("Функция даёт преимущество над игроками\nИспользовать на свой страх и риск", 150)
         if imgui.Checkbox("Закончить рабочий день при поломке/пустом баке", imgui.ImBool(ini.settings.finishWork)) then
             ini.settings.finishWork = not ini.settings.finishWork
-            inicfg.save(ini, "Taximate/settings.ini")
+            inicfg.save(ini, "Taximate/settings.ini") 
         end
         if imgui.Checkbox("Обновление дистанции всех вызовов раз в", imgui.ImBool(ini.settings.ordersDistanceUpdate)) then
             ini.settings.ordersDistanceUpdate = not ini.settings.ordersDistanceUpdate
