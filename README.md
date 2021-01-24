@@ -2,8 +2,9 @@
 ### [Поддержать разработчика](https://qiwi.com/n/TWONSE)
 
 ## Зависимости (установить перед запуском скрипта)
+-   [SAMP 0.3.7 R1](http://files.sa-mp.com/sa-mp-0.3.7-install.exe)
 -   [CLEO 4](https://cleo.li)
--   [SAMPFUNCS v5.4.1](https://www.blast.hk/threads/17/)
+-   [SAMPFUNCS v5.4.1 ](https://www.blast.hk/threads/17/) (для работы возможно потребуется установка [DirectX](https://drive.google.com/file/d/1iRiGqZDgx_2iBCml0vVHNE4DqC9_t4VD/view?usp=sharing) и [Visual C++ Redistributable](https://drive.google.com/file/d/1UwrY220FaUXkA4NjnzSuHapjkWbNImS3/view?usp=sharing))
 -   [Moonloader v026.5](https://www.blast.hk/threads/13305/)
 
 ## Установка
