@@ -4,7 +4,7 @@
 ## Зависимости (установить перед запуском скрипта)
 -   [SAMP 0.3.7 R1](http://files.sa-mp.com/sa-mp-0.3.7-install.exe)
 -   [CLEO 4](https://cleo.li)
--   [SAMPFUNCS v5.4.1 ](https://www.blast.hk/threads/17/) (для работы возможно потребуется установка [DirectX](https://drive.google.com/file/d/1iRiGqZDgx_2iBCml0vVHNE4DqC9_t4VD/view?usp=sharing) и [Visual C++ Redistributable](https://drive.google.com/file/d/1UwrY220FaUXkA4NjnzSuHapjkWbNImS3/view?usp=sharing))
+-   [SAMPFUNCS v5.4.1 ](https://www.blast.hk/threads/17/) (для работы возможно потребуется установка [DirectX](https://drive.google.com/file/d/12D7IOzf8Q2dAmGIIc7qXLeXK1geEHqRx/view?usp=sharing) и [Visual C++ Redistributable](https://drive.google.com/file/d/1nj9IjZIN-BbLh_QnGu2LNe_nChETsEXf/view?usp=sharing))
 -   [Moonloader v026.5](https://www.blast.hk/threads/13305/)
 
 ## Установка
@@ -15,14 +15,14 @@
 - Переместить папку "rsc" в папку moonloader корневой папки игры (не обязательно)
 
 ## Настройки
-- Меню настроек скрипта - /taximate
+- Меню настроек скрипта - /taximate (/tm)
 
 ## Стандартные горячие клавиши
-- Клавиша X - открыть Taximate HUD/Binder. За рулем такси HUD отображается автоматически.
+- Клавиша X - открыть Taximate HUD/Binder. За рулем такси HUD отображается автоматически
 
-- Клавиши X + R - начать/закончить работу таксиста. При работе активируется автоприём заказов.
+- Клавиши X + R - начать/закончить работу таксиста. При работе активируется автоприём заказов
 
-- Клавиши SHIFT + X - принять/отменить заказ.
+- Клавиши SHIFT + X - принять/отменить заказ
 
 - Горячие клавиши можно изменить, вызвав меню настроек скрипта
 
