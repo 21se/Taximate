@@ -1,7 +1,7 @@
 script_name("Taximate")
 script_author("21se(pivo)")
-script_version("1.3.2")
-script_version_number(46)
+script_version("1.3.3")
+script_version_number(47)
 script_moonloader(26)
 script_url("21se.github.io/Taximate")
 script_updates = {}
@@ -88,7 +88,9 @@ local REMOVE_INPUT_MESSAGES = {
 
 local FORMAT_NOTIFICATIONS = {
     newOrder = "Вызов от {4296f9}%s[%s]\nДистанция: {4296f9}%s {FFFFFF}м",
-    orderAccepted = "Принят вызов от {4296f9}%s[%s]\nДистанция: {4296f9}%s {FFFFFF}м"
+    orderAccepted = "Принят вызов от {4296f9}%s[%s]\nДистанция: {4296f9}%s {FFFFFF}м",
+		cruiseControlEnabled = "Круиз-контроль {42ff96}включён",
+		cruiseControlDisabled = "Круиз-контроль {d44331}выключен"
 }
 
 function main()
@@ -146,10 +148,10 @@ function main()
         nil,
         imgui.GetIO().Fonts:GetGlyphRangesCyrillic()
     )
+		bindMenu.bindList = bindMenu.getBindList()
     imgui.Process = true
     chatManager.initQueue()
     player.connected = true
-    bindMenu.bindList = bindMenu.getBindList()
     lua_thread.create(bindMenu.bindsPressProcessingThread)
     lua_thread.create(chatManager.checkMessagesQueueThread)
 		lua_thread.create(chatManager.disableFrozenMessagesProcessing)
@@ -246,11 +248,17 @@ function main()
             end
         end
 
-        if ini.settings.markers then
-            vehicleManager.drawMarkers()
-        else
-            vehicleManager.clearMarkers()
-        end
+        if ini.settings.markers and vehicleManager.maxPassengers then
+		      vehicleManager.drawMarkers()
+				else
+					vehicleManager.clearMarkers()
+				end
+
+				if ini.settings.cruiseControl then
+					vehicleManager.cruiseControl()
+				else
+					vehicleManager.cruiseControlEnabled = false
+				end
     end
 end
 
@@ -494,7 +502,7 @@ function chatManager.handleInputMessage(message)
                 if table.contains(nickname, vehicleManager.lastPassengersList) then
                     player.tips = player.tips + sum
                 end
-            elseif string.find(message, u8:decode "^--------===%[ КЛИЕНТ БАНКА SA %]===-------$") then
+            elseif string.find(message, u8:decode "^=.+=%[.+:.+%]=.+=$") then
                 player.tips = 0
                 player.refreshPlayerInfo()
             elseif string.find(message, u8:decode "^ Не флуди!$") then
@@ -902,6 +910,8 @@ vehicleManager.maxPassengers = nil
 vehicleManager.vehicleName = nil
 vehicleManager.vehicleHandle = nil
 vehicleManager.markers = {}
+vehicleManager.cruiseControlEnabled = false
+vehicleManager.gasPressed = false
 
 function vehicleManager.refreshVehicleInfoThread()
     while true do
@@ -1046,6 +1056,45 @@ function vehicleManager.clearMarkers()
     end
 end
 
+function vehicleManager.cruiseControl()
+    local car = storeCarCharIsInNoSave(PLAYER_PED)
+    if vehicleManager.cruiseControlEnabled then
+				if not isCarEngineOn(car) or not isCharInAnyCar(PLAYER_PED) then
+		      vehicleManager.cruiseControlEnabled = false
+					if ini.settings.notifications then
+							imgui.addNotification(FORMAT_NOTIFICATIONS.cruiseControlDisabled, 2, - 8)
+					end
+					return
+				end
+    end
+    if not sampIsChatInputActive() and not sampIsDialogActive() then
+				if vehicleManager.gasPressed and not isKeyDown(87) then
+					vehicleManager.gasPressed = false
+				end
+        if isCarEngineOn(car) and isCharInAnyCar(PLAYER_PED) and PLAYER_PED == getDriverOfCar(car) then
+						if isKeyJustPressed(ini.settings.key4) then
+            	vehicleManager.cruiseControlEnabled = not vehicleManager.cruiseControlEnabled
+							if ini.settings.notifications then
+								local text = FORMAT_NOTIFICATIONS.cruiseControlEnabled
+								if not vehicleManager.cruiseControlEnabled then
+									text = FORMAT_NOTIFICATIONS.cruiseControlDisabled
+								end
+								imgui.addNotification(text, 2, - 8)
+							end
+							vehicleManager.gasPressed = true
+			      elseif vehicleManager.cruiseControlEnabled and not isKeyJustPressed(ini.settings.key4) and (isKeyDown(87) or isKeyDown(83)) and not vehicleManager.gasPressed then
+			          vehicleManager.cruiseControlEnabled = false
+								if ini.settings.notifications then
+										imgui.addNotification(FORMAT_NOTIFICATIONS.cruiseControlDisabled, 2, - 8)
+								end
+							end
+				end
+    end
+    if vehicleManager.cruiseControlEnabled then
+        setGameKeyState(16, 255)
+    end
+end
+
 player = {}
 
 player.id = nil
@@ -1095,6 +1144,7 @@ ini = {
         key2add = 88,
         key3 = 88,
         key3add = 82,
+				key4 = 18,
         binderPosX = 36,
         binderPosY = 103,
         hudPosX = 498,
@@ -1110,7 +1160,8 @@ ini = {
         SMSArrival = "Жёлтый {carname} прибыл на место вызова",
         SMSCancel = "Вызов отменён, закажите новое такси",
 				ignoreCanceledOrder = true,
-				canceledOrderDelay = 120
+				canceledOrderDelay = 120,
+				cruiseControl = true
     }
 }
 
@@ -1143,68 +1194,108 @@ bindMenu = {}
 bindMenu.bindList = {}
 bindMenu.json = {}
 bindMenu.defaultBinds = {
-	  {text = "/service", key = 0, addKey = 0},
-    {text = "Привет", key = 0, addKey = 0},
-    {text = "Куда едем?", key = 0, addKey = 0},
-    {text = "Спасибо", key = 0, addKey = 0},
-    {text = "Хорошо", key = 0, addKey = 0},
-    {text = "Удачи", key = 0, addKey = 0},
-    {text = "Да", key = 0, addKey = 0},
-    {text = "Нет", key = 0, addKey = 0},
-    {text = ")", key = 0, addKey = 0},
-    {text = "Почини", key = 0, addKey = 0},
-    {text = "Заправь", key = 0, addKey = 0},
-    {text = "/rkt", key = 0, addKey = 0},
-    {text = "/b Скрипт для таксистов - Taximate", key = 0, addKey = 0}
+		binds = {
+		  {text = "/service", cmd = "", key = 0, addKey = 0},
+		  {text = "Привет", cmd = "", key = 0, addKey = 0},
+		  {text = "Куда едем?", cmd = "", key = 0, addKey = 0},
+		  {text = "Спасибо", cmd = "", key = 0, addKey = 0},
+		  {text = "Хорошо", cmd = "", key = 0, addKey = 0},
+		  {text = "Удачи", cmd = "", key = 0, addKey = 0},
+		  {text = "Да", cmd = "", key = 0, addKey = 0},
+		  {text = "Нет", cmd = "", key = 0, addKey = 0},
+		  {text = ")", cmd = "", key = 0, addKey = 0},
+		  {text = "Почини", cmd = "", key = 0, addKey = 0},
+		  {text = "Заправь", cmd = "", key = 0, addKey = 0},
+		  {text = "/rkt", cmd = "", key = 0, addKey = 0},
+		  {text = "/b Скрипт для таксистов - Taximate", cmd = "", key = 0, addKey = 0}
+		},
+		actions = {
+		  {text = "Выкинуть из автомобиля", cmd = "/eject {id}", key = 0, addKey = 0}
+		},
+		sms = {
+			{text = "Жёлтый {carname} в пути. Дистанция: {distance} м", cmd = "", key = 0, addKey = 0},
+			{text = "Жёлтый {carname} прибыл на место вызова", cmd = "", key = 0, addKey = 0},
+			{text = "Вызов отменён, закажите новое такси", cmd = "", key = 0, addKey = 0},
+			{text = "Скоро буду", cmd = "", key = 0, addKey = 0},
+			{text = "Да", cmd = "", key = 0, addKey = 0},
+			{text = "Нет", cmd = "", key = 0, addKey = 0}
+		}
 }
 
-function bindMenu.getBindList()
+function bindMenu.chooseEdit(key, bindIndex)
+	bindMenu.bindList[key][bindIndex].edit = true
+	for keyname in pairs(bindMenu.bindList) do
+		for _bindIndex, _bind in pairs(bindMenu.bindList[keyname]) do
+			if _bindIndex ~= bindIndex or keyname ~= key then
+					_bind.edit = false
+			end
+		end
+	end
+end
+
+function bindMenu.getBindList(key)
     local list = {}
 
-    local oldBinds = inicfg.load(nil, "Taximate/binds.ini")
+    local binds = io.open(getWorkingDirectory() .. "/config/Taximate/binds.json", "r")
 
-    if oldBinds then
-        for index, bind in pairs(oldBinds) do
-            if bind.text ~= "" then
-                bindMenu.json[index] = {text = bind.text, key = bind.key, addKey = bind.keyadd}
-            end
-        end
-        os.remove(getWorkingDirectory() .. "/config/Taximate/binds.ini")
-        bindMenu.save()
+    if binds then
+        local content = binds:read("*a")
+				binds:close()
+				local json = decodeJson(content)
+				local newjson = {binds = {}, actions = bindMenu.defaultBinds.actions, sms = bindMenu.defaultBinds.sms}
+				bindMenu.json = nil
+				for key, value in pairs(json) do
+					if type(key) == "string" and key == "binds" then
+						bindMenu.json = json
+						break
+	        else
+						table.insert(newjson.binds, {text = value.text, cmd = "", key = value.key, addKey = value.addKey})
+					end
+				end
+				if bindMenu.json == nil then
+					bindMenu.json = newjson
+				end
     else
-        local binds = io.open(getWorkingDirectory() .. "/config/Taximate/binds.json", "r")
-
-        if binds then
-            local content = binds:read("*a")
-            bindMenu.json = decodeJson(content)
-            binds:close()
-        else
-            binds = io.open(getWorkingDirectory() .. "/config/Taximate/binds.json", "w")
-            local content = encodeJson(bindMenu.defaultBinds)
-            binds:write(content)
-            binds:close()
-            bindMenu.json = bindMenu.defaultBinds
-        end
+        binds = io.open(getWorkingDirectory() .. "/config/Taximate/binds.json", "w")
+        local content = encodeJson(bindMenu.defaultBinds)
+        binds:write(content)
+        binds:close()
+        bindMenu.json = bindMenu.defaultBinds
     end
 
-    for index, bind in pairs(bindMenu.json) do
-        local _buffer = imgui.ImBuffer(128)
-        _buffer.v = bind.text
-        table.insert(list, {buffer = _buffer, key = bind.key, addKey = bind.addKey, edit = false})
-    end
+		if key then
+		  for index, value in pairs(bindMenu.json[key]) do
+				local buffer = imgui.ImBuffer(128)
+				local bufferCmd = imgui.ImBuffer(128)
+				buffer.v = value.text or ""
+				bufferCmd.v = value.cmd or ""
+				table.insert(list, {buffer = buffer, bufferCmd = bufferCmd, key = value.key or 0, addKey = value.addKey or 0, edit = false})
+		  end
+		else
+			for keyname, bind in pairs(bindMenu.json) do
+				list[keyname] = {}
+				for index, value in pairs(bind) do
+					local buffer = imgui.ImBuffer(128)
+					local bufferCmd = imgui.ImBuffer(128)
+					buffer.v = value.text or ""
+					bufferCmd.v = value.cmd or ""
+					table.insert(list[keyname], {buffer = buffer, bufferCmd = bufferCmd, key = value.key or 0, addKey = value.addKey or 0, edit = false})
+				end
+		  end
+		end
 
     return list
 end
 
-function bindMenu.deleteBind(bindIndex)
-    for i = bindIndex, #bindMenu.json + 1 do
-        bindMenu.json[i] = bindMenu.json[i + 1]
+function bindMenu.deleteBind(key, bindIndex)
+    for i = bindIndex, #bindMenu.json[key] + 1 do
+        bindMenu.json[key][i] = bindMenu.json[key][i + 1]
     end
     bindMenu.save()
 end
 
-function bindMenu.isBindEdit()
-    for bindIndex, bind in pairs(bindMenu.bindList) do
+function bindMenu.isBindEdit(key)
+    for bindIndex, bind in pairs(bindMenu.bindList[key]) do
         if bind.edit then
             return true
         end
@@ -1222,16 +1313,25 @@ end
 function bindMenu.bindsPressProcessingThread()
     while true do
         wait(0)
-        for index, bind in pairs(bindMenu.bindList) do
-            if
-                isKeysPressed(bind.key, bind.addKey, false) and not imgui.showInputWindow.v and not sampIsDialogActive() and
-                    not sampIsChatInputActive() and
-                    not isPauseMenuActive() and
-                    ini.settings.hotKeys
-             then
-                chatManager.addMessageToQueue(bind.buffer.v)
-            end
-        end
+				for key, binds in pairs(bindMenu.bindList) do
+		      for index, bind in ipairs(binds) do
+		          if isKeysPressed(bind.key, bind.addKey, false) and not imgui.showInputWindow.v and not sampIsDialogActive() and
+		                  not sampIsChatInputActive() and
+		                  not isPauseMenuActive() and
+		                  ini.settings.hotKeys
+		          then
+									local text = bind.buffer.v
+									if key == "sms" then
+										if orderHandler.currentOrder then
+											text = string.format("/t %d %s", orderHandler.currentOrder.id, chatManager.subSMSText(ini.settings.SMSPrefix, bind.buffer.v))
+											chatManager.addMessageToQueue(text)
+										end
+									else
+		              	chatManager.addMessageToQueue(text)
+									end
+		          end
+		      end
+				end
     end
 end
 
@@ -1538,6 +1638,8 @@ function imgui.initBuffers()
     imgui.key1Edit = false
     imgui.key2Edit = false
     imgui.key3Edit = false
+		imgui.key4Edit = false
+		imgui.singleBind = false
     imgui.key = 0
     imgui.addKey = 0
     imgui.SMSPrefix = imgui.ImBuffer(126)
@@ -1555,6 +1657,70 @@ function imgui.initBuffers()
     imgui.maxDistanceToGetOrder = imgui.ImInt(ini.settings.maxDistanceToGetOrder)
     imgui.ordersDistanceUpdateTimer = imgui.ImInt(ini.settings.ordersDistanceUpdateTimer)
     imgui.soundVolume = imgui.ImInt(ini.settings.soundVolume)
+end
+
+function imgui.showActions(passengerIndex, passengers)
+	for bindIndex, bind in pairs(bindMenu.bindList.actions) do
+		imgui.NewLine()
+		local x1 = 10.5
+		if passengers then
+			x1 = x1 + 10
+		end
+		imgui.SameLine(toScreenX(x1))
+		imgui.PushID(passengerIndex + 100)
+		if bind.edit then
+			local x2 = 29.67
+			if not passengers then
+				x2 = x2 + 5
+			end
+			imgui.PushItemWidth(toScreenX(x2))
+			imgui.PushStyleVar(imgui.StyleVar.FramePadding, vec(4, 1.1))
+			imgui.PushID(bindIndex)
+			if imgui.InputText("##text", bind.buffer) then
+					bindMenu.json.actions[bindIndex].text = bind.buffer.v
+					bindMenu.save()
+			end
+			imgui.SetTooltip(bind.buffer.v, 500)
+			imgui.PopID()
+			imgui.SameLine()
+			imgui.PushID(bindIndex)
+			if imgui.InputText("##cmd", bind.bufferCmd) then
+					bindMenu.json.actions[bindIndex].cmd = bind.bufferCmd.v
+					bindMenu.save()
+			end
+			imgui.PopID()
+			imgui.PopStyleVar()
+			imgui.PopItemWidth()
+			imgui.SetTooltip(bind.bufferCmd.v .. '\n\nУказанный в сообщении токен "{id}" заменится на id пассажира', 500)
+			imgui.SameLine()
+			if imgui.Button("X##actions" .. bindIndex, vec(7, 10)) then
+					bindMenu.bindList.actions[bindIndex].edit = false
+					bindMenu.deleteBind("actions", bindIndex)
+			end
+			imgui.SameLine()
+			if imgui.Button("-##actions" .. bindIndex, vec(5, 10)) then
+				bindMenu.json.actions[bindIndex].text = bind.buffer.v
+				bind.edit = false
+				bindMenu.save()
+			end
+		else
+			local x2 = 80.5
+			if passengers then
+				x2 = x2 - 10
+			end
+			if imgui.Button(bind.buffer.v .. "##actions", vec(x2, 10)) and passengerIndex ~= -1 then
+					chatManager.addMessageToQueue(
+							bind.bufferCmd.v:gsub('{id}', tostring(vehicleManager.passengersList[passengerIndex].id))
+					)
+			end
+			imgui.SameLine()
+			if imgui.Button("+##actions" .. bindIndex, vec(5, 10)) then
+					bindMenu.chooseEdit("actions", bindIndex)
+					bindMenu.save()
+			end
+		end
+		imgui.PopID()
+	end
 end
 
 function imgui.OnDrawFrame()
@@ -1597,7 +1763,11 @@ function imgui.onDrawInputWindow()
     )
     imgui.Dummy(vec(15, 0))
     imgui.SameLine()
-    imgui.Text("Установить клавиши")
+		if not imgui.singleBind then
+    	imgui.Text("Установить клавиши")
+		else
+			imgui.Text("Установить клавишу")
+		end
     imgui.Dummy(vec(0, 10))
     imgui.NewLine()
     if imgui.key ~= 0 then
@@ -1626,7 +1796,7 @@ function imgui.onDrawInputWindow()
                                 imgui.key ~= v and imgui.addKey == 0 and k ~= "VK_ESCAPE" and k ~= "VK_RETURN" and
                                     k ~= "VK_BACK" and
                                     k ~= "VK_LBUTTON" and
-                                    k ~= "VK_RBUTTON"
+                                    k ~= "VK_RBUTTON" and not imgui.singleBind
                              then
                                 imgui.addKey = v
                             elseif k == "VK_ESCAPE" then
@@ -1647,7 +1817,11 @@ function imgui.onDrawInputWindow()
         end
     )
     imgui.Dummy(vec(0, 10))
-    imgui.Text("Нажмите клавишу/комбинацию\nBackspace - стереть клавиши")
+		if not imgui.singleBind then
+    	imgui.Text("Нажмите клавишу/комбинацию\nBackspace - стереть клавиши")
+		else
+			imgui.Text("Нажмите клавишу\nBackspace - стереть клавишу")
+		end
     if imgui.Button("Принять", vec(27, 10)) then
         imgui.showInputWindow.v = false
     end
@@ -1809,25 +1983,20 @@ end
 
 imgui.bindHovered = false
 function imgui.onDrawBindMenu()
-    if isKeysPressed(ini.settings.key1, ini.settings.key1add, true) or bindMenu.isBindEdit() then
+    if isKeysPressed(ini.settings.key1, ini.settings.key1add, true) or bindMenu.isBindEdit("binds") or bindMenu.isBindEdit("actions") or bindMenu.isBindEdit("sms") then
 				local passengers = not table.isEmpty(vehicleManager.passengersList)
 				local order = orderHandler.currentOrder ~= nil
-				local sizeX = 101
+				local sizeX = 104
 
-        if not bindMenu.isBindEdit() then
-            bindMenu.bindList = bindMenu.getBindList()
+        if not bindMenu.isBindEdit("binds") then
+            bindMenu.bindList.binds = bindMenu.getBindList("binds")
         end
         imgui.ShowCursor = true
 
-				local flags = imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize
-
-				if passengers or order then
-					flags = flags + imgui.WindowFlags.AlwaysVerticalScrollbar
-					sizeX = sizeX + 3
-				end
+				local flags = imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize + imgui.WindowFlags.AlwaysVerticalScrollbar
 
         if not (imgui.bindHovered and imgui.IsMouseDragging(0) and
-        	(isKeysPressed(ini.settings.key1, ini.settings.key1add, true) or bindMenu.isBindEdit())) then
+        	(isKeysPressed(ini.settings.key1, ini.settings.key1add, true) or bindMenu.isBindEdit("binds"))) then
           imgui.SetNextWindowPos(vec(ini.settings.binderPosX, ini.settings.binderPosY))
           imgui.SetNextWindowSize(vec(sizeX, 225))
         end
@@ -1846,90 +2015,142 @@ function imgui.onDrawBindMenu()
             (math.ceil(savePosX) ~= math.ceil(ini.settings.binderPosX) or
                 math.ceil(savePosY) ~= math.ceil(ini.settings.binderPosY)) and
                 (imgui.bindHovered and imgui.IsMouseDragging(0) and
-                    (isKeysPressed(ini.settings.key1, ini.settings.key1add, true) or bindMenu.isBindEdit()))
+                    (isKeysPressed(ini.settings.key1, ini.settings.key1add, true) or bindMenu.isBindEdit("binds")))
          then
             ini.settings.binderPosX = math.ceil(savePosX)
             ini.settings.binderPosY = math.ceil(savePosY)
             inicfg.save(ini, "Taximate/settings.ini")
         end
 
-        if order then
-            imgui.NewLine()
-            imgui.SameLine(toScreenX(3))
-            if imgui.CollapsingHeader("Отправить СМС клиенту", vec(97, 10)) then
-                imgui.NewLine()
-                imgui.SameLine(toScreenX(10))
-                if imgui.Button("Скоро буду", vec(89, 10)) then
-                    chatManager.addMessageToQueue(
-                        string.format("/t %d %s Скоро буду", orderHandler.currentOrder.id, ini.settings.SMSPrefix)
-                    )
-                end
-                imgui.NewLine()
-                imgui.SameLine(toScreenX(10))
-                if imgui.Button("Вызов отменён", vec(89, 10)) then
-                    chatManager.addMessageToQueue(
-                        string.format(
-                            "/t %d %s Вызов отменён, закажите новое такси",
-                            orderHandler.currentOrder.id,
-                            ini.settings.SMSPrefix
-                        )
-                    )
-                end
-                imgui.NewLine()
-                imgui.SameLine(toScreenX(10))
-                if imgui.Button("Да", vec(89, 10)) then
-                    chatManager.addMessageToQueue(
-                        string.format("/t %d %s Да", orderHandler.currentOrder.id, ini.settings.SMSPrefix)
-                    )
-                end
-                imgui.NewLine()
-                imgui.SameLine(toScreenX(10))
-                if imgui.Button("Нет", vec(89, 10)) then
-                    chatManager.addMessageToQueue(
-                        string.format("/t %d %s Нет", orderHandler.currentOrder.id, ini.settings.SMSPrefix)
-                    )
-                end
-            end
+        imgui.NewLine()
+        imgui.SameLine(toScreenX(3))
+        if imgui.CollapsingHeader("Отправить СМС клиенту", vec(97, 10)) then
+					if not bindMenu.isBindEdit("sms") then
+							bindMenu.bindList.sms = bindMenu.getBindList("sms")
+					end
+					imgui.NewLine()
+					imgui.SameLine(toScreenX(10.5))
+					if imgui.Button("Добавить сообщение", vec(87.5, 9)) then
+						if not bindMenu.isBindEdit("sms") then
+							local num = #bindMenu.json.sms + 1
+							if num - 1 < 12 then
+								bindMenu.json.sms[num] = {text = "Новое сообщение", cmd = "", key = 0, addKey = 0}
+								bindMenu.save()
+							end
+						end
+					end
+					for bindIndex, bind in pairs(bindMenu.bindList.sms) do
+						imgui.NewLine()
+						imgui.SameLine(toScreenX(10.5))
+						imgui.PushID(bindIndex + 200)
+						if bind.edit then
+							imgui.PushItemWidth(toScreenX(51.6))
+							imgui.PushStyleVar(imgui.StyleVar.FramePadding, vec(4, 1.1))
+							imgui.PushID(bindIndex)
+							if imgui.InputText("##textsms", bind.buffer) then
+									bindMenu.json.sms[bindIndex].text = bind.buffer.v
+									bindMenu.save()
+							end
+							imgui.PopID()
+							imgui.SetTooltip(bind.buffer.v .. '\n\nДоступные для замены токены:\n{carname}, {distance}, {zone}', 500)
+							imgui.SameLine()
+							local buttonName = "Bind"
+							if bind.key ~= 0 then
+									buttonName = vkeys.id_to_name(bind.key)
+							end
+							if bind.addKey ~= 0 then
+									buttonName = buttonName .. " + " .. vkeys.id_to_name(bind.addKey)
+							end
+							if imgui.Button(buttonName .. "##sms", vec(18, 10)) then
+									imgui.key = 0
+									imgui.addKey = 0
+									imgui.showInputWindow.v = true
+							end
+							imgui.PopStyleVar()
+							imgui.PopItemWidth()
+							if not imgui.showInputWindow.v and imgui.key ~= 0 then
+									if imgui.key == -1 then
+											imgui.key = 0
+											imgui.addKey = 0
+									end
+									bindMenu.json.sms[bindIndex].key = imgui.key
+									bindMenu.json.sms[bindIndex].addKey = imgui.addKey
+									bind.key = imgui.key
+									bind.addKey = imgui.addKey
+									imgui.key = 0
+									imgui.addKey = 0
+									bindMenu.save()
+							end
+							imgui.SameLine()
+							if imgui.Button("X##sms" .. bindIndex, vec(7, 10)) then
+									bindMenu.bindList.sms[bindIndex].edit = false
+									bindMenu.deleteBind("sms", bindIndex)
+							end
+							imgui.SameLine()
+							if imgui.Button("-##sms" .. bindIndex, vec(5, 10)) then
+								bindMenu.json.sms[bindIndex].text = bind.buffer.v
+								bind.edit = false
+								bindMenu.save()
+							end
+						else
+							local text = chatManager.subSMSText(ini.settings.SMSPrefix, bind.buffer.v)
+							if imgui.Button(text .. "##sms" .. bindIndex, vec(80.5, 10)) and orderHandler.currentOrder then
+									chatManager.addMessageToQueue(string.format("/t %d %s", orderHandler.currentOrder.id, text))
+							end
+							imgui.SetTooltip(text, 500)
+							imgui.SameLine()
+							if imgui.Button("+##sms" .. bindIndex, vec(5, 10)) then
+									bindMenu.chooseEdit("sms", bindIndex)
+									bindMenu.save()
+							end
+						end
+						imgui.PopID()
+					end
         end
 
-        if passengers then
-            imgui.NewLine()
-            imgui.SameLine(toScreenX(3))
-            if vehicleManager.maxPassengers then
-                if imgui.CollapsingHeader("Меню действий с пассажирами") then
-                    for passengerIndex = 0, vehicleManager.maxPassengers - 1 do
-                        if vehicleManager.passengersList[passengerIndex] then
-                            imgui.NewLine()
-                            imgui.SameLine(toScreenX(11))
-                            if
-                                imgui.CollapsingHeader(
-                                    vehicleManager.passengersList[passengerIndex].nickname ..
-                                        "[" .. vehicleManager.passengersList[passengerIndex].id .. "]",
-                                    vec(89, 10)
-                                )
-                             then
-                                imgui.NewLine()
-                                imgui.SameLine(toScreenX(20))
-                                imgui.PushID(passengerIndex)
-                                if imgui.Button("Выкинуть из автомобиля", vec(79, 10)) then
-                                    chatManager.addMessageToQueue(
-                                        "/eject " .. vehicleManager.passengersList[passengerIndex].id
-                                    )
-                                end
-                                imgui.PopID()
-                            end
-                        end
-                    end
+        imgui.NewLine()
+        imgui.SameLine(toScreenX(3))
+        if imgui.CollapsingHeader("Меню действий с пассажирами") then
+					if not bindMenu.isBindEdit("actions") then
+							bindMenu.bindList.actions = bindMenu.getBindList("actions")
+					end
+					imgui.NewLine()
+					imgui.SameLine(toScreenX(10.5))
+					if imgui.Button("Добавить действие", vec(87.5, 9)) then
+						if not bindMenu.isBindEdit("actions") then
+							local num = #bindMenu.json.actions + 1
+							if num - 1 < 12 then
+								bindMenu.json.actions[num] = {text = "Новое действие", cmd = "/cmd {id}", key = 0, addKey = 0}
+								bindMenu.save()
+							end
+						end
+					end
+					if passengers and vehicleManager.maxPassengers then
+            for passengerIndex = 0, vehicleManager.maxPassengers - 1 do
+                if vehicleManager.passengersList[passengerIndex] then
+                  imgui.NewLine()
+                  imgui.SameLine(toScreenX(11))
+                  if imgui.CollapsingHeader(
+                          vehicleManager.passengersList[passengerIndex].nickname ..
+                              "[" .. vehicleManager.passengersList[passengerIndex].id .. "]",
+                          vec(89, 10)
+                  	)
+                  then
+									 	imgui.showActions(passengerIndex, passengers)
+                  end
                 end
             end
+					else
+						imgui.showActions(-1, passengers)
+					end
         end
 
 				imgui.BeginChild("binderPage", vec(97, 10), false)
 				for i = 1, 10 do
 					imgui.BeginChild(tostring(i), vec(8, 10), false)
-					local bindPage = i == 1 and 0 or (i-1) * 16
+					local bindPage = i == 1 and 0 or (i-1) * 14
 					local bindPageText = i < 10 and ' ' .. i or tostring(i)
-					local binderSize = #bindMenu.bindList
+					local binderSize = #bindMenu.bindList.binds
 					if binderSize > bindPage or i == 1 then
 						if imgui.Selectable(bindPageText, imgui.binderPage == i, 0, vec(5, 8)) then
 							imgui.binderPage = i
@@ -1947,35 +2168,36 @@ function imgui.onDrawBindMenu()
 				end
 				imgui.EndChild()
 
-				if imgui.Button("Добавить строку", vec(97, 10)) then
-						if not bindMenu.isBindEdit() then
-								local num = #bindMenu.json + 1
-								if num <= 160 then
-									bindMenu.json[num] = {text = "", key = 0, addKey = 0}
+				if imgui.Button("Добавить строку", vec(96, 10)) then
+						if not bindMenu.isBindEdit("binds") then
+								local num = #bindMenu.json.binds + 1
+								if num <= 140 then
+									bindMenu.json.binds[num] = {text = "", cmd = "", key = 0, addKey = 0}
 									bindMenu.save()
 								end
 						end
 				end
 
-				local beginBind, endBind = 1, 16
+				local beginBind, endBind = 1, 14
 
 				if imgui.binderPage > 1 then
-					beginBind = 17 + (imgui.binderPage - 2) * 16
-					endBind = imgui.binderPage * 16
+					beginBind = 15 + (imgui.binderPage - 2) * 14
+					endBind = imgui.binderPage * 14
 				end
 
         for bindIndex = beginBind, endBind do
-            if bindMenu.bindList[bindIndex] then
-								local bind = bindMenu.bindList[bindIndex]
+            if bindMenu.bindList.binds[bindIndex] then
+								local bind = bindMenu.bindList.binds[bindIndex]
                 imgui.PushID(bindIndex)
                 if bind.edit then
-                    imgui.PushItemWidth(toScreenX(40))
+                    imgui.PushItemWidth(toScreenX(55.5))
                     imgui.PushStyleVar(imgui.StyleVar.FramePadding, vec(4, 1.1))
                     imgui.PushID(bindIndex)
                     if imgui.InputText("", bind.buffer) then
-                        bindMenu.json[bindIndex].text = bind.buffer.v
+                        bindMenu.json.binds[bindIndex].text = bind.buffer.v
                         bindMenu.save()
                     end
+										imgui.SetTooltip(bind.buffer.v, 500)
                     imgui.PopID()
                     imgui.PopStyleVar()
                     imgui.PopItemWidth()
@@ -1993,9 +2215,10 @@ function imgui.onDrawBindMenu()
                         end
                     end
                     buttonName = buttonName .. bind.buffer.v
-                    if imgui.Button(buttonName, vec(89.5, 10)) then
+                    if imgui.Button(buttonName, vec(89, 10)) then
                         chatManager.addMessageToQueue(bind.buffer.v)
                     end
+										imgui.SetTooltip(bind.buffer.v, 500)
                 end
 
                 imgui.PopID()
@@ -2020,8 +2243,8 @@ function imgui.onDrawBindMenu()
                             imgui.key = 0
                             imgui.addKey = 0
                         end
-                        bindMenu.json[bindIndex].key = imgui.key
-                        bindMenu.json[bindIndex].addKey = imgui.addKey
+                        bindMenu.json.binds[bindIndex].key = imgui.key
+                        bindMenu.json.binds[bindIndex].addKey = imgui.addKey
                         bind.key = imgui.key
                         bind.addKey = imgui.addKey
                         imgui.key = 0
@@ -2029,27 +2252,22 @@ function imgui.onDrawBindMenu()
                         bindMenu.save()
                     end
                     imgui.SameLine()
-                    if imgui.Button("Удалить", vec(22.7, 10)) then
-                        bindMenu.bindList[bindIndex].edit = false
-                        bindMenu.deleteBind(bindIndex)
+                    if imgui.Button("X", vec(7, 10)) then
+                        bindMenu.bindList.binds[bindIndex].edit = false
+                        bindMenu.deleteBind("binds", bindIndex)
                     end
                     imgui.SameLine()
-                    if bindMenu.bindList[bindIndex] then
+                    if bindMenu.bindList.binds[bindIndex] then
                         if imgui.Button("-", vec(5, 10)) or isKeyJustPressed(13) then
-                            bindMenu.json[bindIndex].text = bind.buffer.v
+                            bindMenu.json.binds[bindIndex].text = bind.buffer.v
                             bind.edit = false
                             bindMenu.save()
                         end
                     end
                 else
                     if imgui.Button("+", vec(5, 10)) then
-                        bind.edit = true
-                        for _bindIndex, _bind in pairs(bindMenu.bindList) do
-                            if _bindIndex ~= bindIndex then
-                                _bind.edit = false
-                                bindMenu.save()
-                            end
-                        end
+                        bindMenu.chooseEdit("binds", bindIndex)
+												bindMenu.save()
                     end
                 end
                 imgui.PopID()
@@ -2121,7 +2339,7 @@ function imgui.onDrawNotification()
 
                     notfList.pos = {
                         x = ini.settings.hudPosX,
-                        y = notfList.pos.y - (notfList.size.y + 10 + sizeWithButton)
+                        y = notfList.pos.y - (notfList.size.y + 10 + sizeWithButton + notification.addSize)
                     }
                     imgui.SetNextWindowPos(imgui.ImVec2(toScreenX(notfList.pos.x), toScreenY(notfList.pos.y - notfPos)))
                     imgui.SetNextWindowSize(
@@ -2129,7 +2347,7 @@ function imgui.onDrawNotification()
                             105,
                             sizeWithButton + notfList.size.y + imgui.GetStyle().ItemSpacing.y +
                                 imgui.GetStyle().WindowPadding.y -
-                                5
+                                5 + notification.addSize
                         )
                     )
                     imgui.Begin(
@@ -2214,8 +2432,8 @@ end
 function imgui.onDrawSettings()
     imgui.ShowCursor = true
     local resX, resY = getScreenResolution()
-    imgui.SetNextWindowSize(vec(200, 210))
-    imgui.SetNextWindowPos(vec(220, 100), 2)
+    imgui.SetNextWindowSize(vec(200, 220))
+    imgui.SetNextWindowPos(vec(220, 90), 2)
     imgui.Begin(
         "Taximate " .. thisScript()["version"],
         imgui.showSettings,
@@ -2237,7 +2455,7 @@ function imgui.onDrawSettings()
         imgui.settingsTab = 3
     end
     imgui.EndChild()
-    imgui.BeginChild("bottom", vec(195, 185), true)
+    imgui.BeginChild("bottom", vec(195, 195), true)
     if imgui.settingsTab == 1 then
         if imgui.Checkbox("Отображение Taximate Binder", imgui.ImBool(ini.settings.showBindMenu)) then
             ini.settings.showBindMenu = not ini.settings.showBindMenu
@@ -2346,8 +2564,37 @@ function imgui.onDrawSettings()
 				imgui.SetTooltip("Функция даёт преимущество над игроками\nИспользовать на свой страх и риск", 150)
         if imgui.Checkbox("Закончить рабочий день при поломке/пустом баке", imgui.ImBool(ini.settings.finishWork)) then
             ini.settings.finishWork = not ini.settings.finishWork
-            inicfg.save(ini, "Taximate/settings.ini") 
+            inicfg.save(ini, "Taximate/settings.ini")
         end
+				if imgui.Checkbox("Активация круиз-контроля клавишей", imgui.ImBool(ini.settings.cruiseControl)) then
+						ini.settings.cruiseControl = not ini.settings.cruiseControl
+						inicfg.save(ini, "Taximate/settings.ini")
+				end
+				imgui.SameLine()
+				buttonText = "None"
+        if ini.settings.key4 ~= 0 then
+            buttonText = vkeys.id_to_name(ini.settings.key4)
+        end
+        imgui.PushID(1)
+        if imgui.Button(buttonText, vec(0, 10)) then
+            imgui.key = 0
+            imgui.addKey = 0
+            imgui.showInputWindow.v = true
+						imgui.singleBind = true
+            imgui.key4Edit = true
+        end
+				if not imgui.showInputWindow.v and imgui.key ~= 0 then
+            if imgui.key == -1 then
+                imgui.key = 0
+            end
+            if imgui.key4Edit then
+                ini.settings.key4 = imgui.key
+            end
+            inicfg.save(ini, "Taximate/settings.ini")
+						imgui.singleBind = false
+            imgui.key = 0
+        end
+        imgui.PopID()
         if imgui.Checkbox("Обновление дистанции всех вызовов раз в", imgui.ImBool(ini.settings.ordersDistanceUpdate)) then
             ini.settings.ordersDistanceUpdate = not ini.settings.ordersDistanceUpdate
             inicfg.save(ini, "Taximate/settings.ini")
@@ -2436,7 +2683,7 @@ function imgui.onDrawSettings()
             elseif imgui.key3Edit then
                 ini.settings.key3 = imgui.key
                 ini.settings.key3add = imgui.addKey
-            end
+						end
             inicfg.save(ini, "Taximate/settings.ini")
             imgui.key1Edit = false
             imgui.key2Edit = false
@@ -2575,7 +2822,7 @@ function imgui.onDrawSettings()
             end
         end
         imgui.Text("История обновлений")
-        imgui.BeginChild("changelog", vec(190, 125), true)
+        imgui.BeginChild("changelog", vec(190, 135), true)
         if script_updates.changelog then
             for index, key in pairs(script_updates.sorted_keys) do
                 if imgui.CollapsingHeader("Версия " .. key) then
@@ -2593,7 +2840,7 @@ function imgui.onDrawSettings()
     imgui.End()
 end
 
-function imgui.addNotification(text, time)
+function imgui.addNotification(text, time, addSize)
     notificationsQueue[#notificationsQueue + 1] = {
         active = false,
         time = 0,
@@ -2601,7 +2848,8 @@ function imgui.addNotification(text, time)
         date = os.date("%X"),
         text = text,
         button = false,
-        orderNickname = nil
+        orderNickname = nil,
+				addSize = addSize or 0
     }
 end
 
@@ -2615,7 +2863,7 @@ function imgui.SetTooltip(text, width)
     end
 end
 
-function imgui.addNotificationWithButton(text, time, _orderNickname)
+function imgui.addNotificationWithButton(text, time, _orderNickname, addSize)
     notificationsQueue[#notificationsQueue + 1] = {
         active = false,
         time = 0,
@@ -2623,117 +2871,121 @@ function imgui.addNotificationWithButton(text, time, _orderNickname)
         date = os.date("%X"),
         text = text,
         button = true,
-        orderNickname = _orderNickname
+        orderNickname = _orderNickname,
+				addSize = addSize or 0
     }
 end
 
 local zones = {
-    ["Гараж СФ"] = {x = -1979.227905, y = 436.112},
-    ["Порт СФ"] = {x = -1731.5, y = 118.919899},
+    ["Гараж [SF]"] = {x = -1960, y = 614.8281},
+    ["Порт [SF]"] = {x = -1731.5, y = 118.919899},
     ["Come-A-Lot"] = {x = 2115.459717, y = 920.206421},
     ["Автошкола"] = {x = -2026.514404, y = -95.752701},
-    ["Автосалон СФ B/A"] = {x = -1638.35144, y = 1202.657227},
-    ["Банк ЛС"] = {x = 1411.71875, y = -1699.705566},
+    ["Автосалон [SF] B/A"] = {x = -1638.35144, y = 1202.657227},
+    ["Банк [LS]"] = {x = 1411.71875, y = -1699.705566},
     ["Клуб Amnesia"] = {x = 2507.358398, y = 1242.260132},
-    ["Новости ЛС"] = {x = 1632.979248, y = -1712.134644},
+    ["Новости [LS]"] = {x = 1632.979248, y = -1712.134644},
     ["Spinybed"] = {x = 2169.407715, y = 2795.919189},
-    ["Амму-нация ЛВ"] = {x = 2154.377686, y = 935.150208},
+    ["Амму-нация [LV]"] = {x = 2154.377686, y = 935.150208},
     ["Ballas"] = {x = 2702.399414, y = -2003.425903},
     ["Ферма 2"] = {x = -1060.39856, y = -1205.524048},
     ["Julius"] = {x = 2640.000244, y = 1106.087646},
     ["Emerald Isle"] = {x = 2202.513672, y = 2474.13623},
     ["Грабители домов"] = {x = 2444.0413, y = -1971.8397},
-    ["АВ/ЖД вокзал СФ"] = {x = -1985.027222, y = 113.767799},
+    ["АВ/ЖД вокзал [SF]"] = {x = -1985.027222, y = 113.767799},
     ["Прием металла"] = {x = 2263.516846, y = -2537.962158},
     ["Yakuza"] = {x = 1538.84436, y = 2761.891602},
     ["Outlaws MC"] = {x = -309.605103, y = 1303.436035},
     ["Клуб Pig Pen"] = {x = 2417.153076, y = -1244.189941},
     ["Sobrino de Botin"] = {x = 2269.751465, y = -74.159599},
-    ["Спортзал ЛВ"] = {x = 2098.566895, y = 2480.085938},
+    ["Спортзал [LV]"] = {x = 2098.566895, y = 2480.085938},
     ["Ферма 4"] = {x = 1925.693237, y = 170.401703},
     ["Sons of Silence MC"] = {x = 1243.829102, y = 203.576202},
     ["Vinewood"] = {x = 1380.432251, y = -897.429016},
     ["Грабители ЛЭП"] = {x = 2285.899658, y = -2339.326904},
     ["Flats"] = {x = -2718.883301, y = 50.5322},
-    ["Автосалон СФ D/C"] = {x = -1987.325806, y = 288.925507},
+    ["Автосалон [SF] D/C"] = {x = -1987.325806, y = 288.925507},
     ["Easter"] = {x = -1675.596558, y = 413.487213},
     ["Grove street"] = {x = 2491.886963, y = -1666.881348},
     ["Пейнтбол"] = {x = 2488.860107, y = 2776.471191},
     ["Montgomery"] = {x = 1381.814453, y = 459.14801},
     ["La Cosa Nostra"] = {x = 1461.381958, y = 659.340027},
     ["Грузчики"] = {x = 2230.001709, y = -2211.310547},
-    ["Больница ЛВ"] = {x = 1607.858, y = 1820.549},
+    ["Больница [LV]"] = {x = 1607.858, y = 1820.549},
     ["Ферма 0"] = {x = -381.502808, y = -1438.979248},
     ["Warlocks MC"] = {x = 661.681824, y = 1717.991211},
     ["Мэрия"] = {x = 1481.229248, y = -1749.487305},
     ["ФБР"] = {x = -2418.072754, y = 497.657501},
     ["PricklePine"] = {x = 2147.674561, y = 2747.945313},
-    ["Армия ЛВ"] = {x = 133.322205, y = 1994.77356},
-    ["Вертолет ЛС"] = {x = 1571.372192, y = -1335.252197},
+    ["Армия [LV]"] = {x = 133.322205, y = 1994.77356},
+    ["Вертолет [LS]"] = {x = 1571.372192, y = -1335.252197},
     ["Черный рынок"] = {x = 2519.776367, y = -1272.694214},
     ["Бар Lil Probe Inn"] = {x = -89.612503, y = 1378.249268},
     ["BoneCounty"] = {x = 614.468323, y = 1692.853638},
-    ["Магазин одежды ЛВ"] = {x = 2802.930664, y = 2430.718018},
+    ["Магазин одежды [LV]"] = {x = 2802.930664, y = 2430.718018},
     ["Стоянка электриков"] = {x = -84.297798, y = -1125.867188},
     ["Ферма 3"] = {x = -5.5959, y = 67.837303},
     ["Нефтезавод 1"] = {x = 256.26001, y = 1414.930054},
     ["Bandidos MC"] = {x = -1940.291016, y = 2380.227783},
-    ["Аэропорт СФ"] = {x = -1551.542847, y = -436.707214},
-    ["Новости СФ"] = {x = -2013.973755, y = 469.190094},
+		["Авиашкола LV"] = {x = 1319.1371, y = 1249.5378},
+    ["Аэропорт [SF]"] = {x = -1551.542847, y = -436.707214},
+    ["Новости [SF]"] = {x = -2013.973755, y = 469.190094},
     ["Mulholland"] = {x = 1003.979614, y = -937.547302},
     ["Гора Чилиад"] = {x = -2231.874, y = -1739.619},
     ["Vagos"] = {x = 2803.55542, y = -1585.0625},
     ["Бар Big Spread Ranch"] = {x = 693.625305, y = 1967.683716},
     ["Vagos MC"] = {x = -315.249115, y = 1773.921875},
     ["Склад продуктов"] = {x = -502.780609, y = -553.796204},
-    ["Магазин одежды СФ"] = {x = -1694.672119, y = 951.845581},
-    ["Церковь СФ"] = {x = -1981.333252, y = 1117.466675},
+    ["Магазин одежды [SF]"] = {x = -1694.672119, y = 951.845581},
+    ["Церковь [SF]"] = {x = -1981.333252, y = 1117.466675},
     ["Angel Pine"] = {x = -2155.095215, y = -2460.37793},
     ["Лесопилка 2"] = {x = -1978.709961, y = -2435.139893},
     ["Торговая площадка"] = {x = -1939.609131, y = 555.069824},
     ["Santa Maria"] = {x = 331.410309, y = -1802.567505},
     ["Dillimore"] = {x = 655.649109, y = -564.918518},
-    ["Порт ЛС"] = {x = 2507.131348, y = -2234.151855},
+    ["Порт [LS]"] = {x = 2507.131348, y = -2234.151855},
     ["AngelPine"] = {x = -2243.743896, y = -2560.55542},
-    ["СТО ЛС"] = {x = 854.575928, y = -605.205322},
+    ["СТО [LS]"] = {x = 854.575928, y = -605.205322},
     ["Бар Misty"] = {x = -2246.219482, y = -90.975998},
     ["Автоугонщики"] = {x = 2494.080078, y = -1464.709961},
-    ["ЖД вокзал ЛС"] = {x = 1808.494507, y = -1896.349854},
-    ["Автосалон ЛС N"] = {x = 557.109619, y = -1285.791626},
+    ["ЖД вокзал [LS]"] = {x = 1808.494507, y = -1896.349854},
+    ["Автосалон [LS] Nope"] = {x = 557.109619, y = -1285.791626},
     ["Idlewood"] = {x = 1940.922241, y = -1772.977905},
     ["Склад урожая"] = {x = 1629.969971, y = 2326.031494},
     ["Перегон. Получение"] = {x = 2476.624756, y = -2596.437256},
-    ["Аэропорт ЛВ"] = {x = 1726.29126, y = 1610.033325},
-    ["Магазин одежды ЛС"] = {x = 461.51239, y = -1500.866211},
+    ["Аэропорт [LV]"] = {x = 1726.2912, y = 1610.0333},
+    ["Магазин одежды [LS]"] = {x = 461.51239, y = -1500.866211},
     ["Клуб Alhambra"] = {x = 1827.609253, y = -1682.12207},
     ["Русская мафия"] = {x = 1001.480103, y = 1690.514526},
     ["Автобусный парк"] = {x = 1638.358643, y = -1148.711914},
     ["Redsands West"] = {x = 1157.925537, y = 2072.282227},
     ["Marina Cluck"] = {x = 928.539917, y = -1352.939331},
-    ["Полиция ЛВ"] = {x = 2283.758789, y = 2420.525146},
+    ["Полиция [LV]"] = {x = 2283.758789, y = 2420.525146},
     ["ElGuebrabos"] = {x = -1328.19751, y = 2677.596924},
     ["Redsands"] = {x = 1596.309814, y = 2199.004639},
-    ["Банк ЛВ"] = {x = 2412.57666, y = 1123.766235},
+    ["Банк [LV]"] = {x = 2412.57666, y = 1123.766235},
     ["Алкозавод"] = {x = -49.508301, y = -297.973602},
-    ["Стадион ЛВ"] = {x = 1099.208, y = 1600.952},
-    ["Казино 4 Дракона"] = {x = 2019.318115, y = 1007.75592},
-    ["Стадион ЛС"] = {x = 2704.779053, y = -1701.145874},
+    ["Стадион [LV]"] = {x = 1099.208, y = 1600.952},
+    ["Казино 4 Дракона"] = {x = 2327.4501, y = 2114.2021},
+		["Склад бара 4 Дракона"] = {x = 2225.8444, y = 2067.1940},
+		["Казино Belagio"] = {x = 2330.4199, y = 2166.1262},
+    ["Стадион [LS]"] = {x = 2704.779053, y = -1701.145874},
     ["Tierra Robada"] = {x = -1471.741943, y = 1863.972412},
     ["Glen Park"] = {x = 1970.055, y = -1204.361},
     ["Garcia"] = {x = -2335.71875, y = -166.687805},
     ["Jefferson Motel"] = {x = 2228.676, y = -1161.456},
     ["Лесопилка 1"] = {x = -449.269897, y = -65.660004},
     ["Склад угля 2"] = {x = -2923.211, y = -1424.843},
-    ["СТО ЛВ"] = {x = 1658.380371, y = 2200.350342},
-    ["Полиция СФ"] = {x = -1607.410034, y = 723.03717},
+    ["СТО [LV]"] = {x = 1658.380371, y = 2200.350342},
+    ["Полиция [SF]"] = {x = -1607.410034, y = 723.03717},
     ["Marina Burger"] = {x = 810.51001, y = -1616.193848},
-    ["Армия СФ"] = {x = -1554.953613, y = 500.124207},
-    ["Гараж ЛВ"] = {x = 1447.29541, y = 2370.61499},
-    ["Гараж ЛС"] = {x = 1636.65918, y = -1525.564209},
-    ["Склад бара Калигула"] = {x = 2314.892822, y = 1733.299561},
-    ["Вертолет ЛВ"] = {x = 2614.588379, y = 2735.326416},
-    ["СТО СФ"] = {x = -1799.868042, y = 1200.299316},
-    ["Больница СФ"] = {x = -2658.259766, y = 627.981018},
+    ["Армия [SF]"] = {x = -1554.953613, y = 500.124207},
+    ["Гараж [LV]"] = {x = 1447.29541, y = 2370.61499},
+    ["Гараж [LS]"] = {x = 1636.65918, y = -1525.564209},
+    ["Склад бара Калигула"] = {x = 2237.3657, y = 2230.6188},
+    ["Вертолет [LV]"] = {x = 2614.588379, y = 2735.326416},
+    ["СТО [SF]"] = {x = -1799.868042, y = 1200.299316},
+    ["Больница [SF]"] = {x = -2658.259766, y = 627.981018},
     ["Willowfield"] = {x = 2397.851563, y = -1899.040039},
     ["Old Venturas Strip"] = {x = 2393.200684, y = 2041.559448},
     ["Strip"] = {x = 2083.269775, y = 2224.69751},
@@ -2744,42 +2996,43 @@ local zones = {
     ["Financial"] = {x = -1807.485352, y = 944.666626},
     ["Нефтезавод 2"] = {x = -1046.780029, y = -670.650024},
     ["Palomino Creek"] = {x = 2250.245117, y = 52.701401},
-    ["Comedy club"] = {x = 1879.190918, y = 2339.53833},
+    ["Comedy club"] = {x = 2506.8877, y = 2120.3816},
     ["Juniper"] = {x = -2410.803467, y = 975.240906},
     ["Наркопритон"] = {x = 2182.824707, y = -1669.634644},
-    ["Амму-нация СФ"] = {x = -2611.327393, y = 213.002808},
-    ["Автосалон ЛВ B/A"] = {x = 2159.575195, y = 1385.734131},
+    ["Амму-нация [SF]"] = {x = -2611.327393, y = 213.002808},
+    ["Автосалон [LV] B/A"] = {x = 2159.575195, y = 1385.734131},
+		["Автосалон [SF] S"] = {x = -1754.2285, y = 964.1264},
     ["Бар Tierra Robada"] = {x = -2501.24292, y = 2318.692627},
     ["Flint"] = {x = -90.936501, y = -1169.390747},
-    ["Банк СФ"] = {x = -2226.506348, y = 251.924103},
+    ["Банк [SF]"] = {x = -2226.506348, y = 251.924103},
     ["Военкомат"] = {x = -551.301514, y = 2593.905029},
     ["Склад угля 1"] = {x = 832.456787, y = 863.901611},
     ["Клуб Jizzy"] = {x = -2593.454834, y = 1362.782349},
     ["Fort Carson"] = {x = 61.247101, y = 1189.19104},
     ["Инкассаторы"] = {x = -2206.516113, y = 312.605194},
-    ["Автовокзал ЛС"] = {x = 1143.750122, y = -1746.589111},
+    ["Автовокзал [LS]"] = {x = 1143.750122, y = -1746.589111},
     ["Aztecas"] = {x = 1723.966553, y = -2112.802734},
-    ["Полиция ЛС"] = {x = 1548.657715, y = -1675.47522},
+    ["Полиция [LS]"] = {x = 1548.657715, y = -1675.47522},
     ["Hell's Angels MC"] = {x = 681.496521, y = -475.403198},
-    ["Больница ЛС"] = {x = 1181.302, y = -1323.499},
-    ["Кладбище ЛС"] = {x = 815.756226, y = -1103.168091},
+    ["Больница [LS]"] = {x = 1181.302, y = -1323.499},
+    ["Кладбище [LS]"] = {x = 815.756226, y = -1103.168091},
     ["Дальнобойщики"] = {x = 2236.611816, y = 2770.693848},
-    ["Новости ЛВ"] = {x = 2617.3396, y = 1179.765137},
+    ["Новости [LV]"] = {x = 2617.3396, y = 1179.765137},
     ["Машины хот-догов"] = {x = -2407.622803, y = 741.159424},
-    ["Стадион СФ"] = {x = -2133.911133, y = -444.985199},
+    ["Стадион [SF]"] = {x = -2133.911133, y = -444.985199},
     ["Rifa"] = {x = 2184.550537, y = -1765.587158},
     ["Ферма 1"] = {x = -112.575401, y = -10.4236},
-    ["АВ/ЖД вокзал ЛВ"] = {x = 2843.035156, y = 1343.983032},
+    ["АВ/ЖД вокзал [LV]"] = {x = 2843.035156, y = 1343.983032},
     ["Highwaymen MC"] = {x = 22.934, y = -2646.949219},
-    ["Казино Калигула"] = {x = 2196.960693, y = 1677.085815},
-    ["Амму-нация ЛС"] = {x = 1363.999512, y = -1288.82666},
+    ["Казино Калигула"] = {x = 2374.4543, y = 2168.7851},
+    ["Амму-нация [LS]"] = {x = 1363.999512, y = -1288.82666},
     ["Кладбище самолётов"] = {x = 252.94, y = 2504.34},
     ["Mongols MC"] = {x = -1265.713867, y = 2716.588623},
     ["Pagans MC"] = {x = -2104.451904, y = -2481.883057},
     ["Free Souls MC"] = {x = -253.842606, y = 2603.138184},
-    ["Вертолет СФ"] = {x = -2241.166992, y = 2322.205566},
+    ["Вертолет [SF]"] = {x = -2241.166992, y = 2322.205566},
     ["Бар Grove street"] = {x = 2306.214355, y = -1651.560547},
-    ["Аэрoпoрт ЛС"] = {x = 1967.20105, y = -2173.359375},
+    ["Аэрoпoрт [LS]"] = {x = 1967.20105, y = -2173.359375},
     ["Blueberry"] = {x = 193.50517272949, y = -149.43431091309},
     ["Fern Ridge"] = {x = 828.34381103516, y = 87.334922790527},
     ["Fort Carsоn"] = {x = -318.39666748047, y = 1059.1397705078},
@@ -2789,22 +3042,22 @@ local zones = {
     ["Las Brujas"] = {x = -389.77297973633, y = 2224.3134765625},
     ["Gant Bridge"] = {x = -2678, y = 1844.75},
     ["Missionary Hill"] = {x = -2412, y = -594.2333984375},
-    ["Маяк ЛС"] = {x = 167.46875, y = -1941.484375},
+    ["Маяк [LS]"] = {x = 167.46875, y = -1941.484375},
     ["Fort Cаrson"] = {x = -87.913604736328, y = 896.2822265625},
-    ["Перекрёсток ЛВ-ЛС"] = {x = 1792.2270507813, y = 842.9541015625},
-    ["Причал ЛВ"] = {x = 2314, y = 573.0322265625},
+    ["Перекрёсток LV-LS"] = {x = 1792.2270507813, y = 842.9541015625},
+    ["Причал [LV]"] = {x = 2314, y = 573.0322265625},
     ["Колесо обозрения"] = {x = 371.21142578125, y = -2036.2333984375},
     ["Vinewoоd"] = {x = 217.96139526367, y = -1269.2333984375},
     ["Back O Beyond"] = {x = -652.17919921875, y = -2188},
-    ["Стоянка такси ЛВ"] = {x = 2448.4223632813, y = 1337.5726318359},
-    ["Аэропорт ЛВ"] = {x = 1350.8845214844, y = 1375.6596679688},
+    ["Стоянка такси [LV]"] = {x = 2448.4223632813, y = 1337.5726318359},
     ["Northstar Rock"] = {x = 2272, y = -507.87426757813},
     ["Vinewоod"] = {x = 1404, y = -686.48815917969},
     ["Лодочная станция"] = {x = 730.087890625, y = -1667.2354736328},
     ["Обсерватория"] = {x = 1108.71875, y = -2032.654296875},
-    ["Аэропорт ЛС"] = {x = 1684, y = -2531.5048828125},
-    ["Армия ЛС"] = {x = 2734, y = -2449.25},
-    ["Стоянка такси СФ"] = {x = -2267.4973144531, y = 123.14111328125},
+		["Причал Tierra Robada"] = {x = -2704.2709, y = 2367.1948},
+    ["Аэропорт [LS]"] = {x = 1684, y = -2531.5048828125},
+    ["Армия [LS]"] = {x = 2734, y = -2449.25},
+    ["Стоянка такси [SF]"] = {x = -2267.4973144531, y = 123.14111328125},
     ["Админ. деревня"] = {x = 2845.7473144531, y = 2765.578125},
     ["Foster Valley"] = {x = -1922.984375, y = -938.43969726563},
     ["Shady Creeks"] = {x = -1655.234375, y = -1922.6591796875},
