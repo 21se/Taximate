@@ -1,7 +1,7 @@
 script_name("Taximate")
 script_author("21se(pivo)")
 script_version("1.3.3")
-script_version_number(47)
+script_version_number(48)
 script_moonloader(26)
 script_url("21se.github.io/Taximate")
 script_updates = {}
@@ -1057,6 +1057,9 @@ function vehicleManager.clearMarkers()
 end
 
 function vehicleManager.cruiseControl()
+    if not isCharInAnyCar(PLAYER_PED) then
+      return
+    end
     local car = storeCarCharIsInNoSave(PLAYER_PED)
     if vehicleManager.cruiseControlEnabled then
 				if not isCarEngineOn(car) or not isCharInAnyCar(PLAYER_PED) then
