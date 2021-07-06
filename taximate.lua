@@ -1,7 +1,7 @@
 script_name("Taximate")
 script_author("21se(pivo)")
-script_version("1.3.3")
-script_version_number(48)
+script_version("1.3.4")
+script_version_number(51)
 script_moonloader(26)
 script_url("21se.github.io/Taximate")
 script_updates = {}
@@ -365,7 +365,11 @@ function chatManager.subSMSText(prefix, text)
         text = text:gsub("{distance}", 1234)
     end
     if vehicleManager.maxPassengers then
-        text = text:gsub("{carname}", vehicleManager.vehicleName)
+				local vehicleName = vehicleManager.vehicleName
+				if vehicleName == "Buffalo" then
+					vehicleName = vehicleName .. " (2-х местн.)"
+				end
+        text = text:gsub("{carname}", vehicleName)
     else
         text = text:gsub("{carname}", "Sentinel")
     end
@@ -1349,7 +1353,7 @@ function sampev.onShowDialog(DdialogId, Dstyle, Dtitle, Dbutton1, Dbutton2, Dtex
                         if line == 5 then
                             player.skill, player.skillExp =
                                 string.match(string, u8:decode "Скилл: (%d+)	Опыт: .+ (%d+%.%d+)%%")
-														player.skillClients = math.ceil((100 - player.skillExp) / (((9600 / 100 * (1.1 ^ (50 - player.skill))) * 100) / (10000 * (1.1 ^ player.skill))))
+														player.skillClients = math.ceil((100 - player.skillExp) / (((9600 / 100 * (1.1 ^ (50 - player.skill))) * 100) / (5000 * (1.1 ^ player.skill))))
                         end
                         if line == 6 then
                             player.rank, player.rankExp =
@@ -1360,12 +1364,14 @@ function sampev.onShowDialog(DdialogId, Dstyle, Dtitle, Dbutton1, Dbutton2, Dtex
             )
             if chatManager.hideResultMessages["/jskill"].bool then
                 chatManager.hideResultMessages["/jskill"].bool = false
+								sampSendDialogResponse(DdialogId, 0)
                 return false
             end
         elseif string.find(Dtitle, "GPS") then
             if chatManager.hideResultMessages["/gps"].bool then
                 chatManager.hideResultMessages["/gps"].bool = false
 								orderHandler.GPSMark = nil
+								sampSendDialogResponse(DdialogId, 0)
                 return false
             else
                 lua_thread.create(
@@ -1460,6 +1466,7 @@ function sampev.onShowDialog(DdialogId, Dstyle, Dtitle, Dbutton1, Dbutton2, Dtex
             )
             if chatManager.hideResultMessages["/service"].bool then
                 chatManager.hideResultMessages["/service"].bool = false
+								sampSendDialogResponse(DdialogId, 0)
                 return false
             end
         end
@@ -1940,7 +1947,7 @@ function imgui.onDrawHUD()
         imgui.TextColoredRGB("Скилл: {4296f9}" .. player.skill .. " {FFFFFF}(" .. player.skillExp .. "%)")
 				imgui.SameLine()
 				imgui.TextDisabled("(?)")
-				imgui.SetTooltip("До след. уровня: " .. player.skillClients .. " клиентов", 48)
+				imgui.SetTooltip("Клиентов до следующего уровня: " .. player.skillClients, 70)
         imgui.EndChild()
         imgui.SameLine()
         imgui.BeginChild("##midright", vec(44, 8), false, imgui.WindowFlags.NoScrollbar)
