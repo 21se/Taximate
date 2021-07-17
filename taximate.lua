@@ -3466,8 +3466,8 @@ function update()
             if status == moonloader.download_status.STATUS_ENDDOWNLOADDATA then
                 os.remove(thisScript().path)
                 os.rename(fpath, thisScript().path)
-                loadfile(thisScript().path, "t")()
-                applyChanges(thisScript().version_num)
+                update = loadfile(thisScript().path, "t")
+                update.applyChanges(thisScript().version_num)
                 chatManager.addChatMessage(
                     "Скрипт обновлён. В случае возникновения ошибок обращаться в ВК - {00CED1}vk.com/twonse{FFFFFF}")
                 if script.find("ML-AutoReboot") == nil then
