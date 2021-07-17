@@ -80,8 +80,6 @@ function main()
 
     repeat wait(100) until sampGetCurrentServerName() ~= "SA-MP"
 
-    applyChanges()
-
     local _, playerID = sampGetPlayerIdByCharHandle(PLAYER_PED)
     player.nickname = sampGetPlayerNickname(playerID)
     player.id = playerID
