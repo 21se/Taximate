@@ -1,13 +1,19 @@
-script_author("21se")
 script_version("1.3.5")
 script_version_number(52)
 script_moonloader(26)
+script_url("Github.com/21se/Taximate")
 script_name(string.format("Taximate v%s (%d)", thisScript().version,
                           thisScript().version_num))
-script_url("Github.com/21se/Taximate")
-script_updates = {}
-script_updates.update = false
+script_author("21se")
+script_updates = {update = false}
 script_branch = "dev"
+
+for index, luascript in pairs(script.list()) do
+    if luascript.name:find("Taximate v.+ (.+)") then
+        thisScript():unload()
+        return
+    end
+end
 
 local moonloader = require "moonloader"
 local inicfg = require "inicfg"
@@ -74,6 +80,7 @@ local FORMAT_NOTIFICATIONS = {
 }
 
 function main()
+    
     if not isSampLoaded() or not isSampfuncsLoaded() then return end
 
     while not isSampAvailable() do wait(100) end
@@ -121,11 +128,14 @@ function main()
     imgui.Process = true
     chatManager.initQueue()
     player.connected = true
-    lua_thread.create(bindMenu.bindsPressProcessingThread)
-    lua_thread.create(chatManager.checkMessagesQueueThread)
-    lua_thread.create(chatManager.disableFrozenMessagesProcessing)
-    lua_thread.create(vehicleManager.refreshVehicleInfoThread)
-    lua_thread.create(orderHandler.deleteOrdersThread)
+    
+    threads = {
+        lua_thread.create(bindMenu.bindsPressProcessingThread),
+        lua_thread.create(chatManager.checkMessagesQueueThread),
+        lua_thread.create(chatManager.disableFrozenMessagesProcessing),
+        lua_thread.create(vehicleManager.refreshVehicleInfoThread),
+        lua_thread.create(orderHandler.deleteOrdersThread)
+    }
 
     sampRegisterChatCommand("taximate", function()
         imgui.showSettings.v = not imgui.showSettings.v
@@ -235,19 +245,20 @@ function main()
     end
 end
 
-chatManager = {}
-chatManager.messagesQueue = {}
-chatManager.messagesQueueSize = 10
-chatManager.antifloodClock = os.clock()
-chatManager.lastMessage = ""
-chatManager.antifloodDelay = 0.6
-chatManager.dialogClock = os.clock()
-chatManager.hideResultMessages = {
-    ["/service"] = {bool = false, dialog = true, clock = os.clock()},
-    ["/paycheck"] = {bool = false, dialog = false, clock = os.clock()},
-    ["/clist"] = {bool = false, dialog = false, clock = os.clock()},
-    ["/jskill"] = {bool = false, dialog = true, clock = os.clock()},
-    ["/gps"] = {bool = false, dialog = true, clock = os.clock()}
+chatManager = {
+    messagesQueue = {},
+    messagesQueueSize = 10,
+    antifloodClock = os.clock(),
+    lastMessage = "",
+    antifloodDelay = 0.6,
+    dialogClock = os.clock(),
+    hideResultMessages = {
+        ["/service"] = {bool = false, dialog = true, clock = os.clock()},
+        ["/paycheck"] = {bool = false, dialog = false, clock = os.clock()},
+        ["/clist"] = {bool = false, dialog = false, clock = os.clock()},
+        ["/jskill"] = {bool = false, dialog = true, clock = os.clock()},
+        ["/gps"] = {bool = false, dialog = true, clock = os.clock()}
+    }
 }
 
 function chatManager.addChatMessage(message)
@@ -533,19 +544,20 @@ function chatManager.addMessageToQueue(string, _nonRepeat, _hideResult)
     end
 end
 
-orderHandler = {}
-orderHandler.orderList = {}
-orderHandler.canceledOrders = {}
-orderHandler.GPSMark = nil
-orderHandler.autoAccept = false
-orderHandler.lastAcceptedOrderClock = os.clock()
-orderHandler.lastCorrectOrderNickname = nil
-orderHandler.lastCorrectOrderClock = os.clock()
-orderHandler.orderAccepted = false
-orderHandler.updateOrdersDistanceClock = os.clock()
-orderHandler.currentOrder = nil
-orderHandler.currentOrderBlip = nil
-orderHandler.currentOrderCheckpoint = nil
+orderHandler = {
+    orderList = {},
+    canceledOrders = {},
+    GPSMark = nil,
+    autoAccept = false,
+    lastAcceptedOrderClock = os.clock(),
+    lastCorrectOrderNickname = nil,
+    lastCorrectOrderClock = os.clock(),
+    orderAccepted = false,
+    updateOrdersDistanceClock = os.clock(),
+    currentOrder = nil,
+    currentOrderBlip = nil,
+    currentOrderCheckpoint = nil
+}
 
 function orderHandler.cancelCurrentOrder()
     if ini.settings.notifications and ini.settings.sounds then
@@ -678,7 +690,7 @@ end
 function orderHandler.refreshCurrentOrder()
     if orderHandler.currentOrder then
         if sampIsPlayerConnected(orderHandler.currentOrder.id) then
-            if vehicleManager.vehicleName then
+            if vehicleManager.maxPassengers then
                 chatManager.sendTaxiNotification(orderHandler.currentOrder)
                 local charInStream, charHandle =
                     sampGetCharHandleBySampPlayerId(
@@ -890,16 +902,17 @@ function orderHandler.handleOrder(orderNickname, orderDistance, orderClock)
     end
 end
 
-vehicleManager = {}
-vehicleManager.lastPassengersList = {}
-vehicleManager.lastPassengersListSize = 3
-vehicleManager.passengersList = {}
-vehicleManager.maxPassengers = nil
-vehicleManager.vehicleName = nil
-vehicleManager.vehicleHandle = nil
-vehicleManager.markers = {}
-vehicleManager.cruiseControlEnabled = false
-vehicleManager.gasPressed = false
+vehicleManager = {
+    lastPassengersList = {},
+    lastPassengersListSize = 3,
+    passengersList = {},
+    maxPassengers = nil,
+    vehicleName = nil,
+    vehicleHandle = nil,
+    markers = {},
+    cruiseControlEnabled = false,
+    gasPressed = false
+}
 
 function vehicleManager.refreshVehicleInfoThread()
     while true do
@@ -1098,19 +1111,20 @@ function vehicleManager.cruiseControl()
     if vehicleManager.cruiseControlEnabled then setGameKeyState(16, 255) end
 end
 
-player = {}
-player.id = nil
-player.nickname = nil
-player.onWork = false
-player.skill = 1
-player.skillExp = 0
-player.skillClients = 0
-player.rank = 1
-player.rankExp = 0
-player.salary = 0
-player.salaryLimit = 0
-player.tips = 0
-player.connected = false
+player = {
+    id = nil,
+    nickname = nil,
+    onWork = false,
+    skill = 1,
+    skillExp = 0,
+    skillClients = 0,
+    rank = 1,
+    rankExp = 0,
+    salary = 0,
+    salaryLimit = 0,
+    tips = 0,
+    connected = false
+}
 
 function player.refreshPlayerInfo()
     if not chatManager.hideResultMessages["/paycheck"].bool then
@@ -1176,8 +1190,9 @@ defaults = {
     canceledOrderDelay = 120
 }
 
-soundManager = {}
-soundManager.soundsList = {}
+soundManager = {
+    soundsList = {}
+}
 
 function soundManager.loadSound(soundName)
     soundManager.soundsList[soundName] = loadAudioStream(
@@ -1194,56 +1209,57 @@ function soundManager.playSound(soundName)
     end
 end
 
-bindMenu = {}
-bindMenu.bindList = {}
-bindMenu.json = {}
-bindMenu.defaultBinds = {
-    binds = {
-        {text = "/service", cmd = "", key = 0, addKey = 0},
-        {text = "Привет", cmd = "", key = 0, addKey = 0},
-        {text = "Куда едем?", cmd = "", key = 0, addKey = 0},
-        {text = "Спасибо", cmd = "", key = 0, addKey = 0},
-        {text = "Хорошо", cmd = "", key = 0, addKey = 0},
-        {text = "Удачи", cmd = "", key = 0, addKey = 0},
-        {text = "Да", cmd = "", key = 0, addKey = 0},
-        {text = "Нет", cmd = "", key = 0, addKey = 0},
-        {text = ")", cmd = "", key = 0, addKey = 0},
-        {text = "Почини", cmd = "", key = 0, addKey = 0},
-        {text = "Заправь", cmd = "", key = 0, addKey = 0},
-        {text = "/rkt", cmd = "", key = 0, addKey = 0}, {
-            text = "/b Скрипт для таксистов - Taximate",
-            cmd = "",
-            key = 0,
-            addKey = 0
+bindMenu = {
+    bindList = {},
+    json = {},
+    defaultBinds = {
+        binds = {
+            {text = "/service", cmd = "", key = 0, addKey = 0},
+            {text = "Привет", cmd = "", key = 0, addKey = 0},
+            {text = "Куда едем?", cmd = "", key = 0, addKey = 0},
+            {text = "Спасибо", cmd = "", key = 0, addKey = 0},
+            {text = "Хорошо", cmd = "", key = 0, addKey = 0},
+            {text = "Удачи", cmd = "", key = 0, addKey = 0},
+            {text = "Да", cmd = "", key = 0, addKey = 0},
+            {text = "Нет", cmd = "", key = 0, addKey = 0},
+            {text = ")", cmd = "", key = 0, addKey = 0},
+            {text = "Почини", cmd = "", key = 0, addKey = 0},
+            {text = "Заправь", cmd = "", key = 0, addKey = 0},
+            {text = "/rkt", cmd = "", key = 0, addKey = 0}, {
+                text = "/b Скрипт для таксистов - Taximate",
+                cmd = "",
+                key = 0,
+                addKey = 0
+            }
+        },
+        actions = {
+            {
+                text = "Выкинуть из автомобиля",
+                cmd = "/eject {id}",
+                key = 0,
+                addKey = 0
+            }
+        },
+        sms = {
+            {
+                text = "Жёлтый {carname} в пути. Дистанция: {distance}",
+                cmd = "",
+                key = 0,
+                addKey = 0
+            }, {
+                text = "Жёлтый {carname} прибыл на место вызова",
+                cmd = "",
+                key = 0,
+                addKey = 0
+            }, {
+                text = "Вызов отменён, закажите новое такси",
+                cmd = "",
+                key = 0,
+                addKey = 0
+            }, {text = "Скоро буду", cmd = "", key = 0, addKey = 0},
+            {text = "Да", cmd = "", key = 0, addKey = 0},
+            {text = "Нет", cmd = "", key = 0, addKey = 0}
         }
-    },
-    actions = {
-        {
-            text = "Выкинуть из автомобиля",
-            cmd = "/eject {id}",
-            key = 0,
-            addKey = 0
-        }
-    },
-    sms = {
-        {
-            text = "Жёлтый {carname} в пути. Дистанция: {distance}",
-            cmd = "",
-            key = 0,
-            addKey = 0
-        }, {
-            text = "Жёлтый {carname} прибыл на место вызова",
-            cmd = "",
-            key = 0,
-            addKey = 0
-        }, {
-            text = "Вызов отменён, закажите новое такси",
-            cmd = "",
-            key = 0,
-            addKey = 0
-        }, {text = "Скоро буду", cmd = "", key = 0, addKey = 0},
-        {text = "Да", cmd = "", key = 0, addKey = 0},
-        {text = "Нет", cmd = "", key = 0, addKey = 0}
     }
 }
 
@@ -1843,25 +1859,27 @@ function imgui.onDrawInputWindow()
         repeat
             wait(0)
             for k, v in pairs(vkeys) do
-                if wasKeyPressed(v) and v < 160 or v > 165 then
-                    if imgui.key == 0 and k ~= "VK_ESCAPE" and k ~= "VK_RETURN" and
-                        k ~= "VK_BACK" and k ~= "VK_LBUTTON" and k ~=
-                        "VK_RBUTTON" then
-                        imgui.key = v
-                    elseif imgui.key ~= v and imgui.addKey == 0 and k ~=
-                        "VK_ESCAPE" and k ~= "VK_RETURN" and k ~= "VK_BACK" and
-                        k ~= "VK_LBUTTON" and k ~= "VK_RBUTTON" and
-                        not imgui.singleBind then
-                        imgui.addKey = v
-                    elseif k == "VK_ESCAPE" then
-                        imgui.key = 0
-                        imgui.addKey = 0
-                        imgui.showInputWindow.v = false
-                    elseif k == "VK_RETURN" then
-                        imgui.showInputWindow.v = false
-                    elseif k == "VK_BACK" then
-                        imgui.key = 0
-                        imgui.addKey = 0
+                if wasKeyPressed(v) then
+                    if v < 160 or v > 165 then
+                        if imgui.key == 0 and k ~= "VK_ESCAPE" and k ~= "VK_RETURN" and
+                            k ~= "VK_BACK" and k ~= "VK_LBUTTON" and k ~=
+                            "VK_RBUTTON" then
+                            imgui.key = v
+                        elseif imgui.key ~= v and imgui.addKey == 0 and k ~=
+                            "VK_ESCAPE" and k ~= "VK_RETURN" and k ~= "VK_BACK" and
+                            k ~= "VK_LBUTTON" and k ~= "VK_RBUTTON" and
+                            not imgui.singleBind then
+                            imgui.addKey = v
+                        elseif k == "VK_ESCAPE" then
+                            imgui.key = 0
+                            imgui.addKey = 0
+                            imgui.showInputWindow.v = false
+                        elseif k == "VK_RETURN" then
+                            imgui.showInputWindow.v = false
+                        elseif k == "VK_BACK" then
+                            imgui.key = 0
+                            imgui.addKey = 0
+                        end
                     end
                 end
             end
@@ -3397,6 +3415,15 @@ function getDistanceToCoords3d(posX, posY, posZ)
     return distance
 end
 
+function isOneInstance()
+    for index, luascript in pairs(script.list()) do
+        if luascript.name:find("Taximate v.+ (.+)") then
+            return false
+        end
+    end
+    return true
+end
+
 function checkUpdates(verbose)
     if verbose == nil then verbose = true end
     local fpath = os.tmpname()
@@ -3410,7 +3437,6 @@ function checkUpdates(verbose)
             if not file then return false end
             script_updates = decodeJson(file:read("*a"))
             script_updates.update_from_version_num = thisScript().version_num
-            local content = encodeJson(script_updates)
             script_updates.sorted_keys = {}
             if script_updates.changelog then
                 for key in pairs(script_updates.changelog) do
@@ -3429,10 +3455,6 @@ function checkUpdates(verbose)
                             "{FFFFFF}. Введите {00CED1}'/tmup'{FFFFFF} чтобы скачать обновление")
                 end
                 script_updates.update = true
-                versionFile = io.open(getWorkingDirectory() ..
-                                          '/taximate_updates.json', "w")
-                versionFile:write(content)
-                versionFile:close()
                 return true
             end
         end
@@ -3466,8 +3488,14 @@ function update()
             if status == moonloader.download_status.STATUS_ENDDOWNLOADDATA then
                 os.remove(thisScript().path)
                 os.rename(fpath, thisScript().path)
+                for i, thread in pairs(threads) do
+                    thread:terminate()
+                end
                 loadfile(thisScript().path, "t")()
-                applyChanges(thisScript().version_num)
+                pcall(function() 
+                        applyChanges(thisScript().version_num)
+                    end
+                )
                 chatManager.addChatMessage(
                     "Скрипт обновлён. В случае возникновения ошибок обращаться в ВК - {00CED1}vk.com/twonse{FFFFFF}")
                 if script.find("ML-AutoReboot") == nil then
@@ -3485,7 +3513,7 @@ end
 function applyChanges(version_num)
     if version_num < 52 then
         chatManager.addChatMessage(
-            "Тест") 
+            "Test") 
     end
 end
 
