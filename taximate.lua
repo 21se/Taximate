@@ -138,7 +138,10 @@ function main()
         update()
     end)
 
-    applyChanges()
+    -- +TODO: убрать в версии 53
+    applyChangesV52()
+    -- -TODO
+    -- applyChanges()
 
     if ini.settings.checkUpdates then lua_thread.create(checkUpdates) end
 
@@ -3482,24 +3485,27 @@ function applyChanges()
     if not versionFile then return end
     local content = versionFile:read("*a")
     local script_updates = decodeJson(content)
-    if script_updates.update_from_version_num < 53 then
-        
-    else -- +TODO: убрать при релизе следующей версии
-        sampAddChatMessage("update from " .. script_updates.update_from_version_num, -1)
-        ini.settings.SMSText = ini.settings.SMSText:gsub(
-                                   "Жёлтый {carname} в пути. Дистанция: {distance} м",
-                                   "Жёлтый {carname} в пути. Дистанция: {distance}")
-        inicfg.save(ini, "Taximate/settings.ini")
 
-        for index, value in ipairs(bindMenu.json.sms) do
-            value.text = ini.settings.SMSText:gsub(
-                             "Жёлтый {carname} в пути. Дистанция: {distance} м",
-                             "Жёлтый {carname} в пути. Дистанция: {distance}")
-        end
-        bindMenu.save()
-    end -- -TODO
+    -- if script_updates.update_from_version_num < 50 then
+       
+    -- end
+
     versionFile:close()
     os.remove(getWorkingDirectory() .. "/taximate_updates.json")
+end
+
+function applyChangesV52() 
+    ini.settings.SMSText = ini.settings.SMSText:gsub(
+        "Жёлтый {carname} в пути. Дистанция: {distance} м",
+        "Жёлтый {carname} в пути. Дистанция: {distance}")
+    inicfg.save(ini, "Taximate/settings.ini")
+
+    for index, value in ipairs(bindMenu.json.sms) do
+        value.text = ini.settings.SMSText:gsub(
+            "Жёлтый {carname} в пути. Дистанция: {distance} м",
+            "Жёлтый {carname} в пути. Дистанция: {distance}")
+    end
+    bindMenu.save()
 end
 
 -- utf8lib
