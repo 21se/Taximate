@@ -1,4 +1,4 @@
-script_author("21se(pivo)")
+script_author("21se")
 script_version("1.3.5")
 script_version_number(52)
 script_moonloader(26)
@@ -7,6 +7,7 @@ script_name(string.format("Taximate v%s (%d)", thisScript().version,
 script_url("Github.com/21se/Taximate")
 script_updates = {}
 script_updates.update = false
+script_branch = "dev"
 
 local moonloader = require "moonloader"
 local inicfg = require "inicfg"
@@ -133,9 +134,11 @@ function main()
         imgui.showSettings.v = not imgui.showSettings.v
     end)
     sampRegisterChatCommand("tmup", function()
-        checkUpdates()
+        checkUpdates(false)
         update()
     end)
+
+    applyChanges()
 
     if ini.settings.checkUpdates then lua_thread.create(checkUpdates) end
 
@@ -1625,11 +1628,10 @@ function stringToMeters(string)
 end
 
 function metersToString(meters, color)
-    color = color or true
-    if color then
-        color = "{FFFFFF}"
-    else
+    if color == false then
         color = ""
+    else
+        color = "{FFFFFF}"
     end
     local distanceString = string.format("%d %sм", meters, color)
     if meters >= 1000 then
@@ -3392,11 +3394,14 @@ function getDistanceToCoords3d(posX, posY, posZ)
     return distance
 end
 
-function checkUpdates()
+function checkUpdates(verbose)
+    if verbose == nil then
+        verbose = true
+    end
     local fpath = os.tmpname()
     if doesFileExist(fpath) then os.remove(fpath) end
     downloadUrlToFile(
-        "https://raw.githubusercontent.com/21se/Taximate/master/version.json",
+        "https://raw.githubusercontent.com/21se/Taximate/" .. script_branch .. "/version.json",
         fpath, function(_, status, _, _)
             if status == moonloader.download_status.STATUSEX_ENDDOWNLOAD then
                 if not doesFileExist(fpath) then return false end
@@ -3416,8 +3421,10 @@ function checkUpdates()
                 file:close()
                 os.remove(fpath)
                 if script_updates["version_num"] > thisScript()["version_num"] then
-                    chatManager.addChatMessage(
-                        "Доступна новая версия скрипта. Команда {00CED1}/tmup{FFFFFF} - скачать обновление")
+                    if verbose then
+                        chatManager.addChatMessage(
+                            "Доступен {00CED1}Taximate v" .. script_updates.sorted_keys[1] .. "{FFFFFF}. Введите {00CED1}'/tmup'{FFFFFF} чтобы скачать обновление")
+                    end
                     script_updates.update = true
                     versionFile = io.open(getWorkingDirectory() .. '/taximate_version.json', "w")
                     versionFile:write(content)
@@ -3450,7 +3457,7 @@ function update()
         local fpath = os.tmpname()
         if doesFileExist(fpath) then os.remove(fpath) end
         downloadUrlToFile(
-            "https://raw.githubusercontent.com/21se/Taximate/master/taximate.lua",
+            "https://raw.githubusercontent.com/21se/Taximate/" .. script_branch .. "/taximate.lua",
             fpath, function(_, status, _, _)
                 if status == moonloader.download_status.STATUS_ENDDOWNLOADDATA then
                     os.remove(thisScript().path)
@@ -3475,7 +3482,7 @@ function applyChanges()
     local content = versionFile:read("*a")
     local script_updates = decodeJson(content)
     if script_updates.update_from_version_num < 52 then
-        chatManager.addChatMessage("update from " .. script_update.update_from_version_num)
+        chatManager.addChatMessage("update from " .. script_updates.update_from_version_num)
         ini.settings.SMSText = ini.settings.SMSText:gsub(
                                    "Жёлтый {carname} в пути. Дистанция: {distance} м",
                                    "Жёлтый {carname} в пути. Дистанция: {distance}")
