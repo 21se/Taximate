@@ -75,10 +75,8 @@ local FORMAT_NOTIFICATIONS = {
 
 for index, luascript in pairs(script.list()) do
     print(luascript.name)
-    print(luascript.name:find("Taximate v%s (%d)"), luascript.id ~= thisScript().id)
-    if luascript.name:find("Taximate v%s (%d)") and luascript.id ~= thisScript().id then
+    if luascript.name:find("Taximate v%s %d") and luascript.id ~= thisScript().id and true then
         thisScript():terminate()
-        print("terminated " .. luascript.name)
     end
 end
 
