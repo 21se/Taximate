@@ -73,7 +73,15 @@ local FORMAT_NOTIFICATIONS = {
     cruiseControlDisabled = "Круиз-контроль {d44331}выключен"
 }
 
+for index, luascript in pairs(script.list()) do
+    print(luascript.name)
+    if luascript.name:find("Taximate v%s (%d)") and luascript.id ~= thisScript().id and true then
+        thisScript():terminate()
+    end
+end
+
 function main()
+    
     if not isSampLoaded() or not isSampfuncsLoaded() then return end
 
     while not isSampAvailable() do wait(100) end
