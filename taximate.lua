@@ -80,7 +80,7 @@ local FORMAT_NOTIFICATIONS = {
 }
 
 function main()
-    
+
     if not isSampLoaded() or not isSampfuncsLoaded() then return end
 
     while not isSampAvailable() do wait(100) end
@@ -128,7 +128,7 @@ function main()
     imgui.Process = true
     chatManager.initQueue()
     player.connected = true
-    
+
     threads = {
         lua_thread.create(bindMenu.bindsPressProcessingThread),
         lua_thread.create(chatManager.checkMessagesQueueThread),
@@ -150,8 +150,7 @@ function main()
 
     -- +TODO: убрать в версии 53
     applyChangesV52()
-    -- -TODO
-    -- applyChanges()
+    --
 
     if ini.settings.checkUpdates then lua_thread.create(checkUpdates) end
 
@@ -245,7 +244,7 @@ function main()
     end
 end
 
-chatManager = { 
+chatManager = {
     messagesQueue = {},
     messagesQueueSize = 10,
     antifloodClock = os.clock(),
@@ -1190,9 +1189,7 @@ defaults = {
     canceledOrderDelay = 120
 }
 
-soundManager = {
-    soundsList = {}
-}
+soundManager = {soundsList = {}}
 
 function soundManager.loadSound(soundName)
     soundManager.soundsList[soundName] = loadAudioStream(
@@ -1861,9 +1858,9 @@ function imgui.onDrawInputWindow()
             for k, v in pairs(vkeys) do
                 if wasKeyPressed(v) then
                     if v < 160 or v > 165 then
-                        if imgui.key == 0 and k ~= "VK_ESCAPE" and k ~= "VK_RETURN" and
-                            k ~= "VK_BACK" and k ~= "VK_LBUTTON" and k ~=
-                            "VK_RBUTTON" then
+                        if imgui.key == 0 and k ~= "VK_ESCAPE" and k ~=
+                            "VK_RETURN" and k ~= "VK_BACK" and k ~= "VK_LBUTTON" and
+                            k ~= "VK_RBUTTON" then
                             imgui.key = v
                         elseif imgui.key ~= v and imgui.addKey == 0 and k ~=
                             "VK_ESCAPE" and k ~= "VK_RETURN" and k ~= "VK_BACK" and
@@ -3415,15 +3412,6 @@ function getDistanceToCoords3d(posX, posY, posZ)
     return distance
 end
 
-function isOneInstance()
-    for index, luascript in pairs(script.list()) do
-        if luascript.name:find("Taximate v.+ (.+)") then
-            return false
-        end
-    end
-    return true
-end
-
 function checkUpdates(verbose)
     if verbose == nil then verbose = true end
     local fpath = os.tmpname()
@@ -3486,14 +3474,17 @@ function update()
                               script_branch .. "/taximate.lua", fpath,
                           function(_, status, _, _)
             if status == moonloader.download_status.STATUS_ENDDOWNLOADDATA then
-                os.remove(thisScript().path)
-                os.rename(fpath, thisScript().path)
-                for i, thread in pairs(threads) do
-                    thread:terminate()
-                end
-                loadfile(thisScript().path, "t")()
-                pcall(function() 
+                loadfile(fpath, "t")()
+                try(function()
                         applyChanges(thisScript().version_num)
+                        os.remove(thisScript().path)
+                        os.rename(fpath, thisScript().path)
+                    end, 
+                    function(e)
+                        chatManager.addChatMessage("При попытке обновления произошла ошибка, обратитесь в ВК - {00CED1}vk.com/twonse{FFFFFF}")
+                        print(e)
+                        thisScript():reload()
+                        return
                     end
                 )
                 chatManager.addChatMessage(
@@ -3511,24 +3502,28 @@ function update()
 end
 
 function applyChanges(version_num)
-    if version_num < 52 then
-        chatManager.addChatMessage(
-            "Test") 
-    end
+    if version_num < 52 then chatManager.addChatMessage("Test") end
 end
 
-function applyChangesV52() 
+function applyChangesV52()
     ini.settings.SMSText = ini.settings.SMSText:gsub(
-        "Жёлтый {carname} в пути. Дистанция: {distance} м",
-        "Жёлтый {carname} в пути. Дистанция: {distance}")
+                               "Жёлтый {carname} в пути. Дистанция: {distance} м",
+                               "Жёлтый {carname} в пути. Дистанция: {distance}")
     inicfg.save(ini, "Taximate/settings.ini")
 
     for index, value in ipairs(bindMenu.json.sms) do
         value.text = value.text:gsub(
-            "Жёлтый {carname} в пути. Дистанция: {distance} м",
-            "Жёлтый {carname} в пути. Дистанция: {distance}")
+                         "Жёлтый {carname} в пути. Дистанция: {distance} м",
+                         "Жёлтый {carname} в пути. Дистанция: {distance}")
     end
     bindMenu.save()
+end
+
+function try(f, catch_f)
+    local status, exception = pcall(f)
+    if not status then
+        catch_f(exception)
+    end
 end
 
 -- utf8lib
