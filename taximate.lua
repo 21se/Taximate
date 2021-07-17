@@ -10,8 +10,8 @@ script_branch = "dev"
 
 for index, luascript in pairs(script.list()) do
     if luascript.name:find("Taximate v.+ (.+)") then
-        --thisScript():unload()
-        --return
+        thisScript():unload()
+        return
     end
 end
 
@@ -3474,23 +3474,28 @@ function update()
                               script_branch .. "/taximate.lua", fpath,
                           function(_, status, _, _)
             if status == moonloader.download_status.STATUS_ENDDOWNLOADDATA then
-                reload = false
+                for index, thread in pairs(threads) do
+                    thread:terminate()
+                end
+                fail = false
                 try(function()
-                        loadfile(fpath, "t")()
-                        applyChanges(thisScript().version_num)
-                        os.remove(thisScript().path)
+                        os.rename(thisScript().path, thisScript().path .. "temp")
                         os.rename(fpath, thisScript().path)
+                        loadfile(thisScript().path, "t")()
+                        applyChanges(thisScript().version_num)
                     end, 
                     function(e)
+                        os.remove(thisScript().path)
+                        os.rename(thisScript().path .. "temp", thisScript().path)
                         chatManager.addChatMessage("При попытке обновления произошла ошибка, обратитесь в ВК - {00CED1}vk.com/twonse{FFFFFF}")
-                        print(u8:decode"При попытке обновления произошла ошибка: " .. e)
-                        thisScript():reload()
-                        reload = true
+                        print(e)
+                        fail = true
                     end
                 )
-                if reload then return end
-                chatManager.addChatMessage(
-                    "Скрипт обновлён. В случае возникновения ошибок обращаться в ВК - {00CED1}vk.com/twonse{FFFFFF}")
+                if not fail then
+                    chatManager.addChatMessage(
+                        "Скрипт обновлён. В случае возникновения ошибок обращаться в ВК - {00CED1}vk.com/twonse{FFFFFF}")
+                end
                 if script.find("ML-AutoReboot") == nil then
                     thisScript():reload()
                     return
@@ -3505,9 +3510,9 @@ end
 
 function applyChanges(version_num)
     if version_num < 52 then 
-        chatManager.addChatMessage("Test123") 
+        chatManager.addChatMessage("Test") 
         a = 1/0
-        error(2) 
+        error(3) 
     end
 end
 
@@ -3530,7 +3535,6 @@ function try(f, catch_f)
     if not status then
         catch_f(exception)
     end
-    return status
 end
 
 -- utf8lib
