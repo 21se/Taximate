@@ -11,7 +11,6 @@ script_branch = "dev"
 for index, luascript in pairs(script.list()) do
     if luascript.name:find("Taximate v.+ (.+)") then
         thisScript():unload()
-        print('unload')
         return
     end
 end
@@ -3485,13 +3484,11 @@ function update()
                     function(e)
                         chatManager.addChatMessage("При попытке обновления произошла ошибка, обратитесь в ВК - {00CED1}vk.com/twonse{FFFFFF}")
                         print(u8:decode"При попытке обновления произошла ошибка: " .. e)
+                        thisScript():reload()
                         reload = true
                     end
                 )
-                if reload then 
-                    thisScript():reload()
-                    return 
-                end
+                if reload then return end
                 chatManager.addChatMessage(
                     "Скрипт обновлён. В случае возникновения ошибок обращаться в ВК - {00CED1}vk.com/twonse{FFFFFF}")
                 if script.find("ML-AutoReboot") == nil then
@@ -3508,7 +3505,9 @@ end
 
 function applyChanges(version_num)
     if version_num < 52 then 
-        chatManager.addChatMessage("TEST") 
+        chatManager.addChatMessage("Test123") 
+        a = 1/0
+        error(1) 
     end
 end
 
@@ -3531,6 +3530,7 @@ function try(f, catch_f)
     if not status then
         catch_f(exception)
     end
+    return status
 end
 
 -- utf8lib
