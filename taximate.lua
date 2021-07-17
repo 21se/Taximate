@@ -11,6 +11,7 @@ script_branch = "dev"
 for index, luascript in pairs(script.list()) do
     if luascript.name:find("Taximate v.+ (.+)") then
         thisScript():unload()
+        print('unload')
         return
     end
 end
@@ -3474,19 +3475,23 @@ function update()
                               script_branch .. "/taximate.lua", fpath,
                           function(_, status, _, _)
             if status == moonloader.download_status.STATUS_ENDDOWNLOADDATA then
-                loadfile(fpath, "t")()
+                reload = false
                 try(function()
+                        loadfile(fpath, "t")()
                         applyChanges(thisScript().version_num)
                         os.remove(thisScript().path)
                         os.rename(fpath, thisScript().path)
                     end, 
                     function(e)
                         chatManager.addChatMessage("При попытке обновления произошла ошибка, обратитесь в ВК - {00CED1}vk.com/twonse{FFFFFF}")
-                        print(e)
-                        thisScript():reload()
-                        return
+                        print(u8:decode"При попытке обновления произошла ошибка: " .. e)
+                        reload = true
                     end
                 )
+                if reload then 
+                    thisScript():reload()
+                    return 
+                end
                 chatManager.addChatMessage(
                     "Скрипт обновлён. В случае возникновения ошибок обращаться в ВК - {00CED1}vk.com/twonse{FFFFFF}")
                 if script.find("ML-AutoReboot") == nil then
@@ -3504,8 +3509,6 @@ end
 function applyChanges(version_num)
     if version_num < 52 then 
         chatManager.addChatMessage("Test") 
-        a = 1/0
-        error(1) 
     end
 end
 
