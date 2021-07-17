@@ -121,11 +121,14 @@ function main()
     imgui.Process = true
     chatManager.initQueue()
     player.connected = true
-    lua_thread.create(bindMenu.bindsPressProcessingThread)
-    lua_thread.create(chatManager.checkMessagesQueueThread)
-    lua_thread.create(chatManager.disableFrozenMessagesProcessing)
-    lua_thread.create(vehicleManager.refreshVehicleInfoThread)
-    lua_thread.create(orderHandler.deleteOrdersThread)
+    
+    threads = {
+        lua_thread.create(bindMenu.bindsPressProcessingThread),
+        lua_thread.create(chatManager.checkMessagesQueueThread),
+        lua_thread.create(chatManager.disableFrozenMessagesProcessing),
+        lua_thread.create(vehicleManager.refreshVehicleInfoThread),
+        lua_thread.create(orderHandler.deleteOrdersThread)
+    }
 
     sampRegisterChatCommand("taximate", function()
         imgui.showSettings.v = not imgui.showSettings.v
@@ -3466,6 +3469,9 @@ function update()
             if status == moonloader.download_status.STATUS_ENDDOWNLOADDATA then
                 os.remove(thisScript().path)
                 os.rename(fpath, thisScript().path)
+                for i, thread in pairs(threads) do
+                    thread:terminate()
+                end
                 loadfile(thisScript().path, "t")()
                 pcall(function() 
                         applyChanges(thisScript().version_num)
