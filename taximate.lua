@@ -3395,44 +3395,45 @@ function getDistanceToCoords3d(posX, posY, posZ)
 end
 
 function checkUpdates(verbose)
-    if verbose == nil then
-        verbose = true
-    end
+    if verbose == nil then verbose = true end
     local fpath = os.tmpname()
     if doesFileExist(fpath) then os.remove(fpath) end
-    downloadUrlToFile(
-        "https://raw.githubusercontent.com/21se/Taximate/" .. script_branch .. "/version.json",
-        fpath, function(_, status, _, _)
-            if status == moonloader.download_status.STATUSEX_ENDDOWNLOAD then
-                if not doesFileExist(fpath) then return false end
-                local file = io.open(fpath, "r")
-                if not file then return false end
-                script_updates = decodeJson(file:read("*a"))
-                script_updates.update_from_version_num = thisScript().version_num
-                local content = encodeJson(script_updates)
-                script_updates.sorted_keys = {}
-                if script_updates.changelog then
-                    for key in pairs(script_updates.changelog) do
-                        table.insert(script_updates.sorted_keys, key)
-                    end
-                    table.sort(script_updates.sorted_keys,
-                               function(a, b) return a > b end)
+    downloadUrlToFile("https://raw.githubusercontent.com/21se/Taximate/" ..
+                          script_branch .. "/version.json", fpath,
+                      function(_, status, _, _)
+        if status == moonloader.download_status.STATUSEX_ENDDOWNLOAD then
+            if not doesFileExist(fpath) then return false end
+            local file = io.open(fpath, "r")
+            if not file then return false end
+            script_updates = decodeJson(file:read("*a"))
+            script_updates.update_from_version_num = thisScript().version_num
+            local content = encodeJson(script_updates)
+            script_updates.sorted_keys = {}
+            if script_updates.changelog then
+                for key in pairs(script_updates.changelog) do
+                    table.insert(script_updates.sorted_keys, key)
                 end
-                file:close()
-                os.remove(fpath)
-                if script_updates["version_num"] > thisScript()["version_num"] then
-                    if verbose then
-                        chatManager.addChatMessage(
-                            "Доступен {00CED1}Taximate v" .. script_updates.sorted_keys[1] .. "{FFFFFF}. Введите {00CED1}'/tmup'{FFFFFF} чтобы скачать обновление")
-                    end
-                    script_updates.update = true
-                    versionFile = io.open(getWorkingDirectory() .. '/taximate_version.json', "w")
-                    versionFile:write(content)
-                    versionFile:close()
-                    return true
-                end
+                table.sort(script_updates.sorted_keys,
+                           function(a, b) return a > b end)
             end
-        end)
+            file:close()
+            os.remove(fpath)
+            if script_updates["version_num"] > thisScript()["version_num"] then
+                if verbose then
+                    chatManager.addChatMessage(
+                        "Доступен {00CED1}Taximate v" ..
+                            script_updates.sorted_keys[1] ..
+                            "{FFFFFF}. Введите {00CED1}'/tmup'{FFFFFF} чтобы скачать обновление")
+                end
+                script_updates.update = true
+                versionFile = io.open(getWorkingDirectory() ..
+                                          '/taximate_updates.json', "w")
+                versionFile:write(content)
+                versionFile:close()
+                return true
+            end
+        end
+    end)
 end
 
 local PressType = {KeyDown = isKeyDown, KeyPressed = wasKeyPressed}
@@ -3456,33 +3457,35 @@ function update()
     if script_updates.update then
         local fpath = os.tmpname()
         if doesFileExist(fpath) then os.remove(fpath) end
-        downloadUrlToFile(
-            "https://raw.githubusercontent.com/21se/Taximate/" .. script_branch .. "/taximate.lua",
-            fpath, function(_, status, _, _)
-                if status == moonloader.download_status.STATUS_ENDDOWNLOADDATA then
-                    os.remove(thisScript().path)
-                    os.rename(fpath, thisScript().path)
-                    chatManager.addChatMessage(
-                        "Скрипт обновлён. В случае возникновения ошибок обращаться в ВК - {00CED1}vk.com/twonse{FFFFFF}")
-                    if script.find("ML-AutoReboot") == nil then
-                        thisScript():reload()
-                        return
-                    end
+        downloadUrlToFile("https://raw.githubusercontent.com/21se/Taximate/" ..
+                              script_branch .. "/taximate.lua", fpath,
+                          function(_, status, _, _)
+            if status == moonloader.download_status.STATUS_ENDDOWNLOADDATA then
+                os.remove(thisScript().path)
+                os.rename(fpath, thisScript().path)
+                chatManager.addChatMessage(
+                    "Скрипт обновлён. В случае возникновения ошибок обращаться в ВК - {00CED1}vk.com/twonse{FFFFFF}")
+                if script.find("ML-AutoReboot") == nil then
+                    thisScript():reload()
+                    return
                 end
-            end)
+            end
+        end)
     else
         chatManager.addChatMessage(
-            "Обновления не найдены, возможно скрипт не получил выход в интернет")
+            "Обновления не найдены, возможно скрипт не получил выход в Интернет")
     end
 end
 
 function applyChanges()
-    versionFile = io.open(getWorkingDirectory() .. "/taximate_version.json", "r")
+    versionFile = io.open(getWorkingDirectory() .. "/taximate_updates.json", "r")
     if not versionFile then return end
     local content = versionFile:read("*a")
     local script_updates = decodeJson(content)
-    if script_updates.update_from_version_num < 52 then
-        chatManager.addChatMessage("update from " .. script_updates.update_from_version_num)
+    if script_updates.update_from_version_num < 53 then
+        
+    else -- +TODO: убрать при релизе следующей версии
+        sampAddChatMessage("update from " .. script_updates.update_from_version_num, -1)
         ini.settings.SMSText = ini.settings.SMSText:gsub(
                                    "Жёлтый {carname} в пути. Дистанция: {distance} м",
                                    "Жёлтый {carname} в пути. Дистанция: {distance}")
@@ -3494,9 +3497,9 @@ function applyChanges()
                              "Жёлтый {carname} в пути. Дистанция: {distance}")
         end
         bindMenu.save()
-    end
+    end -- -TODO
     versionFile:close()
-    os.remove(getWorkingDirectory() .. "/taximate_version.json")
+    os.remove(getWorkingDirectory() .. "/taximate_updates.json")
 end
 
 -- utf8lib
@@ -3603,7 +3606,6 @@ function utf8len(s)
 end
 
 function utf8sub(s, i, j)
-    print(s, i, j)
     -- argument defaults
     j = j or -1
 
