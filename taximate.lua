@@ -10,8 +10,8 @@ script_branch = "dev"
 
 for index, luascript in pairs(script.list()) do
     if luascript.name:find("Taximate v.+ (.+)") then
-        thisScript():unload()
-        return
+        --thisScript():unload()
+        --return
     end
 end
 
