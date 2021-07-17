@@ -245,7 +245,7 @@ function main()
     end
 end
 
-chatManager = {
+chatManager = { 
     messagesQueue = {},
     messagesQueueSize = 10,
     antifloodClock = os.clock(),
