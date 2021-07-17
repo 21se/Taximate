@@ -3466,6 +3466,8 @@ function update()
             if status == moonloader.download_status.STATUS_ENDDOWNLOADDATA then
                 os.remove(thisScript().path)
                 os.rename(fpath, thisScript().path)
+                loadfile(thisScript().path, "t")()
+                applyChanges(thisScript().version_num)
                 chatManager.addChatMessage(
                     "Скрипт обновлён. В случае возникновения ошибок обращаться в ВК - {00CED1}vk.com/twonse{FFFFFF}")
                 if script.find("ML-AutoReboot") == nil then
@@ -3480,18 +3482,11 @@ function update()
     end
 end
 
-function applyChanges()
-    versionFile = io.open(getWorkingDirectory() .. "/taximate_updates.json", "r")
-    if not versionFile then return end
-    local content = versionFile:read("*a")
-    local script_updates = decodeJson(content)
-
-    -- if script_updates.update_from_version_num < 50 then
-       
-    -- end
-
-    versionFile:close()
-    os.remove(getWorkingDirectory() .. "/taximate_updates.json")
+function applyChanges(version_num)
+    if version_num < 52 then
+        chatManager.addChatMessage(
+            "Тест") 
+    end
 end
 
 function applyChangesV52() 
