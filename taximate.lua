@@ -3501,7 +3501,7 @@ function applyChangesV52()
     inicfg.save(ini, "Taximate/settings.ini")
 
     for index, value in ipairs(bindMenu.json.sms) do
-        value.text = ini.settings.SMSText:gsub(
+        value.text = value.text:gsub(
             "Жёлтый {carname} в пути. Дистанция: {distance} м",
             "Жёлтый {carname} в пути. Дистанция: {distance}")
     end
