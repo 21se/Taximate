@@ -17,6 +17,7 @@ local imgui = require "imgui"
 
 encoding.default = "CP1251"
 local u8 = encoding.UTF8
+local cp1251 = encoding.CP1251
 local ini = {}
 local notificationsQueue = {}
 local fastMapKey = 0
@@ -3469,21 +3470,23 @@ function update()
             if status == moonloader.download_status.STATUS_ENDDOWNLOADDATA then
                 fail = false
                 try(function()
-                        os.rename(thisScript().path, thisScript().path .. "tmp")
+                        os.copy(thisScript().path, thisScript().path .. "old")
                         local scriptFile = io.open(fpath, "r")
+                        if not scriptFile then
+                            fail = true
+                            return
+                        end
                         local text = u8:decode(scriptFile:read("*a"))
                         if text:find("\n%-%- applyChanges\n.+\n%-%- applyChanges\n") then
                             for changes in text:gmatch("\n%-%- applyChanges\n(.+)\n%-%- applyChanges\n") do text = changes break end
                             load(text)()
                             applyChanges(thisScript().version_num)
-                            os.rename(fpath, thisScript().path)
-                            os.remove(thisScript().path .. "tmp")
+                            os.copy(fpath, thisScript().path)
+                            os.remove(thisScript().path .. "old")
                         end
                     end, 
                     function(e)
-                        os.remove(thisScript().path)
-                        os.rename(thisScript().path .. "tmp", thisScript().path)
-                        chatManager.addChatMessage("При попытке обновления произошла ошибка, обратитесь в ВК - {00CED1}vk.com/twonse{FFFFFF}")
+                        os.move(thisScript().path .. "old", thisScript().path)
                         fail = true
                         print(e)
                     end
@@ -3492,11 +3495,11 @@ function update()
                     chatManager.addChatMessage(
                         "Скрипт обновлён. В случае возникновения ошибок обращаться в ВК - {00CED1}vk.com/twonse{FFFFFF}")
                 else
+                    chatManager.addChatMessage("При попытке обновления произошла ошибка, обратитесь в ВК - {00CED1}vk.com/twonse{FFFFFF}")
                     return
                 end
                 if script.find("ML-AutoReboot") == nil then
                     thisScript():reload()
-                    return
                 end
             end
         end)
@@ -3506,6 +3509,7 @@ function update()
     end
 end
 
+-- applyChanges
 function applyChanges(version_num)
     if version_num < 52 then 
         chatManager.addChatMessage("Test") 
@@ -3513,6 +3517,7 @@ function applyChanges(version_num)
         error(3) 
     end
 end
+-- applyChanges
 
 function applyChangesV52()
     ini.settings.SMSText = ini.settings.SMSText:gsub(
@@ -3671,4 +3676,19 @@ function utf8sub(s, i, j)
     end
 
     return s:sub(startByte, endByte), startByte, endByte
+end
+
+function os.copy(source, path)
+    infile = io.open(source, "r")
+    instr = infile:read("*a")
+    infile:close()
+
+    outfile = io.open(path, "w")
+    outfile:write(instr)
+    outfile:close()
+end
+
+function os.move(source, path)
+    os.copy(source, path)
+    os.remove(source)
 end
