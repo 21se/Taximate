@@ -381,7 +381,9 @@ function chatManager.sendTaxiNotification(currentOrder)
                         string.format("/t %d %s", currentOrder.id,
                                       chatManager.subSMSText(
                                           ini.settings.SMSPrefix,
-                                          "Внимание! Такси имеет только одно пассажирское место!")))
+                                          "Такси " ..
+                                              vehicleManager.vehicleName ..
+                                              " имеет только одно пассажирское место")))
                     currentOrder.firstSMS = false
                 end
                 currentOrder.SMSClock = os.clock() + ini.settings.SMSTimer
@@ -2631,7 +2633,7 @@ function imgui.onDrawSettings()
             inicfg.save(ini, "Taximate/settings.ini")
         end
         if imgui.Checkbox(
-            "SMS об одном пассажирском месте для такси Buffalo",
+            "Отправка СМС об одном пассажирском месте для такси Buffalo",
             imgui.ImBool(ini.settings.seatsNotify)) then
             ini.settings.seatsNotify = not ini.settings.seatsNotify
             inicfg.save(ini, "Taximate/settings.ini")
@@ -2643,7 +2645,7 @@ function imgui.onDrawSettings()
             inicfg.save(ini, "Taximate/settings.ini")
         end
         if imgui.Checkbox(
-            "Игнорировать отмененные вызовы в течение",
+            "Игнорирование отмененных вызовов в течение",
             imgui.ImBool(ini.settings.ignoreCanceledOrder)) then
             ini.settings.ignoreCanceledOrder = not ini.settings
                                                    .ignoreCanceledOrder
@@ -2671,8 +2673,9 @@ function imgui.onDrawSettings()
             ini.settings.acceptRepeatOrder = not ini.settings.acceptRepeatOrder
             inicfg.save(ini, "Taximate/settings.ini")
         end
-        if imgui.Checkbox("Менять clist на рабочий цвет:",
-                          imgui.ImBool(ini.settings.autoClist)) then
+        if imgui.Checkbox(
+            "Автоматическое изменение clist на рабочий цвет:",
+            imgui.ImBool(ini.settings.autoClist)) then
             ini.settings.autoClist = not ini.settings.autoClist
             inicfg.save(ini, "Taximate/settings.ini")
         end
@@ -2683,7 +2686,7 @@ function imgui.onDrawSettings()
             inicfg.save(ini, "Taximate/settings.ini")
         end
         if imgui.Checkbox(
-            "Показывать на карте игроков в транспорте",
+            "Отображение игроков в транспорте на карте",
             imgui.ImBool(ini.settings.markers)) then
             ini.settings.markers = not ini.settings.markers
             inicfg.save(ini, "Taximate/settings.ini")
@@ -2692,7 +2695,7 @@ function imgui.onDrawSettings()
             "Функция даёт преимущество над игроками\nИспользовать на свой страх и риск",
             150)
         if imgui.Checkbox(
-            "Закончить рабочий день при поломке/пустом баке",
+            "Окончание рабочего день при поломке/пустом баке",
             imgui.ImBool(ini.settings.finishWork)) then
             ini.settings.finishWork = not ini.settings.finishWork
             inicfg.save(ini, "Taximate/settings.ini")
@@ -3472,30 +3475,32 @@ function update()
             if status == moonloader.download_status.STATUS_ENDDOWNLOADDATA then
                 fail = false
                 try(function()
-                        os.copy(thisScript().path, thisScript().path .. "old")
-                        local scriptFile = io.open(fpath, "r")
-                        if not scriptFile then
-                            fail = true
-                            print("{f44331}При попытке обновления произошла ошибка: не удалось открыть файл")
-                            return
-                        end
-                        loadChangesFromFile(scriptFile)
-                        scriptFile:close()
-                        applyChanges(thisScript().version_num) -- applyChanges from scriptFile
-                        os.move(fpath, thisScript().path)
-                        os.remove(thisScript().path .. "old")
-                    end, 
-                    function(e)
+                    os.copy(thisScript().path, thisScript().path .. "old")
+                    local scriptFile = io.open(fpath, "r")
+                    if not scriptFile then
                         fail = true
-                        os.move(thisScript().path .. "old", thisScript().path)
-                        print("{f44331}При попытке обновления произошла ошибка: " .. e)
+                        print(
+                            "{f44331}При попытке обновления произошла ошибка: не удалось открыть файл")
+                        return
                     end
-                )
+                    loadChangesFromFile(scriptFile)
+                    scriptFile:close()
+                    applyChanges(thisScript().version_num) -- applyChanges from scriptFile
+                    os.move(fpath, thisScript().path)
+                    os.remove(thisScript().path .. "old")
+                end, function(e)
+                    fail = true
+                    os.move(thisScript().path .. "old", thisScript().path)
+                    print(
+                        "{f44331}При попытке обновления произошла ошибка: " ..
+                            e)
+                end)
                 if not fail then
                     chatManager.addChatMessage(
                         "Скрипт обновлён. В случае возникновения ошибок обращаться в ВК - {00CED1}vk.com/twonse{FFFFFF}")
                 else
-                    chatManager.addChatMessage("{f44331}При попытке обновления произошла ошибка.{FFFFFF} Обратитесь в ВК - {00CED1}vk.com/twonse{FFFFFF}")
+                    chatManager.addChatMessage(
+                        "{f44331}При попытке обновления произошла ошибка.{FFFFFF} Обратитесь в ВК - {00CED1}vk.com/twonse{FFFFFF}")
                 end
                 if script.find("ML-AutoReboot") == nil and not fail then
                     thisScript():reload()
@@ -3511,16 +3516,20 @@ end
 function loadChangesFromFile(scriptFile)
     local text = u8:decode(scriptFile:read("*a"))
     if text:find("\n%-%- applyChanges\n.+\n%-%- applyChanges\n") then
-        for changes in text:gmatch("\n%-%- applyChanges\n(.+)\n%-%- applyChanges\n") do text = changes break end
+        for changes in text:gmatch(
+                           "\n%-%- applyChanges\n(.+)\n%-%- applyChanges\n") do
+            text = changes
+            break
+        end
         load(text)()
     end
 end
 
 -- applyChanges
 function applyChanges(version_num)
-    if version_num < 52 then 
-        chatManager.addChatMessage("123Test123") 
-        a = 1/0
+    if version_num < 52 then
+        chatManager.addChatMessage(
+            "Применение обновлений...")
     end
 end
 -- applyChanges
@@ -3541,9 +3550,7 @@ end
 
 function try(f, catch_f)
     local status, exception = pcall(f)
-    if not status then
-        catch_f(exception)
-    end
+    if not status then catch_f(exception) end
 end
 
 -- utf8lib
@@ -3685,10 +3692,7 @@ function utf8sub(s, i, j)
 end
 
 old_print = print
-
-function print(text)
-    old_print(u8:decode(text))
-end
+function print(text) old_print(u8:decode(text)) end
 
 function os.copy(source, path)
     infile = io.open(source, "r")
