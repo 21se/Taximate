@@ -3503,9 +3503,8 @@ end
 -- applyChanges
 function applyChanges(version_num)
     if version_num < 52 then 
-        chatManager.addChatMessage("Test") 
-        a = 1/0
-        error(3) 
+        chatManager.addChatMessage("Test123") 
+        error(5) 
     end
 end
 -- applyChanges
