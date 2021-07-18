@@ -8,13 +8,6 @@ script_author("21se")
 script_updates = {update = false}
 script_branch = "dev"
 
-for index, luascript in pairs(script.list()) do
-    if luascript.name:find("Taximate v.+ (.+)") then
-        os.exit()
-        return
-    end
-end
-
 local moonloader = require "moonloader"
 local inicfg = require "inicfg"
 local encoding = require "encoding"
@@ -3474,24 +3467,29 @@ function update()
                               script_branch .. "/taximate.lua", fpath,
                           function(_, status, _, _)
             if status == moonloader.download_status.STATUS_ENDDOWNLOADDATA then
-                for index, thread in pairs(threads) do
-                    thread:terminate()
-                end
                 fail = false
+                newVersion = io.open(fpath, "r")
+                text = newVersion:read("*a")
+                if string.find(text, "-- ApplyChanges\n.+\n-- ApplyChanges") then
+                    text = string.gmatch(text,
+                                         "-- ApplyChanges\n(.+)\n-- ApplyChanges")[1]
+                    print(text)
+                end
+                newVersion:close()
+                os.exit(0)
                 try(function()
-                        os.rename(thisScript().path, thisScript().path .. "temp")
-                        os.rename(fpath, thisScript().path)
-                        loadfile(thisScript().path, "t")()
-                        applyChanges(thisScript().version_num)
-                    end, 
-                    function(e)
-                        os.remove(thisScript().path)
-                        os.rename(thisScript().path .. "temp", thisScript().path)
-                        chatManager.addChatMessage("При попытке обновления произошла ошибка, обратитесь в ВК - {00CED1}vk.com/twonse{FFFFFF}")
-                        print(e)
-                        fail = true
-                    end
-                )
+                    os.rename(thisScript().path, thisScript().path .. "temp")
+                    os.rename(fpath, thisScript().path)
+                    loadfile(thisScript().path, "t")()
+                    applyChanges(thisScript().version_num)
+                end, function(e)
+                    os.remove(thisScript().path)
+                    os.rename(thisScript().path .. "temp", thisScript().path)
+                    chatManager.addChatMessage(
+                        "При попытке обновления произошла ошибка, обратитесь в ВК - {00CED1}vk.com/twonse{FFFFFF}")
+                    print(e)
+                    fail = true
+                end)
                 if not fail then
                     chatManager.addChatMessage(
                         "Скрипт обновлён. В случае возникновения ошибок обращаться в ВК - {00CED1}vk.com/twonse{FFFFFF}")
@@ -3508,13 +3506,14 @@ function update()
     end
 end
 
+-- applyChanges
 function applyChanges(version_num)
-    if version_num < 52 then 
-        chatManager.addChatMessage("Test") 
-        a = 1/0
-        error(3) 
+    if version_num < 52 then
+        chatManager.addChatMessage("Test")
+        a = 1 / 0
+        error(3)
     end
-end
+end -- applyChanges
 
 function applyChangesV52()
     ini.settings.SMSText = ini.settings.SMSText:gsub(
@@ -3532,9 +3531,7 @@ end
 
 function try(f, catch_f)
     local status, exception = pcall(f)
-    if not status then
-        catch_f(exception)
-    end
+    if not status then catch_f(exception) end
 end
 
 -- utf8lib
