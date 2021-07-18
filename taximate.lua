@@ -1,5 +1,5 @@
 script_version("1.3.5")
-script_version_number(51)
+script_version_number(52)
 script_moonloader(26)
 script_url("Github.com/21se/Taximate")
 script_name(string.format("Taximate v%s (%d)", thisScript().version,
@@ -3469,14 +3469,20 @@ function update()
             if status == moonloader.download_status.STATUS_ENDDOWNLOADDATA then
                 fail = false
                 try(function()
+                        os.rename(thisScript().path, thisScript().path .. "tmp")
                         local scriptFile = io.open(fpath, "r")
                         local text = u8:decode(scriptFile:read("*a"))
-                        if text:find("-- applyChanges\n.+-- applyChanges") then
-                            for changes in text:gmatch("\n-- applyChanges\n(.+)\n-- applyChanges\n") do text = changes break end
-                            print(text)
+                        if text:find("\n%-%- applyChanges\n.+\n%-%- applyChanges\n") then
+                            for changes in text:gmatch("\n%-%- applyChanges\n(.+)\n%-%- applyChanges\n") do text = changes break end
+                            load(text)()
+                            applyChanges(thisScript().version_num)
+                            os.rename(fpath, thisScript().path)
+                            os.remove(thisScript().path .. "tmp")
                         end
                     end, 
                     function(e)
+                        os.remove(thisScript().path)
+                        os.rename(thisScript().path .. "tmp", thisScript().path)
                         chatManager.addChatMessage("При попытке обновления произошла ошибка, обратитесь в ВК - {00CED1}vk.com/twonse{FFFFFF}")
                         fail = true
                         print(e)
@@ -3500,14 +3506,13 @@ function update()
     end
 end
 
--- applyChanges
 function applyChanges(version_num)
     if version_num < 52 then 
-        chatManager.addChatMessage("Test123") 
-        error(5) 
+        chatManager.addChatMessage("Test") 
+        a = 1/0
+        error(3) 
     end
 end
--- applyChanges
 
 function applyChangesV52()
     ini.settings.SMSText = ini.settings.SMSText:gsub(
