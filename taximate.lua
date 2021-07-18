@@ -3462,6 +3462,8 @@ end
 
 function update()
     if script_updates.update then
+        chatManager.addChatMessage(
+            "Выполняется обновление...")
         local fpath = os.tmpname()
         if doesFileExist(fpath) then os.remove(fpath) end
         downloadUrlToFile("https://raw.githubusercontent.com/21se/Taximate/" ..
@@ -3474,31 +3476,28 @@ function update()
                         local scriptFile = io.open(fpath, "r")
                         if not scriptFile then
                             fail = true
+                            print("{f44331}При попытке обновления произошла ошибка: не удалось открыть файл")
                             return
                         end
-                        local text = u8:decode(scriptFile:read("*a"))
-                        if text:find("\n%-%- applyChanges\n.+\n%-%- applyChanges\n") then
-                            for changes in text:gmatch("\n%-%- applyChanges\n(.+)\n%-%- applyChanges\n") do text = changes break end
-                            load(text)()
-                            applyChanges(thisScript().version_num)
-                            os.copy(fpath, thisScript().path)
-                            os.remove(thisScript().path .. "old")
-                        end
+                        loadChangesFromFile(scriptFile)
+                        scriptFile:close()
+                        applyChanges(thisScript().version_num) -- applyChanges from scriptFile
+                        os.move(fpath, thisScript().path)
+                        os.remove(thisScript().path .. "old")
                     end, 
                     function(e)
-                        os.move(thisScript().path .. "old", thisScript().path)
                         fail = true
-                        print(e)
+                        os.move(thisScript().path .. "old", thisScript().path)
+                        print("{f44331}При попытке обновления произошла ошибка: " .. e)
                     end
                 )
                 if not fail then
                     chatManager.addChatMessage(
                         "Скрипт обновлён. В случае возникновения ошибок обращаться в ВК - {00CED1}vk.com/twonse{FFFFFF}")
                 else
-                    chatManager.addChatMessage("При попытке обновления произошла ошибка, обратитесь в ВК - {00CED1}vk.com/twonse{FFFFFF}")
-                    return
+                    chatManager.addChatMessage("{f44331}При попытке обновления произошла ошибка.{FFFFFF} Обратитесь в ВК - {00CED1}vk.com/twonse{FFFFFF}")
                 end
-                if script.find("ML-AutoReboot") == nil then
+                if script.find("ML-AutoReboot") == nil and not fail then
                     thisScript():reload()
                 end
             end
@@ -3509,12 +3508,19 @@ function update()
     end
 end
 
+function loadChangesFromFile(scriptFile)
+    local text = u8:decode(scriptFile:read("*a"))
+    if text:find("\n%-%- applyChanges\n.+\n%-%- applyChanges\n") then
+        for changes in text:gmatch("\n%-%- applyChanges\n(.+)\n%-%- applyChanges\n") do text = changes break end
+        load(text)()
+    end
+end
+
 -- applyChanges
 function applyChanges(version_num)
     if version_num < 52 then 
-        chatManager.addChatMessage("Test") 
+        chatManager.addChatMessage("123Test123") 
         a = 1/0
-        error(3) 
     end
 end
 -- applyChanges
@@ -3676,6 +3682,12 @@ function utf8sub(s, i, j)
     end
 
     return s:sub(startByte, endByte), startByte, endByte
+end
+
+old_print = print
+
+function print(text)
+    old_print(u8:decode(text))
 end
 
 function os.copy(source, path)
