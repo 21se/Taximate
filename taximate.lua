@@ -372,11 +372,11 @@ function chat:sendNotification(order)
                                                          ini.settings.SMSPrefix,
                                                          ini.settings.SMSText)))
                 if order.firstSMS and vehicle.maxPassengers == 1 and
-                    ini.settings.seatsNotify then
+                    ini.settings.seatsNotify and ini.settings.SMSSeats ~= "" then
                     chat:addMessageToQueue(
-                        string.format("/t %d %s", order.id,
-                                      chat:subSMSText(ini.settings.SMSPrefix,
-                                                      "Такси имеет только одно пассажирское место")))
+                        string.format("/t %d %s", order.id, chat:subSMSText(
+                                          ini.settings.SMSPrefix,
+                                          ini.settings.SMSSeats)))
                     order.firstSMS = false
                 end
                 order.SMSClock = os.clock() + ini.settings.SMSTimer
@@ -1134,6 +1134,7 @@ ini = {
         SMSPrefix = "[Taxi]",
         SMSText = "Жёлтый {carname} в пути. Дистанция: {distance}",
         SMSArrival = "Жёлтый {carname} прибыл на место вызова",
+        SMSSeats = "Такси имеет только одно пассажирское место",
         SMSCancel = "Вызов отменён, закажите новое такси",
         ignoreCanceledOrder = true,
         canceledOrderDelay = 120,
@@ -1412,15 +1413,12 @@ function sampev.onShowDialog(DdialogId, Dstyle, Dtitle, Dbutton1, Dbutton2,
                     if string:find("/service ac taxi") then
                         nickname, id, time, distance =
                             string.match(string, MESSAGES.order)
-                        chat:sendMessage("1")
                     else
                         nickname, id, time, distance =
                             string.match(string, utf8sub(MESSAGES.order, 1,
                                                          utf8len(MESSAGES.order) -
                                                              1))
-                        chat:sendMessage("2")
                     end
-                    chat:sendMessage(nickname)
                     time = stringToSeconds(time)
                     distance = stringToMeters(distance)
                     if orders.list[nickname] then
@@ -1682,6 +1680,8 @@ function imgui:initBuffers()
     imgui.SMSArrival.v = ini.settings.SMSArrival
     imgui.SMSCancel = imgui.ImBuffer(126)
     imgui.SMSCancel.v = ini.settings.SMSCancel
+    imgui.SMSSeats = imgui.ImBuffer(126)
+    imgui.SMSSeats.v = ini.settings.SMSSeats
     imgui.workClist = imgui.ImInt(ini.settings.workClist)
     imgui.SMSTimer = imgui.ImInt(ini.settings.SMSTimer)
     imgui.canceledOrderDelay = imgui.ImInt(ini.settings.canceledOrderDelay)
@@ -2834,42 +2834,54 @@ function imgui:onDrawSettings()
             ini.settings.SMSPrefix = imgui.SMSPrefix.v
             inicfg.save(ini, "Taximate/settings.ini")
         end
-        imgui.Text("СМС доклад:")
+        local color = "{FFFFFF}"
+        local text = chat:subSMSText(ini.settings.SMSPrefix,
+                                     ini.settings.SMSText)
+        if utf8len(text) > 63 then color = "{FF0000}" end
+        imgui:TextColoredRGB(color .. "Доклад:")
         imgui.SameLine()
-        imgui.PushItemWidth(toScreenX(155))
+        imgui.PushItemWidth(toScreenX(167))
         if imgui.InputText("##SMSText", imgui.SMSText) then
             ini.settings.SMSText = imgui.SMSText.v
             inicfg.save(ini, "Taximate/settings.ini")
         end
-        local color = "{FFFF00}"
+        imgui:SetTooltip("SMS: " .. utf8sub(text, 1, 63), 200)
+        local color = "{FFFFFF}"
         local text = chat:subSMSText(ini.settings.SMSPrefix,
-                                     ini.settings.SMSText)
+                                     ini.settings.SMSArrival)
         if utf8len(text) > 63 then color = "{FF0000}" end
-        imgui:TextColoredRGB(color .. "SMS: " .. utf8sub(text, 1, 63))
-        imgui.Text("СМС о прибытии:")
+        imgui:TextColoredRGB(color .. "Прибытие:")
         imgui.SameLine()
-        imgui.PushItemWidth(toScreenX(144))
+        imgui.PushItemWidth(toScreenX(160))
         if imgui.InputText("##SMSArrival", imgui.SMSArrival) then
             ini.settings.SMSArrival = imgui.SMSArrival.v
             inicfg.save(ini, "Taximate/settings.ini")
         end
-        local color = "{FFFF00}"
+        imgui:SetTooltip("SMS: " .. utf8sub(text, 1, 63), 200)
+        local color = "{FFFFFF}"
         local text = chat:subSMSText(ini.settings.SMSPrefix,
-                                     ini.settings.SMSArrival)
+                                     ini.settings.SMSSeats)
         if utf8len(text) > 63 then color = "{FF0000}" end
-        imgui:TextColoredRGB(color .. "SMS: " .. utf8sub(text, 1, 63))
-        imgui.Text("СМС об отмене вызова:")
+        imgui:TextColoredRGB(color .. "Одно пасс. место:")
         imgui.SameLine()
-        imgui.PushItemWidth(toScreenX(128))
+        imgui.PushItemWidth(toScreenX(142))
+        if imgui.InputText("##SMSSeats", imgui.SMSSeats) then
+            ini.settings.SMSSeats = imgui.SMSSeats.v
+            inicfg.save(ini, "Taximate/settings.ini")
+        end
+        imgui:SetTooltip("SMS: " .. utf8sub(text, 1, 63), 200)
+        local color = "{FFFFFF}"
+        local text = chat:subSMSText(ini.settings.SMSPrefix,
+                                     ini.settings.SMSCancel)
+        if utf8len(text) > 63 then color = "{FF0000}" end
+        imgui:TextColoredRGB(color .. "Отмена вызова:")
+        imgui.SameLine()
+        imgui.PushItemWidth(toScreenX(147))
         if imgui.InputText("##SMSCancel", imgui.SMSCancel) then
             ini.settings.SMSCancel = imgui.SMSCancel.v
             inicfg.save(ini, "Taximate/settings.ini")
         end
-        local color = "{FFFF00}"
-        local text = chat:subSMSText(ini.settings.SMSPrefix,
-                                     ini.settings.SMSCancel)
-        if utf8len(text) > 63 then color = "{FF0000}" end
-        imgui:TextColoredRGB(color .. "SMS: " .. utf8sub(text, 1, 63))
+        imgui:SetTooltip("SMS: " .. utf8sub(text, 1, 63), 200)
         imgui.TextDisabled(
             "Доступные для замены токены: {carname}, {distance}, {zone}")
     else
