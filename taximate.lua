@@ -18,7 +18,8 @@ local imgui = require "imgui"
 
 encoding.default = "CP1251"
 local u8 = encoding.UTF8
-local ini = {}
+local chat, orders, vehicle
+local player, sounds, binds, ini
 local notificationsQueue = {}
 local fastMapKey = 0
 
@@ -91,8 +92,8 @@ function main()
     repeat wait(100) until sampGetCurrentServerName() ~= "SA-MP"
 
     local _, playerID = sampGetPlayerIdByCharHandle(PLAYER_PED)
-    PLAYER.nickname = sampGetPlayerNickname(playerID)
-    PLAYER.id = playerID
+    player.nickname = sampGetPlayerNickname(playerID)
+    player.id = playerID
 
     server = sampGetCurrentServerName():gsub("|", "")
     server = (server:find("02") and "two" or
@@ -105,11 +106,11 @@ function main()
         return
     end
 
-    CHAT:sendMessage(
+    chat:sendMessage(
         "Меню настроек скрипта - {00CED1}/tm{FFFFFF}, страница скрипта: {00CED1}" ..
             thisScript().url)
 
-    repeat wait(100) until sampGetPlayerScore(PLAYER.id) ~= 0
+    repeat wait(100) until sampGetPlayerScore(player.id) ~= 0
 
     if not doesDirectoryExist(getWorkingDirectory() .. "/config") then
         createDirectory(getWorkingDirectory() .. "/config")
@@ -120,24 +121,24 @@ function main()
 
     ini = inicfg.load({settings = ini.settings}, "Taximate/settings.ini")
     imgui:initBuffers()
-    SOUNDS:loadSound("new_order")
-    SOUNDS:loadSound("correct_order")
-    SOUNDS:loadSound("new_passenger")
+    sounds:loadSound("new_order")
+    sounds:loadSound("correct_order")
+    sounds:loadSound("new_passenger")
     imgui:ApplyCustomStyle()
     imgui.GetIO().Fonts:AddFontFromFileTTF("C:/Windows/Fonts/arial.ttf",
                                            toScreenX(6), nil, imgui.GetIO()
                                                .Fonts:GetGlyphRangesCyrillic())
-    BINDS.list = BINDS:get()
+    binds.list = binds:get()
 
     imgui.Process = true
-    CHAT:initQueue()
-    PLAYER.connected = true
+    chat:initQueue()
+    player.connected = true
 
-    lua_thread.create(BINDS.pressProcessingThread)
-    lua_thread.create(CHAT.checkQueueThread)
-    lua_thread.create(CHAT.disableFrozenMessagesProcessing)
-    lua_thread.create(VEHICLE.refreshInfo)
-    lua_thread.create(ORDERS.deleteOrdersThread)
+    lua_thread.create(binds.pressProcessingThread)
+    lua_thread.create(chat.checkQueueThread)
+    lua_thread.create(chat.disableFrozenMessagesProcessingThread)
+    lua_thread.create(vehicle.refreshInfoThread)
+    lua_thread.create(orders.deleteOrdersThread)
 
     sampRegisterChatCommand("taximate", function()
         imgui.showSettings.v = not imgui.showSettings.v
@@ -167,82 +168,82 @@ function main()
         wait(0)
 
         imgui.ShowCursor = false
-        if PLAYER.onWork then
+        if player.onWork then
             local result, orderNickname, orderDistance, orderClock =
-                ORDERS:get()
+                orders:get()
             if result then
-                ORDERS:handle(orderNickname, orderDistance, orderClock)
+                orders:handle(orderNickname, orderDistance, orderClock)
             end
 
-            ORDERS.autoAccept = table:isEmpty(VEHICLE.passengersList) and
-                                    not ORDERS.currentOrder
+            orders.autoAccept = table:isEmpty(vehicle.passengersList) and
+                                    not orders.currentOrder
 
-            ORDERS:refreshCurrentOrder()
+            orders:refreshCurrentOrder()
 
             if ini.settings.ordersDistanceUpdate then
-                ORDERS:updateOrdersDistance()
+                orders:updateOrdersDistance()
             end
 
             if isKeysPressed(ini.settings.key3, ini.settings.key3add, false) and
                 ini.settings.hotKeys then
-                PLAYER.onWork = false
+                player.onWork = false
                 if ini.settings.autoClist then
-                    CHAT:addMessageToQueue("/clist 0", true, true)
+                    chat:addMessageToQueue("/clist 0", true, true)
                 end
-                if ORDERS.currentOrder then
-                    ORDERS:cancelCurrentOrder()
+                if orders.currentOrder then
+                    orders:cancelCurrentOrder()
                 end
             end
 
             if isKeyJustPressed(vkeys.VK_2) then
-                if VEHICLE.vehicleName then
-                    CHAT.antifloodClock = os.clock()
+                if vehicle.name then
+                    chat.antifloodClock = os.clock()
                 end
             end
 
-            if not ORDERS.currentOrder then
-                if ORDERS.lastCorrectOrderNickname then
+            if not orders.currentOrder then
+                if orders.lastCorrectOrderNickname then
                     if isKeysPressed(ini.settings.key2, ini.settings.key2add,
                                      false) and ini.settings.hotKeys then
-                        ORDERS:accept(ORDERS.lastCorrectOrderNickname,
-                                      ORDERS.lastCorrectOrderClock)
+                        orders:accept(orders.lastCorrectOrderNickname,
+                                      orders.lastCorrectOrderClock)
                     end
                 end
             else
                 if isKeysPressed(ini.settings.key2, ini.settings.key2add, false) and
                     ini.settings.hotKeys then
-                    ORDERS:cancelCurrentOrder()
+                    orders:cancelCurrentOrder()
                 end
             end
-        elseif ORDERS.currentOrder then
-            ORDERS:cancelCurrentOrder()
+        elseif orders.currentOrder then
+            orders:cancelCurrentOrder()
         else
-            ORDERS.autoAccept = false
+            orders.autoAccept = false
             if isKeysPressed(ini.settings.key3, ini.settings.key3add, false) and
                 ini.settings.hotKeys then
-                PLAYER.onWork = true
+                player.onWork = true
                 if ini.settings.autoClist and ini.settings.workClist ~= 0 then
-                    CHAT:addMessageToQueue("/clist " .. ini.settings.workClist,
+                    chat:addMessageToQueue("/clist " .. ini.settings.workClist,
                                            true, true)
                 end
             end
         end
 
-        if ini.settings.markers and VEHICLE.vehicleName then
-            VEHICLE:drawMarkers()
+        if ini.settings.markers and vehicle.name then
+            vehicle:drawMarkers()
         else
-            VEHICLE:clearMarkers()
+            vehicle:clearMarkers()
         end
 
         if ini.settings.cruiseControl then
-            VEHICLE:cruiseControl()
+            vehicle:cruiseControl()
         else
-            VEHICLE.cruiseControlEnabled = false
+            vehicle.cruiseControlEnabled = false
         end
     end
 end
 
-CHAT = {
+chat = {
     queue = {},
     queueSize = 10,
     antifloodClock = os.clock(),
@@ -258,47 +259,47 @@ CHAT = {
     }
 }
 
-function CHAT:sendMessage(message)
+function chat:sendMessage(message)
     sampAddChatMessage(u8:decode("\
 				{00CED1}[Taximate v" .. thisScript().version .. "]{FFFFFF} " ..
                                      tostring(message)), 0xFFFFFF)
 end
 
-function CHAT:updateAntifloodClock()
-    CHAT.antifloodClock = os.clock()
-    if string.sub(CHAT.lastMessage, 1, 5) == "/sms " or
-        string.sub(CHAT.lastMessage, 1, 3) == "/t " then
-        CHAT.antifloodClock = CHAT.antifloodClock + 0.5
+function chat:updateAntifloodClock()
+    chat.antifloodClock = os.clock()
+    if string.sub(chat.lastMessage, 1, 5) == "/sms " or
+        string.sub(chat.lastMessage, 1, 3) == "/t " then
+        chat.antifloodClock = chat.antifloodClock + 0.5
     end
 end
 
-function CHAT:disableFrozenMessagesProcessing()
+function chat:disableFrozenMessagesProcessingThread()
     while true do
-        wait(0)
-        for key, value in pairs(CHAT.hiddenMessages) do
+        wait(1000)
+        for key, value in pairs(chat.hiddenMessages) do
             if os.clock() - value.clock > 5 and value.bool then
                 value.bool = false
             end
         end
-        if os.clock() - ORDERS.lastAcceptedOrderClock > 5 and
-            ORDERS.orderAccepted then ORDERS.orderAccepted = false end
+        if os.clock() - orders.lastAcceptedOrderClock > 5 and
+            orders.orderAccepted then orders.orderAccepted = false end
     end
 end
 
-function CHAT:checkQueueThread()
+function chat:checkQueueThread()
     while true do
         wait(0)
-        for messageIndex = 1, CHAT.queueSize do
-            local message = CHAT.queue[messageIndex]
+        for messageIndex = 1, chat.queueSize do
+            local message = chat.queue[messageIndex]
             if message.message ~= "" then
-                if string.sub(CHAT.lastMessage, 1, 1) ~= "/" and
+                if string.sub(chat.lastMessage, 1, 1) ~= "/" and
                     string.sub(message.message, 1, 1) ~= "/" then
-                    CHAT.antifloodDelay = CHAT.antifloodDelay + 0.5
+                    chat.antifloodDelay = chat.antifloodDelay + 0.5
                 end
-                if os.clock() - CHAT.antifloodClock > CHAT.antifloodDelay then
+                if os.clock() - chat.antifloodClock > chat.antifloodDelay then
                     if string.find(message.message, "/service ac taxi") then
-                        ORDERS.orderAccepted = true
-                        ORDERS.lastAcceptedOrderClock = os.clock()
+                        orders.orderAccepted = true
+                        orders.lastAcceptedOrderClock = os.clock()
                     end
 
                     local sendMessage = true
@@ -306,48 +307,48 @@ function CHAT:checkQueueThread()
                     local command = string.match(message.message, "^(/[^ ]*).*")
 
                     if message.hideResult then
-                        if CHAT.hiddenMessages[command] then
-                            if CHAT.hiddenMessages[command].bool then
-                                CHAT.hiddenMessages[command].bool = false
+                        if chat.hiddenMessages[command] then
+                            if chat.hiddenMessages[command].bool then
+                                chat.hiddenMessages[command].bool = false
                                 sendMessage = false
                             else
-                                CHAT.hiddenMessages[command].bool =
+                                chat.hiddenMessages[command].bool =
                                     (not sampIsDialogActive() or
-                                        not CHAT.hiddenMessages[command].dialog) and
-                                        CHAT.dialogClock < os.clock()
-                                CHAT.hiddenMessages[command].clock = os.clock()
-                                sendMessage = CHAT.hiddenMessages[command].bool
+                                        not chat.hiddenMessages[command].dialog) and
+                                        chat.dialogClock < os.clock()
+                                chat.hiddenMessages[command].clock = os.clock()
+                                sendMessage = chat.hiddenMessages[command].bool
                             end
                         end
                     end
 
                     if sendMessage then
-                        CHAT.lastMessage = u8:decode(message.message)
+                        chat.lastMessage = u8:decode(message.message)
                         sampSendChat(u8:decode(message.message))
                     end
 
                     message.hideResult = false
                     message.message = ""
                 end
-                CHAT.antifloodDelay = 0.6
+                chat.antifloodDelay = 0.6
             end
         end
     end
 end
 
-function CHAT:subSMSText(prefix, text)
+function chat:subSMSText(prefix, text)
     if text:find("{zone}") then
         local posX, posY = getCharCoordinates(PLAYER_PED)
         text = text:gsub("{zone}", getZone(posX, posY))
     end
-    if ORDERS.currentOrder then
+    if orders.currentOrder then
         text = text:gsub("{distance}", metersToString(
-                             ORDERS.currentOrder.currentDistance, false))
+                             orders.currentOrder.currentDistance, false))
     else
         text = text:gsub("{distance}", "123 м")
     end
-    if VEHICLE.vehicleName then
-        text = text:gsub("{carname}", VEHICLE.vehicleName)
+    if vehicle.name then
+        text = text:gsub("{carname}", vehicle.name)
     else
         text = text:gsub("{carname}", "Sentinel")
     end
@@ -355,26 +356,26 @@ function CHAT:subSMSText(prefix, text)
     return prefix .. text
 end
 
-function CHAT:sendNotification(order)
+function chat:sendNotification(order)
     if ini.settings.sendSMS then
         if not order.arrived and order.showMark then
             if order.currentDistance < 30 and ini.settings.SMSArrival ~= "" then
-                CHAT:addMessageToQueue(string.format("/t %d %s", order.id,
-                                                     CHAT:subSMSText(
+                chat:addMessageToQueue(string.format("/t %d %s", order.id,
+                                                     chat:subSMSText(
                                                          ini.settings.SMSPrefix,
                                                          ini.settings.SMSArrival)))
                 order.arrived = true
             elseif order.SMSClock < os.clock() and order.updateDistance and
                 ini.settings.SMSText ~= "" then
-                CHAT:addMessageToQueue(string.format("/t %d %s", order.id,
-                                                     CHAT:subSMSText(
+                chat:addMessageToQueue(string.format("/t %d %s", order.id,
+                                                     chat:subSMSText(
                                                          ini.settings.SMSPrefix,
                                                          ini.settings.SMSText)))
-                if order.firstSMS and VEHICLE.maxPassengers == 1 and
+                if order.firstSMS and vehicle.maxPassengers == 1 and
                     ini.settings.seatsNotify then
-                    CHAT:addMessageToQueue(
+                    chat:addMessageToQueue(
                         string.format("/t %d %s", order.id,
-                                      CHAT:subSMSText(ini.settings.SMSPrefix,
+                                      chat:subSMSText(ini.settings.SMSPrefix,
                                                       "Такси имеет только одно пассажирское место")))
                     order.firstSMS = false
                 end
@@ -387,136 +388,136 @@ function CHAT:sendNotification(order)
     end
 end
 
-function CHAT:handleInputMessage(message)
+function chat:handleInputMessage(message)
     lua_thread.create(function()
         if string.find(message, MESSAGES.newOrder) then
             local time = os.clock()
             local nickname, id, distance =
                 string.match(message, MESSAGES.newOrderFormat)
             distance = stringToMeters(distance)
-            ORDERS:add(nickname, id, distance, time)
+            orders:add(nickname, id, distance, time)
         elseif string.find(message, MESSAGES.orderAccepted) then
             local driverNickname, passengerNickname =
                 string.match(message, MESSAGES.orderAcceptedFormat)
-            if driverNickname == PLAYER.nickname and PLAYER.onWork then
-                if ORDERS.orderAccepted then
-                    ORDERS.orderAccepted = false
+            if driverNickname == player.nickname and player.onWork then
+                if orders.orderAccepted then
+                    orders.orderAccepted = false
                 end
-                if ORDERS.currentOrder then
-                    if ORDERS.currentOrder.nickname ~= passengerNickname then
+                if orders.currentOrder then
+                    if orders.currentOrder.nickname ~= passengerNickname then
                         if ini.settings.notifications and ini.settings.sounds then
-                            SOUNDS:play("new_order")
+                            sounds:play("new_order")
                         end
                         if ini.settings.notifications then
                             imgui:addNotification(string.format(
                                                       FORMAT_NOTIFICATIONS.orderAccepted,
-                                                      ORDERS.list[passengerNickname]
+                                                      orders.list[passengerNickname]
                                                           .nickname,
-                                                      ORDERS.list[passengerNickname]
+                                                      orders.list[passengerNickname]
                                                           .id, metersToString(
-                                                          ORDERS.list[passengerNickname]
+                                                          orders.list[passengerNickname]
                                                               .distance)), 10)
                         end
                     else
-                        ORDERS.currentOrder.repeatCount = ORDERS.currentOrder
+                        orders.currentOrder.repeatCount = orders.currentOrder
                                                               .repeatCount + 1
 
-                        ORDERS:updateGPSMark()
+                        orders:updateGPSMark()
                     end
-                elseif ORDERS.list[passengerNickname] then
+                elseif orders.list[passengerNickname] then
                     if ini.settings.notifications and ini.settings.sounds then
-                        SOUNDS:play("new_order")
+                        sounds:play("new_order")
                     end
                     if ini.settings.notifications then
                         imgui:addNotification(string.format(
                                                   FORMAT_NOTIFICATIONS.orderAccepted,
-                                                  ORDERS.list[passengerNickname]
+                                                  orders.list[passengerNickname]
                                                       .nickname,
-                                                  ORDERS.list[passengerNickname]
+                                                  orders.list[passengerNickname]
                                                       .id, metersToString(
-                                                      ORDERS.list[passengerNickname]
+                                                      orders.list[passengerNickname]
                                                           .distance)), 10)
                     end
-                    ORDERS.currentOrder = ORDERS.list[passengerNickname]
-                    ORDERS.currentOrder.SMSClock = os.clock()
+                    orders.currentOrder = orders.list[passengerNickname]
+                    orders.currentOrder.SMSClock = os.clock()
 
-                    ORDERS:updateGPSMark()
+                    orders:updateGPSMark()
                 end
             end
-            ORDERS:delete(passengerNickname)
-        elseif string.find(message, MESSAGES.GPS) and PLAYER.onWork then
+            orders:delete(passengerNickname)
+        elseif string.find(message, MESSAGES.GPS) and player.onWork then
             local text = "Метка на карте обновлена"
             local result, x, y = getGPSMarkCoords3d()
             if result then
                 text = text .. "\nРайон: {4296f9}" .. getZone(x, y)
                 if ini.settings.notifications and ini.settings.sounds then
-                    SOUNDS:play("correct_order")
+                    sounds:play("correct_order")
                 end
                 if ini.settings.notifications then
                     imgui:addNotification(text, 5)
                 end
             end
-        elseif string.find(message, MESSAGES.finishWork) and PLAYER.onWork and
-            ini.settings.finishWork and not ORDERS.currentOrder then
-            PLAYER.onWork = false
-            if ini.settings.autoClist and not CHAT.hiddenMessages["/clist"].bool then
-                CHAT:addMessageToQueue("/clist 0", true, true)
+        elseif string.find(message, MESSAGES.finishWork) and player.onWork and
+            ini.settings.finishWork and not orders.currentOrder then
+            player.onWork = false
+            if ini.settings.autoClist and not chat.hiddenMessages["/clist"].bool then
+                chat:addMessageToQueue("/clist 0", true, true)
             end
         elseif string.find(message, MESSAGES.passengerOut) or
             string.find(message, MESSAGES.passengerOutFree) then
-            PLAYER:refresh()
+            player:refresh()
         elseif string.find(message, MESSAGES.pay) then
             local sum, nickname = string.match(message, MESSAGES.payFormat)
-            if table:contains(nickname, VEHICLE.lastPassengersList) then
-                PLAYER.tips = PLAYER.tips + sum
+            if table:contains(nickname, vehicle.lastPassengersList) then
+                player.tips = player.tips + sum
             end
         elseif string.find(message, MESSAGES.payDay) then
-            PLAYER.tips = 0
-            PLAYER:refresh()
+            player.tips = 0
+            player:refresh()
         elseif string.find(message, MESSAGES.antiFlood) then
-            CHAT:updateAntifloodClock()
-            for qMessage in pairs(CHAT.hiddenMessages) do
-                CHAT.hiddenMessages[qMessage].bool = false
+            chat:updateAntifloodClock()
+            for qMessage in pairs(chat.hiddenMessages) do
+                chat.hiddenMessages[qMessage].bool = false
             end
-            ORDERS.orderAccepted = false
+            orders.orderAccepted = false
         end
     end)
 end
 
-function CHAT:initQueue()
-    CHAT.queue[1] = {message = "/jskill", hideResult = true}
-    CHAT.queue[2] = {message = "/paycheck", hideResult = true}
-    for messageIndex = 3, CHAT.queueSize do
-        CHAT.queue[messageIndex] = {message = "", hideResult = false}
+function chat:initQueue()
+    chat.queue[1] = {message = "/jskill", hideResult = true}
+    chat.queue[2] = {message = "/paycheck", hideResult = true}
+    for messageIndex = 3, chat.queueSize do
+        chat.queue[messageIndex] = {message = "", hideResult = false}
     end
 end
 
-function CHAT:addMessageToQueue(string, nonRepeat, hideResult)
+function chat:addMessageToQueue(string, nonRepeat, hideResult)
     local isRepeat = false
     local nonRepeat = nonRepeat or false
     local hideResult = hideResult or false
 
     if nonRepeat then
-        for messageIndex = 1, CHAT.queueSize do
-            if string == CHAT.queue[messageIndex].message then
+        for messageIndex = 1, chat.queueSize do
+            if string == chat.queue[messageIndex].message then
                 isRepeat = true
             end
         end
     end
 
     if not isRepeat then
-        for messageIndex = 1, CHAT.queueSize - 1 do
-            CHAT.queue[messageIndex].message =
-                CHAT.queue[messageIndex + 1].message
-            CHAT.queue[messageIndex].hideResult =
-                CHAT.queue[messageIndex + 1].hideResult
+        for messageIndex = 1, chat.queueSize - 1 do
+            chat.queue[messageIndex].message =
+                chat.queue[messageIndex + 1].message
+            chat.queue[messageIndex].hideResult =
+                chat.queue[messageIndex + 1].hideResult
         end
-        CHAT.queue[CHAT.queueSize].message = string
-        CHAT.queue[CHAT.queueSize].hideResult = hideResult
+        chat.queue[chat.queueSize].message = string
+        chat.queue[chat.queueSize].hideResult = hideResult
     end
 end
 
-ORDERS = {
+orders = {
     list = {},
     canceled = {},
     GPSMark = nil,
@@ -531,9 +532,9 @@ ORDERS = {
     currentOrderCheckpoint = nil
 }
 
-function ORDERS:cancelCurrentOrder()
+function orders:cancelCurrentOrder()
     if ini.settings.notifications and ini.settings.sounds then
-        SOUNDS:play("correct_order")
+        sounds:play("correct_order")
     end
     if ini.settings.notifications then
         imgui:addNotification(
@@ -541,43 +542,43 @@ function ORDERS:cancelCurrentOrder()
             5)
     end
     if ini.settings.sendSMSCancel and ini.settings.SMSCancel ~= "" then
-        CHAT:addMessageToQueue(string.format("/t %d %s", ORDERS.currentOrder.id,
-                                             CHAT:subSMSText(
+        chat:addMessageToQueue(string.format("/t %d %s", orders.currentOrder.id,
+                                             chat:subSMSText(
                                                  ini.settings.SMSPrefix,
                                                  ini.settings.SMSCancel)))
     end
-    ORDERS.canceled[ORDERS.currentOrder.nickname] = os.clock()
-    ORDERS.currentOrder = nil
-    ORDERS:removeGPSMark()
+    orders.canceled[orders.currentOrder.nickname] = os.clock()
+    orders.currentOrder = nil
+    orders:removeGPSMark()
 end
 
-function ORDERS:removeGPSMark()
-    if ORDERS.currentOrderBlip then
-        deleteCheckpoint(ORDERS.currentOrderCheckpoint)
-        removeBlip(ORDERS.currentOrderBlip)
-        ORDERS.currentOrderBlip = nil
-        ORDERS.currentOrderCheckpoint = nil
+function orders:removeGPSMark()
+    if orders.currentOrderBlip then
+        deleteCheckpoint(orders.currentOrderCheckpoint)
+        removeBlip(orders.currentOrderBlip)
+        orders.currentOrderBlip = nil
+        orders.currentOrderCheckpoint = nil
     end
-    CHAT:addMessageToQueue("/gps", true, true)
+    chat:addMessageToQueue("/gps", true, true)
 end
 
-function ORDERS:updateGPSMark()
+function orders:updateGPSMark()
     local result, posX, posY, posZ = getGPSMarkCoords3d()
-    if ORDERS.currentOrder and result then
-        ORDERS.currentOrder.pos.x = posX
-        ORDERS.currentOrder.pos.y = posY
-        ORDERS.currentOrder.pos.z = posZ
-        ORDERS.currentOrder.zone = getZone(posX, posY)
-        ORDERS.currentOrder.distance = getDistanceToCoords3d(
-                                           ORDERS.currentOrder.pos.x,
-                                           ORDERS.currentOrder.pos.y,
-                                           ORDERS.currentOrder.pos.z)
-        ORDERS.currentOrder.currentDistance = ORDERS.currentOrder.distance
-        ORDERS.currentOrder.showMark = true
+    if orders.currentOrder and result then
+        orders.currentOrder.pos.x = posX
+        orders.currentOrder.pos.y = posY
+        orders.currentOrder.pos.z = posZ
+        orders.currentOrder.zone = getZone(posX, posY)
+        orders.currentOrder.distance = getDistanceToCoords3d(
+                                           orders.currentOrder.pos.x,
+                                           orders.currentOrder.pos.y,
+                                           orders.currentOrder.pos.z)
+        orders.currentOrder.currentDistance = orders.currentOrder.distance
+        orders.currentOrder.showMark = true
     end
 end
 
-function ORDERS:calculate2dCoords(circle1, circle2, circle3)
+function orders:calculate2dCoords(circle1, circle2, circle3)
     local dX = circle2.x - circle1.x
     local dY = circle2.y - circle1.y
 
@@ -620,13 +621,13 @@ function ORDERS:calculate2dCoords(circle1, circle2, circle3)
     end
 end
 
-function ORDERS:updateOrdersDistance()
-    if VEHICLE.vehicleName then
-        if ORDERS.updateOrdersDistanceClock < os.clock() then
-            if not ORDERS.currentOrder then
-                if not CHAT.hiddenMessages["/service"].bool then
-                    CHAT:addMessageToQueue("/service", true, true)
-                    ORDERS.updateOrdersDistanceClock = os.clock() +
+function orders:updateOrdersDistance()
+    if vehicle.name then
+        if orders.updateOrdersDistanceClock < os.clock() then
+            if not orders.currentOrder then
+                if not chat.hiddenMessages["/service"].bool then
+                    chat:addMessageToQueue("/service", true, true)
+                    orders.updateOrdersDistanceClock = os.clock() +
                                                            ini.settings
                                                                .ordersDistanceUpdateTimer
                 end
@@ -635,9 +636,9 @@ function ORDERS:updateOrdersDistance()
     end
 end
 
-function ORDERS:add(nickname, id, distance, time)
+function orders:add(nickname, id, distance, time)
     local posX, posY = getCharCoordinates(PLAYER_PED)
-    ORDERS.list[nickname] = {
+    orders.list[nickname] = {
         nickname = nickname,
         id = id,
         distance = distance,
@@ -657,50 +658,50 @@ function ORDERS:add(nickname, id, distance, time)
     }
 end
 
-function ORDERS:refreshCurrentOrder()
-    if ORDERS.currentOrder then
-        if sampIsPlayerConnected(ORDERS.currentOrder.id) then
-            if VEHICLE.maxPassengers then
-                CHAT:sendNotification(ORDERS.currentOrder)
+function orders:refreshCurrentOrder()
+    if orders.currentOrder then
+        if sampIsPlayerConnected(orders.currentOrder.id) then
+            if vehicle.maxPassengers then
+                chat:sendNotification(orders.currentOrder)
                 local charInStream, charHandle =
-                    sampGetCharHandleBySampPlayerId(ORDERS.currentOrder.id)
+                    sampGetCharHandleBySampPlayerId(orders.currentOrder.id)
                 if charInStream and ini.settings.updateOrderMark then
-                    ORDERS.currentOrder.pos.x, ORDERS.currentOrder.pos.y, ORDERS.currentOrder
+                    orders.currentOrder.pos.x, orders.currentOrder.pos.y, orders.currentOrder
                         .pos.z = getCharCoordinates(charHandle)
-                    ORDERS.currentOrder.zone = getZone(
-                                                   ORDERS.currentOrder.pos.x,
-                                                   ORDERS.currentOrder.pos.y)
-                    if ORDERS.currentOrder.showMark then
-                        if not ORDERS.currentOrderBlip then
-                            ORDERS.currentOrderBlip = addBlipForCoord(
-                                                          ORDERS.currentOrder
+                    orders.currentOrder.zone = getZone(
+                                                   orders.currentOrder.pos.x,
+                                                   orders.currentOrder.pos.y)
+                    if orders.currentOrder.showMark then
+                        if not orders.currentOrderBlip then
+                            orders.currentOrderBlip = addBlipForCoord(
+                                                          orders.currentOrder
                                                               .pos.x,
-                                                          ORDERS.currentOrder
+                                                          orders.currentOrder
                                                               .pos.y,
-                                                          ORDERS.currentOrder
+                                                          orders.currentOrder
                                                               .pos.z)
-                            changeBlipColour(ORDERS.currentOrderBlip, 0xBB0000FF)
-                            ORDERS.currentOrderCheckpoint = createCheckpoint(1,
-                                                                             ORDERS.currentOrder
+                            changeBlipColour(orders.currentOrderBlip, 0xBB0000FF)
+                            orders.currentOrderCheckpoint = createCheckpoint(1,
+                                                                             orders.currentOrder
                                                                                  .pos
                                                                                  .x,
-                                                                             ORDERS.currentOrder
+                                                                             orders.currentOrder
                                                                                  .pos
                                                                                  .y,
-                                                                             ORDERS.currentOrder
+                                                                             orders.currentOrder
                                                                                  .pos
                                                                                  .z,
-                                                                             ORDERS.currentOrder
+                                                                             orders.currentOrder
                                                                                  .pos
                                                                                  .x,
-                                                                             ORDERS.currentOrder
+                                                                             orders.currentOrder
                                                                                  .pos
                                                                                  .y,
-                                                                             ORDERS.currentOrder
+                                                                             orders.currentOrder
                                                                                  .pos
                                                                                  .z,
                                                                              2.99)
-                            CHAT:addMessageToQueue("/gps", true, true)
+                            chat:addMessageToQueue("/gps", true, true)
                             if ini.settings.notifications then
                                 imgui:addNotification(
                                     "Клиент поблизости\nМетка на карте обновлена",
@@ -708,52 +709,52 @@ function ORDERS:refreshCurrentOrder()
                             end
                             if ini.settings.notifications and
                                 ini.settings.sounds then
-                                SOUNDS:play("correct_order")
+                                sounds:play("correct_order")
                             end
                         else
-                            removeBlip(ORDERS.currentOrderBlip)
-                            ORDERS.currentOrderBlip = addBlipForCoord(
-                                                          ORDERS.currentOrder
+                            removeBlip(orders.currentOrderBlip)
+                            orders.currentOrderBlip = addBlipForCoord(
+                                                          orders.currentOrder
                                                               .pos.x,
-                                                          ORDERS.currentOrder
+                                                          orders.currentOrder
                                                               .pos.y,
-                                                          ORDERS.currentOrder
+                                                          orders.currentOrder
                                                               .pos.z)
-                            changeBlipColour(ORDERS.currentOrderBlip, 0xBB0000FF)
-                            setCheckpointCoords(ORDERS.currentOrderCheckpoint,
-                                                ORDERS.currentOrder.pos.x,
-                                                ORDERS.currentOrder.pos.y,
-                                                ORDERS.currentOrder.pos.z)
+                            changeBlipColour(orders.currentOrderBlip, 0xBB0000FF)
+                            setCheckpointCoords(orders.currentOrderCheckpoint,
+                                                orders.currentOrder.pos.x,
+                                                orders.currentOrder.pos.y,
+                                                orders.currentOrder.pos.z)
                         end
 
-                        if ORDERS.currentOrderBlip then
+                        if orders.currentOrderBlip then
                             local distance =
                                 getDistanceToCoords3d(
-                                    ORDERS.currentOrder.pos.x,
-                                    ORDERS.currentOrder.pos.y,
-                                    ORDERS.currentOrder.pos.z)
+                                    orders.currentOrder.pos.x,
+                                    orders.currentOrder.pos.y,
+                                    orders.currentOrder.pos.z)
                             if distance <= 3 then
-                                removeBlip(ORDERS.currentOrderBlip)
-                                deleteCheckpoint(ORDERS.currentOrderCheckpoint)
-                                ORDERS.currentOrderBlip = nil
-                                ORDERS.currentOrderCheckpoint = nil
-                                ORDERS.currentOrder.showMark = false
+                                removeBlip(orders.currentOrderBlip)
+                                deleteCheckpoint(orders.currentOrderCheckpoint)
+                                orders.currentOrderBlip = nil
+                                orders.currentOrderCheckpoint = nil
+                                orders.currentOrder.showMark = false
                             end
                         end
                     end
                 end
 
-                if ORDERS.currentOrder.pos.x then
-                    ORDERS.currentOrder.currentDistance =
+                if orders.currentOrder.pos.x then
+                    orders.currentOrder.currentDistance =
                         getDistanceToCoords3d(
-                            ORDERS.currentOrder.pos.x,
-                            ORDERS.currentOrder.pos.y, ORDERS.currentOrder.pos.z)
-                    ORDERS.currentOrder.updateDistance = true
+                            orders.currentOrder.pos.x,
+                            orders.currentOrder.pos.y, orders.currentOrder.pos.z)
+                    orders.currentOrder.updateDistance = true
                 end
 
-                if VEHICLE:isPassengerIn(VEHICLE.vehicleHandle,
-                                         ORDERS.currentOrder.nickname) then
-                    ORDERS.currentOrder = nil
+                if vehicle:isPassengerIn(vehicle.handle,
+                                         orders.currentOrder.nickname) then
+                    orders.currentOrder = nil
                 end
             end
         else
@@ -762,98 +763,98 @@ function ORDERS:refreshCurrentOrder()
                     "Клиент оффлайн\nВызов отменён", 5)
             end
             if ini.settings.notifications and ini.settings.sounds then
-                SOUNDS:play("correct_order")
+                sounds:play("correct_order")
             end
-            ORDERS.currentOrder = nil
-            ORDERS:removeGPSMark()
+            orders.currentOrder = nil
+            orders:removeGPSMark()
         end
     else
-        removeBlip(ORDERS.currentOrderBlip)
-        deleteCheckpoint(ORDERS.currentOrderCheckpoint)
-        ORDERS.currentOrderBlip = nil
-        ORDERS.currentOrderCheckpoint = nil
+        removeBlip(orders.currentOrderBlip)
+        deleteCheckpoint(orders.currentOrderCheckpoint)
+        orders.currentOrderBlip = nil
+        orders.currentOrderCheckpoint = nil
     end
 end
 
-function ORDERS:delete(nickname) ORDERS.list[nickname] = nil end
+function orders:delete(nickname) orders.list[nickname] = nil end
 
-function ORDERS:accept(nickname, orderClock)
-    if ORDERS.canceled[nickname] and ini.settings.ignoreCanceledOrder then
+function orders:accept(nickname, orderClock)
+    if orders.canceled[nickname] and ini.settings.ignoreCanceledOrder then
         return
     end
-    if ORDERS.list[nickname] then
+    if orders.list[nickname] then
         if orderClock then
-            if ORDERS.lastAcceptedOrderClock ~= orderClock then
-                if not ORDERS.orderAccepted then
-                    CHAT:addMessageToQueue(
-                        "/service ac taxi " .. ORDERS.list[nickname].id)
-                    ORDERS.lastAcceptedOrderClock = ORDERS.list[nickname].time
-                    ORDERS.orderAccepted = false
+            if orders.lastAcceptedOrderClock ~= orderClock then
+                if not orders.orderAccepted then
+                    chat:addMessageToQueue(
+                        "/service ac taxi " .. orders.list[nickname].id)
+                    orders.lastAcceptedOrderClock = orders.list[nickname].time
+                    orders.orderAccepted = false
                 end
             end
         end
     end
 end
 
-function ORDERS:deleteOrdersThread()
+function orders:deleteOrdersThread()
     while true do
         wait(1000)
-        for nickname, order in pairs(ORDERS.list) do
+        for nickname, order in pairs(orders.list) do
             if os.clock() - order.time > 600 or
                 not sampIsPlayerConnected(order.id) then
-                ORDERS:delete(nickname)
+                orders:delete(nickname)
             end
         end
-        for nickname, clock in pairs(ORDERS.canceled) do
+        for nickname, clock in pairs(orders.canceled) do
             if os.clock() - clock > ini.settings.canceledOrderDelay then
-                ORDERS.canceled[nickname] = nil
+                orders.canceled[nickname] = nil
             end
         end
     end
 end
 
-function ORDERS:get()
-    for keyIndex, key in ipairs(table:getTableKeysSortedByValue(ORDERS.list,
+function orders:get()
+    for keyIndex, key in ipairs(table:getTableKeysSortedByValue(orders.list,
                                                                 "time", false)) do
-        if ORDERS.list[key] then
-            return true, key, ORDERS.list[key].distance, ORDERS.list[key].time
+        if orders.list[key] then
+            return true, key, orders.list[key].distance, orders.list[key].time
         end
     end
     return false, nil, nil, nil
 end
 
-function ORDERS:handle(orderNickname, orderDistance, orderClock)
-    if not ORDERS.currentOrder then
-        if not table:contains(orderNickname, VEHICLE.lastPassengersList) then
-            if table:isEmpty(VEHICLE.passengersList) then
-                if ORDERS.autoAccept then
+function orders:handle(orderNickname, orderDistance, orderClock)
+    if not orders.currentOrder then
+        if not table:contains(orderNickname, vehicle.lastPassengersList) then
+            if table:isEmpty(vehicle.passengersList) then
+                if orders.autoAccept then
                     if orderDistance <= ini.settings.maxDistanceToAcceptOrder and
                         os.clock() - 60 < orderClock then
-                        ORDERS:accept(orderNickname, orderClock)
+                        orders:accept(orderNickname, orderClock)
                     end
                 end
             else
                 if orderDistance <= ini.settings.maxDistanceToGetOrder and
                     os.clock() - 60 < orderClock then
-                    if not ORDERS.list[orderNickname].correct then
-                        ORDERS.list[orderNickname].correct = true
-                        ORDERS.lastCorrectOrderNickname = orderNickname
-                        ORDERS.lastCorrectOrderClock = os.clock()
+                    if not orders.list[orderNickname].correct then
+                        orders.list[orderNickname].correct = true
+                        orders.lastCorrectOrderNickname = orderNickname
+                        orders.lastCorrectOrderClock = os.clock()
                         lua_thread.create(function()
                             wait(500)
-                            if ORDERS.list[orderNickname] then
+                            if orders.list[orderNickname] then
                                 if ini.settings.notifications and
                                     ini.settings.sounds then
-                                    SOUNDS:play("correct_order")
+                                    sounds:play("correct_order")
                                 end
                                 if ini.settings.notifications then
                                     imgui:addNotificationWithButton(
                                         string.format(
                                             FORMAT_NOTIFICATIONS.newOrder,
                                             orderNickname,
-                                            ORDERS.list[orderNickname].id,
+                                            orders.list[orderNickname].id,
                                             orderDistance,
-                                            ORDERS.list[orderNickname].zone),
+                                            orders.list[orderNickname].zone),
                                         15, orderNickname)
                                 end
                             end
@@ -862,87 +863,86 @@ function ORDERS:handle(orderNickname, orderDistance, orderClock)
                 end
             end
         end
-    elseif orderNickname == ORDERS.currentOrder.nickname and
-        ini.settings.acceptRepeatOrder and ORDERS.currentOrder.repeatCount < 3 then
-        ORDERS:accept(orderNickname, orderClock)
+    elseif orderNickname == orders.currentOrder.nickname and
+        ini.settings.acceptRepeatOrder and orders.currentOrder.repeatCount < 3 then
+        orders:accept(orderNickname, orderClock)
     end
 end
 
-VEHICLE = {
+vehicle = {
     lastPassengersList = {},
     lastPassengersListSize = 3,
     passengersList = {},
     maxPassengers = nil,
-    vehicleName = nil,
+    name = nil,
     vehicleHandle = nil,
     markers = {},
     cruiseControlEnabled = false,
     gasPressed = false
 }
 
-function VEHICLE:refreshInfo()
+function vehicle:refreshInfoThread()
     while true do
         wait(0)
-        VEHICLE.vehicleName, VEHICLE.vehicleHandle, VEHICLE.maxPassengers =
-            VEHICLE:getInfo()
-        VEHICLE:refreshPassengersList()
+        vehicle.name, vehicle.handle, vehicle.maxPassengers = vehicle:getInfo()
+        vehicle:refreshPassengersList()
     end
 end
 
-function VEHICLE:addPassenger(passengerNickname)
+function vehicle:addPassenger(passengerNickname)
     local isPassengerInVehicle = false
 
-    for passengerIndex = 1, VEHICLE.lastPassengersListSize do
-        if passengerNickname == VEHICLE.lastPassengersList[passengerIndex] then
+    for passengerIndex = 1, vehicle.lastPassengersListSize do
+        if passengerNickname == vehicle.lastPassengersList[passengerIndex] then
             isPassengerInVehicle = true
             break
         end
     end
 
     if not isPassengerInVehicle then
-        for passengerindex = VEHICLE.lastPassengersListSize, 1, -1 do
-            VEHICLE.lastPassengersList[passengerindex] =
-                VEHICLE.lastPassengersList[passengerindex - 1]
+        for passengerindex = vehicle.lastPassengersListSize, 1, -1 do
+            vehicle.lastPassengersList[passengerindex] =
+                vehicle.lastPassengersList[passengerindex - 1]
         end
-        VEHICLE.lastPassengersList[1] = passengerNickname
+        vehicle.lastPassengersList[1] = passengerNickname
         if ini.settings.notifications and ini.settings.sounds then
-            SOUNDS:play("new_passenger")
+            sounds:play("new_passenger")
         end
     end
 end
 
-function VEHICLE:refreshPassengersList()
-    if VEHICLE.maxPassengers then
-        for passengerIndex = 0, VEHICLE.maxPassengers - 1 do
-            VEHICLE.passengersList[passengerIndex] = nil
+function vehicle:refreshPassengersList()
+    if vehicle.maxPassengers then
+        for passengerIndex = 0, vehicle.maxPassengers - 1 do
+            vehicle.passengersList[passengerIndex] = nil
         end
 
-        for seatIndex = 0, VEHICLE.maxPassengers - 1 do
-            if not isCarPassengerSeatFree(VEHICLE.vehicleHandle, seatIndex) then
+        for seatIndex = 0, vehicle.maxPassengers - 1 do
+            if not isCarPassengerSeatFree(vehicle.handle, seatIndex) then
                 local passengerHandle = getCharInCarPassengerSeat(
-                                            VEHICLE.vehicleHandle, seatIndex)
+                                            vehicle.handle, seatIndex)
                 local result, passengerID =
                     sampGetPlayerIdByCharHandle(passengerHandle)
                 if result then
                     local passengerNickname = sampGetPlayerNickname(passengerID)
-                    VEHICLE.passengersList[seatIndex] = {
+                    vehicle.passengersList[seatIndex] = {
                         nickname = passengerNickname,
                         id = passengerID
                     }
-                    VEHICLE:addPassenger(passengerNickname)
+                    vehicle:addPassenger(passengerNickname)
                 end
             end
         end
     end
 end
 
-function VEHICLE:getInfo()
+function vehicle:getInfo()
     for vehicleName, vehicleModelID in pairs(VEHICLE_MODEL_IDS) do
         if isCharInModel(PLAYER_PED, vehicleModelID) then
             local vehicleHandle = storeCarCharIsInNoSave(PLAYER_PED)
             if PLAYER_PED == getDriverOfCar(vehicleHandle) then
-                if VEHICLE:isTaxi(vehicleHandle) then
-                    local maxPassengers = VEHICLE:getMaxPassengers()
+                if vehicle:isTaxi(vehicleHandle) then
+                    local maxPassengers = vehicle:getMaxPassengers()
                     return vehicleName, vehicleHandle, maxPassengers
                 end
             end
@@ -952,7 +952,7 @@ function VEHICLE:getInfo()
     return nil, nil, nil
 end
 
-function VEHICLE:isTaxi(vehicleHandle)
+function vehicle:isTaxi(vehicleHandle)
     local result, id = sampGetVehicleIdByCarHandle(vehicleHandle)
     if result then
         for textId = 0, 2048 do
@@ -969,8 +969,8 @@ function VEHICLE:isTaxi(vehicleHandle)
     return false
 end
 
-function VEHICLE:isPassengerIn(vehicleHandle, nickname)
-    for seatIndex = 0, VEHICLE.maxPassengers - 1 do
+function vehicle:isPassengerIn(vehicleHandle, nickname)
+    for seatIndex = 0, vehicle.maxPassengers - 1 do
         if not isCarPassengerSeatFree(vehicleHandle, seatIndex) then
             local passengerHandle = getCharInCarPassengerSeat(vehicleHandle,
                                                               seatIndex)
@@ -985,56 +985,56 @@ function VEHICLE:isPassengerIn(vehicleHandle, nickname)
     return false
 end
 
-function VEHICLE:getMaxPassengers()
-    if VEHICLE.vehicleName == "Buffalo" then
+function vehicle:getMaxPassengers()
+    if vehicle.name == "Buffalo" then
         return 1
-    elseif VEHICLE.vehicleName then
+    elseif vehicle.name then
         return 3
     else
         return nil
     end
 end
 
-function VEHICLE:drawMarkers()
+function vehicle:drawMarkers()
     for id = 0, 999 do
         if sampIsPlayerConnected(id) then
             local charInStream, charHandle = sampGetCharHandleBySampPlayerId(id)
             if charInStream then
-                if not VEHICLE.markers[id] then
+                if not vehicle.markers[id] then
                     if isCharInAnyCar(charHandle) and sampGetPlayerColor(id) ==
                         16777215 then
-                        VEHICLE.markers[id] = addBlipForChar(charHandle)
-                        changeBlipDisplay(VEHICLE.markers[id], 2)
-                        changeBlipColour(VEHICLE.markers[id], 0xFFFFFF25)
+                        vehicle.markers[id] = addBlipForChar(charHandle)
+                        changeBlipDisplay(vehicle.markers[id], 2)
+                        changeBlipColour(vehicle.markers[id], 0xFFFFFF25)
                     end
                 elseif not isCharInAnyCar(charHandle) or sampGetPlayerColor(id) ~=
                     16777215 then
-                    removeBlip(VEHICLE.markers[id])
-                    VEHICLE.markers[id] = nil
+                    removeBlip(vehicle.markers[id])
+                    vehicle.markers[id] = nil
                 end
             else
-                if VEHICLE.markers[id] then
-                    removeBlip(VEHICLE.markers[id])
-                    VEHICLE.markers[id] = nil
+                if vehicle.markers[id] then
+                    removeBlip(vehicle.markers[id])
+                    vehicle.markers[id] = nil
                 end
             end
         end
     end
 end
 
-function VEHICLE:clearMarkers()
-    for id, marker in pairs(VEHICLE.markers) do
+function vehicle:clearMarkers()
+    for id, marker in pairs(vehicle.markers) do
         removeBlip(marker)
-        VEHICLE.markers[id] = nil
+        vehicle.markers[id] = nil
     end
 end
 
-function VEHICLE:cruiseControl()
+function vehicle:cruiseControl()
     if not isCharInAnyCar(PLAYER_PED) then return end
     local car = storeCarCharIsInNoSave(PLAYER_PED)
-    if VEHICLE.cruiseControlEnabled then
+    if vehicle.cruiseControlEnabled then
         if not isCarEngineOn(car) or not isCharInAnyCar(PLAYER_PED) then
-            VEHICLE.cruiseControlEnabled = false
+            vehicle.cruiseControlEnabled = false
             if ini.settings.notifications then
                 imgui:addNotification(
                     FORMAT_NOTIFICATIONS.cruiseControlDisabled, 2, -8)
@@ -1043,25 +1043,25 @@ function VEHICLE:cruiseControl()
         end
     end
     if not sampIsChatInputActive() and not sampIsDialogActive() then
-        if VEHICLE.gasPressed and not isKeyDown(87) then
-            VEHICLE.gasPressed = false
+        if vehicle.gasPressed and not isKeyDown(87) then
+            vehicle.gasPressed = false
         end
         if isCarEngineOn(car) and isCharInAnyCar(PLAYER_PED) and PLAYER_PED ==
             getDriverOfCar(car) then
             if isKeyJustPressed(ini.settings.key4) then
-                VEHICLE.cruiseControlEnabled = not VEHICLE.cruiseControlEnabled
+                vehicle.cruiseControlEnabled = not vehicle.cruiseControlEnabled
                 if ini.settings.notifications then
                     local text = FORMAT_NOTIFICATIONS.cruiseControlEnabled
-                    if not VEHICLE.cruiseControlEnabled then
+                    if not vehicle.cruiseControlEnabled then
                         text = FORMAT_NOTIFICATIONS.cruiseControlDisabled
                     end
                     imgui:addNotification(text, 2, -8)
                 end
-                VEHICLE.gasPressed = true
-            elseif VEHICLE.cruiseControlEnabled and
+                vehicle.gasPressed = true
+            elseif vehicle.cruiseControlEnabled and
                 not isKeyJustPressed(ini.settings.key4) and
-                (isKeyDown(87) or isKeyDown(83)) and not VEHICLE.gasPressed then
-                VEHICLE.cruiseControlEnabled = false
+                (isKeyDown(87) or isKeyDown(83)) and not vehicle.gasPressed then
+                vehicle.cruiseControlEnabled = false
                 if ini.settings.notifications then
                     imgui:addNotification(
                         FORMAT_NOTIFICATIONS.cruiseControlDisabled, 2, -8)
@@ -1069,10 +1069,10 @@ function VEHICLE:cruiseControl()
             end
         end
     end
-    if VEHICLE.cruiseControlEnabled then setGameKeyState(16, 255) end
+    if vehicle.cruiseControlEnabled then setGameKeyState(16, 255) end
 end
 
-PLAYER = {
+player = {
     id = nil,
     nickname = nil,
     onWork = false,
@@ -1087,12 +1087,12 @@ PLAYER = {
     connected = false
 }
 
-function PLAYER:refresh()
-    if not CHAT.hiddenMessages["/paycheck"].bool then
-        CHAT:addMessageToQueue("/paycheck", true, true)
+function player:refresh()
+    if not chat.hiddenMessages["/paycheck"].bool then
+        chat:addMessageToQueue("/paycheck", true, true)
     end
-    if not CHAT.hiddenMessages["/jskill"].bool then
-        CHAT:addMessageToQueue("/jskill", true, true)
+    if not chat.hiddenMessages["/jskill"].bool then
+        chat:addMessageToQueue("/jskill", true, true)
     end
 end
 
@@ -1100,7 +1100,7 @@ ini = {
     settings = {
         checkUpdates = true,
         showHUD = true,
-        showBINDS = true,
+        showBinds = true,
         sounds = true,
         notifications = true,
         sendSMS = true,
@@ -1120,7 +1120,7 @@ ini = {
         key2add = 88,
         key3 = 88,
         key3add = 82,
-        key4 = 18,
+        key4 = 67,
         binderPosX = 36,
         binderPosY = 103,
         hudPosX = 498,
@@ -1151,24 +1151,24 @@ local defaults = {
     canceledOrderDelay = 120
 }
 
-SOUNDS = {list = {}}
+sounds = {list = {}}
 
-function SOUNDS:loadSound(soundName)
-    SOUNDS.list[soundName] = loadAudioStream(
+function sounds:loadSound(soundName)
+    sounds.list[soundName] = loadAudioStream(
                                  getWorkingDirectory() .. "/rsc/" .. soundName ..
                                      ".mp3")
 end
 
-function SOUNDS:play(soundName)
-    if SOUNDS.list[soundName] then
-        setAudioStreamVolume(SOUNDS.list[soundName],
+function sounds:play(soundName)
+    if sounds.list[soundName] then
+        setAudioStreamVolume(sounds.list[soundName],
                              ini.settings.soundVolume / 100)
-        setAudioStreamState(SOUNDS.list[soundName],
+        setAudioStreamState(sounds.list[soundName],
                             moonloader.audiostream_state.PLAY)
     end
 end
 
-BINDS = {
+binds = {
     list = {},
     defaults = {
         binds = {
@@ -1221,10 +1221,10 @@ BINDS = {
     }
 }
 
-function BINDS:chooseEdit(key, bindIndex)
-    BINDS.list[key][bindIndex].edit = true
-    for keyname in pairs(BINDS.list) do
-        for _bindIndex, _bind in pairs(BINDS.list[keyname]) do
+function binds:chooseEdit(key, bindIndex)
+    binds.list[key][bindIndex].edit = true
+    for keyname in pairs(binds.list) do
+        for _bindIndex, _bind in pairs(binds.list[keyname]) do
             if _bindIndex ~= bindIndex or keyname ~= key then
                 _bind.edit = false
             end
@@ -1232,23 +1232,22 @@ function BINDS:chooseEdit(key, bindIndex)
     end
 end
 
-function BINDS:get()
+function binds:get()
     local list = {}
 
-    local binds = io.open(
-                      getWorkingDirectory() .. "/config/Taximate/binds.json",
-                      "r")
+    local bindsFile = io.open(getWorkingDirectory() ..
+                                  "/config/Taximate/binds.json", "r")
 
     local json = nil
 
-    if binds then
-        local content = binds:read("*a")
-        binds:close()
+    if bindsFile then
+        local content = bindsFile:read("*a")
+        bindsFile:close()
         local jsonFromFile = decodeJson(content)
         local newjson = {
             binds = {},
-            actions = BINDS.defaults.actions,
-            sms = BINDS.defaults.sms
+            actions = binds.defaults.actions,
+            sms = binds.defaults.sms
         }
         for key, value in pairs(jsonFromFile) do
             if type(key) == "string" and key == "binds" then
@@ -1265,12 +1264,12 @@ function BINDS:get()
         end
         if json == nil then json = newjson end
     else
-        binds = io.open(getWorkingDirectory() .. "/config/Taximate/binds.json",
-                        "w")
-        local content = encodeJson(BINDS.defaults)
-        binds:write(content)
-        binds:close()
-        json = BINDS.defaults
+        bindsFile = io.open(getWorkingDirectory() ..
+                                "/config/Taximate/binds.json", "w")
+        local content = encodeJson(binds.defaults)
+        bindsFile:write(content)
+        bindsFile:close()
+        json = binds.defaults
     end
 
     for keyname, bind in pairs(json) do
@@ -1293,26 +1292,25 @@ function BINDS:get()
     return list
 end
 
-function BINDS:delete(key, index)
-    for i = index, #BINDS.list[key] + 1 do
-        BINDS.list[key][i] = BINDS.list[key][i + 1]
+function binds:delete(key, index)
+    for i = index, #binds.list[key] + 1 do
+        binds.list[key][i] = binds.list[key][i + 1]
     end
-    BINDS:save()
+    binds:save()
 end
 
-function BINDS:isEdit(key)
-    for bindIndex, bind in pairs(BINDS.list[key]) do
+function binds:isEdit(key)
+    for bindIndex, bind in pairs(binds.list[key]) do
         if bind.edit then return true end
     end
     return false
 end
 
-function BINDS:save()
-    local binds = io.open(
-                      getWorkingDirectory() .. "/config/Taximate/binds.json",
-                      "w")
+function binds:save()
+    local bindsFile = io.open(getWorkingDirectory() ..
+                                  "/config/Taximate/binds.json", "w")
     local json = {}
-    for keyname, bind in pairs(BINDS.list) do
+    for keyname, bind in pairs(binds.list) do
         json[keyname] = {}
         for index, value in pairs(bind) do
             table.insert(json[keyname], {
@@ -1324,14 +1322,14 @@ function BINDS:save()
         end
     end
     local content = encodeJson(json)
-    binds:write(content)
-    binds:close()
+    bindsFile:write(content)
+    bindsFile:close()
 end
 
-function BINDS:pressProcessingThread()
+function binds:pressProcessingThread()
     while true do
         wait(0)
-        for key, binds in pairs(BINDS.list) do
+        for key, binds in pairs(binds.list) do
             for index, bind in ipairs(binds) do
                 if isKeysPressed(bind.key, bind.addKey, false) and
                     not imgui.showInputWindow.v and not sampIsDialogActive() and
@@ -1339,16 +1337,16 @@ function BINDS:pressProcessingThread()
                     ini.settings.hotKeys then
                     local text = bind.buffer.v
                     if key == "sms" then
-                        if ORDERS.currentOrder then
+                        if orders.currentOrder then
                             text = string.format("/t %d %s",
-                                                 ORDERS.currentOrder.id,
-                                                 CHAT:subSMSText(
+                                                 orders.currentOrder.id,
+                                                 chat:subSMSText(
                                                      ini.settings.SMSPrefix,
                                                      bind.buffer.v))
-                            CHAT:addMessageToQueue(text)
+                            chat:addMessageToQueue(text)
                         end
                     else
-                        CHAT:addMessageToQueue(text)
+                        chat:addMessageToQueue(text)
                     end
                 end
             end
@@ -1358,147 +1356,150 @@ end
 
 function sampev.onShowDialog(DdialogId, Dstyle, Dtitle, Dbutton1, Dbutton2,
                              Dtext)
-    if PLAYER.connected then
+    if player.connected then
         if Dstyle == 0 and string.find(Dtext, "Таксист") then
             lua_thread.create(function()
                 local line = 0
                 for string in string.gmatch(Dtext, "[^\n]+") do
                     line = line + 1
                     if line == 5 then
-                        PLAYER.skill, PLAYER.skillExp =
+                        player.skill, player.skillExp =
                             string.match(string, MESSAGES.skill)
-                        PLAYER.skillClients = math.ceil(
-                                                  (100 - PLAYER.skillExp) /
+                        player.skillClients = math.ceil(
+                                                  (100 - player.skillExp) /
                                                       (((9600 / 100 *
                                                           (1.1 ^
-                                                              (50 - PLAYER.skill))) *
+                                                              (50 - player.skill))) *
                                                           100) /
                                                           (5000 *
                                                               (1.1 ^
-                                                                  PLAYER.skill))))
+                                                                  player.skill))))
                     end
                     if line == 6 then
-                        PLAYER.rank, PLAYER.rankExp =
+                        player.rank, player.rankExp =
                             string.match(string, MESSAGES.rank)
                     end
                 end
             end)
-            if CHAT.hiddenMessages["/jskill"].bool then
-                CHAT.hiddenMessages["/jskill"].bool = false
+            if chat.hiddenMessages["/jskill"].bool then
+                chat.hiddenMessages["/jskill"].bool = false
                 sampSendDialogResponse(DdialogId, 0)
                 return false
             end
         elseif string.find(Dtitle, "GPS") then
-            if CHAT.hiddenMessages["/gps"].bool then
-                CHAT.hiddenMessages["/gps"].bool = false
-                ORDERS.GPSMark = nil
+            if chat.hiddenMessages["/gps"].bool then
+                chat.hiddenMessages["/gps"].bool = false
+                orders.GPSMark = nil
                 sampSendDialogResponse(DdialogId, 0)
                 return false
             else
                 lua_thread.create(function()
-                    if ORDERS.currentOrderBlip then
-                        ORDERS.currentOrder.showMark = false
-                        removeBlip(ORDERS.currentOrderBlip)
-                        deleteCheckpoint(ORDERS.currentOrderCheckpoint)
-                        ORDERS.currentOrderBlip = nil
-                        ORDERS.currentOrderCheckpoint = nil
+                    if orders.currentOrderBlip then
+                        orders.currentOrder.showMark = false
+                        removeBlip(orders.currentOrderBlip)
+                        deleteCheckpoint(orders.currentOrderCheckpoint)
+                        orders.currentOrderBlip = nil
+                        orders.currentOrderCheckpoint = nil
                     end
                 end)
             end
         elseif string.find(Dtitle, "Вызовы") then
             lua_thread.create(function()
-                local orders = {}
+                local ordersList = {}
 
                 for string in string.gmatch(Dtext, "[^\n]+") do
                     local nickname, id, time, distance
                     if string:find("/service ac taxi") then
                         nickname, id, time, distance =
                             string.match(string, MESSAGES.order)
+                        chat:sendMessage("1")
                     else
                         nickname, id, time, distance =
                             string.match(string, utf8sub(MESSAGES.order, 1,
                                                          utf8len(MESSAGES.order) -
                                                              1))
+                        chat:sendMessage("2")
                     end
+                    chat:sendMessage(nickname)
                     time = stringToSeconds(time)
                     distance = stringToMeters(distance)
-                    if ORDERS.list[nickname] then
-                        if distance < ORDERS.list[nickname].distance then
-                            ORDERS.list[nickname].direction = 1
-                        elseif distance > ORDERS.list[nickname].distance then
-                            ORDERS.list[nickname].direction = -1
+                    if orders.list[nickname] then
+                        if distance < orders.list[nickname].distance then
+                            orders.list[nickname].direction = 1
+                        elseif distance > orders.list[nickname].distance then
+                            orders.list[nickname].direction = -1
                         end
-                        ORDERS.list[nickname].distance = distance
-                        ORDERS.list[nickname].time = os.clock() - time
+                        orders.list[nickname].distance = distance
+                        orders.list[nickname].time = os.clock() - time
                     else
-                        ORDERS:add(nickname, id, distance, os.clock() - time)
+                        orders:add(nickname, id, distance, os.clock() - time)
                     end
-                    table.insert(orders, nickname)
+                    table.insert(ordersList, nickname)
                     local posX, posY = getCharCoordinates(PLAYER_PED)
-                    if not ORDERS.list[nickname].tempCircles[1] then
-                        ORDERS.list[nickname].tempCircles[1] = {
+                    if not orders.list[nickname].tempCircles[1] then
+                        orders.list[nickname].tempCircles[1] = {
                             x = posX,
                             y = posY,
                             radius = distance
                         }
-                    elseif not ORDERS.list[nickname].tempCircles[2] then
-                        if math.abs(ORDERS.list[nickname].tempCircles[1].x -
+                    elseif not orders.list[nickname].tempCircles[2] then
+                        if math.abs(orders.list[nickname].tempCircles[1].x -
                                         posX) > 15 or
                             math.abs(
-                                ORDERS.list[nickname].tempCircles[1].y - posY) >
+                                orders.list[nickname].tempCircles[1].y - posY) >
                             15 then
-                            ORDERS.list[nickname].tempCircles[2] = {
+                            orders.list[nickname].tempCircles[2] = {
                                 x = posX,
                                 y = posY,
                                 radius = distance
                             }
                         end
-                    elseif not ORDERS.list[nickname].tempCircles[3] then
-                        if (math.abs(ORDERS.list[nickname].tempCircles[1].x -
+                    elseif not orders.list[nickname].tempCircles[3] then
+                        if (math.abs(orders.list[nickname].tempCircles[1].x -
                                          posX) > 15 or
                             math.abs(
-                                ORDERS.list[nickname].tempCircles[1].y - posY) >
+                                orders.list[nickname].tempCircles[1].y - posY) >
                             15) and
                             (math.abs(
-                                ORDERS.list[nickname].tempCircles[2].x - posX) >
+                                orders.list[nickname].tempCircles[2].x - posX) >
                                 15 or
                                 math.abs(
-                                    ORDERS.list[nickname].tempCircles[2].y -
+                                    orders.list[nickname].tempCircles[2].y -
                                         posY) > 15) then
-                            ORDERS.list[nickname].tempCircles[3] = {
+                            orders.list[nickname].tempCircles[3] = {
                                 x = posX,
                                 y = posY,
                                 radius = distance
                             }
                             local result, calcX, calcY =
-                                ORDERS:calculate2dCoords(
-                                    ORDERS.list[nickname].tempCircles[1],
-                                    ORDERS.list[nickname].tempCircles[2],
-                                    ORDERS.list[nickname].tempCircles[3])
+                                orders:calculate2dCoords(
+                                    orders.list[nickname].tempCircles[1],
+                                    orders.list[nickname].tempCircles[2],
+                                    orders.list[nickname].tempCircles[3])
                             if result then
-                                ORDERS.list[nickname].pos = {
+                                orders.list[nickname].pos = {
                                     x = calcX,
                                     y = calcY,
                                     z = 30
                                 }
-                                ORDERS.list[nickname].zone = getZone(calcX,
+                                orders.list[nickname].zone = getZone(calcX,
                                                                      calcY)
                             end
 
-                            ORDERS.list[nickname].tempCircles[1] = nil
-                            ORDERS.list[nickname].tempCircles[2] = nil
-                            ORDERS.list[nickname].tempCircles[3] = nil
+                            orders.list[nickname].tempCircles[1] = nil
+                            orders.list[nickname].tempCircles[2] = nil
+                            orders.list[nickname].tempCircles[3] = nil
                         end
                     end
                 end
-                for order in pairs(ORDERS.list) do
-                    if not table:contains(order, orders) then
-                        ORDERS:delete(order)
+                for order in pairs(orders.list) do
+                    if not table:contains(order, ordersList) then
+                        orders:delete(order)
                     end
                 end
             end)
-            if CHAT.hiddenMessages["/service"].bool then
-                CHAT.hiddenMessages["/service"].bool = false
+            if chat.hiddenMessages["/service"].bool then
+                chat.hiddenMessages["/service"].bool = false
                 sampSendDialogResponse(DdialogId, 0)
                 return false
             end
@@ -1507,42 +1508,42 @@ function sampev.onShowDialog(DdialogId, Dstyle, Dtitle, Dbutton1, Dbutton2,
 end
 
 function sampev.onSendDialogResponse(dialogId, button, listboxId, input)
-    CHAT.dialogClock = os.clock() + 1
+    chat.dialogClock = os.clock() + 1
 end
 
 function sampev.onServerMessage(color, message)
-    if PLAYER.connected then
+    if player.connected then
         if string.find(message, MESSAGES.service) then
             return false
         elseif string.find(message, MESSAGES.payCheck) then
-            PLAYER.salary, PLAYER.salaryLimit =
+            player.salary, player.salaryLimit =
                 string.match(message, MESSAGES.payCheckFormat)
-            if not PLAYER.salary then
-                PLAYER.salary = 0
-                PLAYER.salaryLimit = 0
+            if not player.salary then
+                player.salary = 0
+                player.salaryLimit = 0
             end
-            if CHAT.hiddenMessages["/paycheck"].bool then
-                CHAT.hiddenMessages["/paycheck"].bool = false
+            if chat.hiddenMessages["/paycheck"].bool then
+                chat.hiddenMessages["/paycheck"].bool = false
                 return false
             end
         elseif string.find(message, MESSAGES.clist) then
-            if CHAT.hiddenMessages["/clist"].bool then
-                CHAT.hiddenMessages["/clist"].bool = false
+            if chat.hiddenMessages["/clist"].bool then
+                chat.hiddenMessages["/clist"].bool = false
                 return false
             end
         elseif string.find(message, MESSAGES.noOrders) or
             string.find(message, MESSAGES.enterService) then
-            if CHAT.hiddenMessages["/service"].bool then
-                CHAT.hiddenMessages["/service"].bool = false
+            if chat.hiddenMessages["/service"].bool then
+                chat.hiddenMessages["/service"].bool = false
                 return false
             end
         elseif string.find(message, MESSAGES.wrongPerson) then
-            if ORDERS.orderAccepted then
-                ORDERS.orderAccepted = false
+            if orders.orderAccepted then
+                orders.orderAccepted = false
                 return false
             end
         else
-            CHAT:handleInputMessage(message)
+            chat:handleInputMessage(message)
             if string.find(message, MESSAGES.newOrderFormat) or
                 string.find(message, MESSAGES.orderAcceptedFormat) then
                 if not ini.settings.dispatcherMessages then
@@ -1554,20 +1555,20 @@ function sampev.onServerMessage(color, message)
 end
 
 function sampev.onSendChat(message)
-    CHAT.lastMessage = message
-    CHAT:updateAntifloodClock()
+    chat.lastMessage = message
+    chat:updateAntifloodClock()
 end
 
 function sampev.onSendCommand(command)
-    CHAT.lastMessage = command
-    CHAT:updateAntifloodClock()
+    chat.lastMessage = command
+    chat:updateAntifloodClock()
 end
 
 function sampev.onSendSpawn()
-    if PLAYER.onWork then
-        if ini.settings.autoClist and not CHAT.hiddenMessages["/clist"].bool and
+    if player.onWork then
+        if ini.settings.autoClist and not chat.hiddenMessages["/clist"].bool and
             ini.settings.workClist ~= 0 then
-            CHAT:addMessageToQueue("/clist " .. ini.settings.workClist, true,
+            chat:addMessageToQueue("/clist " .. ini.settings.workClist, true,
                                    true)
         end
     end
@@ -1575,9 +1576,9 @@ end
 
 function onScriptTerminate(script, quitGame)
     if script == thisScript() then
-        removeBlip(ORDERS.currentOrderBlip)
-        deleteCheckpoint(ORDERS.currentOrderCheckpoint)
-        VEHICLE:clearMarkers()
+        removeBlip(orders.currentOrderBlip)
+        deleteCheckpoint(orders.currentOrderCheckpoint)
+        vehicle:clearMarkers()
         imgui.Process = false
     end
 end
@@ -1694,7 +1695,7 @@ function imgui:initBuffers()
 end
 
 function imgui:showActions(passengerIndex, passengers)
-    for bindIndex, bind in pairs(BINDS.list.actions) do
+    for bindIndex, bind in pairs(binds.list.actions) do
         imgui.NewLine()
         local x1 = 10.5
         if passengers then x1 = x1 + 10 end
@@ -1707,14 +1708,14 @@ function imgui:showActions(passengerIndex, passengers)
             imgui.PushStyleVar(imgui.StyleVar.FramePadding, vec(4, 1.1))
             imgui.PushID(bindIndex)
             if imgui.InputText("##text", bind.buffer) then
-                BINDS:save()
+                binds:save()
             end
             imgui:SetTooltip(bind.buffer.v, 500)
             imgui.PopID()
             imgui.SameLine()
             imgui.PushID(bindIndex)
             if imgui.InputText("##cmd", bind.bufferCmd) then
-                BINDS:save()
+                binds:save()
             end
             imgui.PopID()
             imgui.PopStyleVar()
@@ -1724,28 +1725,28 @@ function imgui:showActions(passengerIndex, passengers)
                              500)
             imgui.SameLine()
             if imgui.Button("X##actions" .. bindIndex, vec(7, 10)) then
-                BINDS.list.actions[bindIndex].edit = false
-                BINDS:delete("actions", bindIndex)
+                binds.list.actions[bindIndex].edit = false
+                binds:delete("actions", bindIndex)
             end
             imgui.SameLine()
             if imgui.Button("-##actions" .. bindIndex, vec(5, 10)) or
                 isKeyJustPressed(13) then
                 bind.edit = false
-                BINDS:save()
+                binds:save()
             end
         else
             local x2 = 80.5
             if passengers then x2 = x2 - 10 end
             if imgui.Button(bind.buffer.v .. "##actions", vec(x2, 10)) and
                 passengerIndex ~= -1 then
-                CHAT:addMessageToQueue(bind.bufferCmd.v:gsub("{id}", tostring(
-                                                                 VEHICLE.passengersList[passengerIndex]
+                chat:addMessageToQueue(bind.bufferCmd.v:gsub("{id}", tostring(
+                                                                 vehicle.passengersList[passengerIndex]
                                                                      .id)))
             end
             imgui.SameLine()
             if imgui.Button("+##actions" .. bindIndex, vec(5, 10)) then
-                BINDS:chooseEdit("actions", bindIndex)
-                BINDS:save()
+                binds:chooseEdit("actions", bindIndex)
+                binds:save()
             end
         end
         imgui.PopID()
@@ -1765,7 +1766,7 @@ function imgui.OnDrawFrame()
         not (ini.settings.fastMapCompatibility and isKeyDown(fastMapKey)) then
         imgui:onDrawNotification()
         if ini.settings.showHUD then imgui:onDrawHUD() end
-        if ini.settings.showBINDS then imgui:OnDrawBinder() end
+        if ini.settings.showBinds then imgui:OnDrawBinder() end
         if imgui.showSettings.v then imgui:onDrawSettings() end
     end
 end
@@ -1853,22 +1854,22 @@ end
 
 imgui.hudHovered = false
 function imgui:onDrawHUD()
-    if VEHICLE.vehicleName or
+    if vehicle.name or
         isKeysPressed(ini.settings.key1, ini.settings.key1add, true) then
         local windowPosY = 0
         local zone = nil
         local gps = nil
-        if ORDERS.currentOrder then
+        if orders.currentOrder then
             windowPosY = windowPosY + 37
-        elseif ORDERS.GPSMark then
+        elseif orders.GPSMark then
             windowPosY = windowPosY + 9.5
-            zone = getZone(ORDERS.GPSMark.x, ORDERS.GPSMark.y)
-            gps = {x = ORDERS.GPSMark.x, y = ORDERS.GPSMark.y}
+            zone = getZone(orders.GPSMark.x, orders.GPSMark.y)
+            gps = {x = orders.GPSMark.x, y = orders.GPSMark.y}
         end
 
         if not (imgui.hudHovered and imgui.IsMouseDragging(0) and
             isKeysPressed(ini.settings.key1, ini.settings.key1add, true)) or
-            ORDERS.currentOrder or ORDERS.GPSMark then
+            orders.currentOrder or orders.GPSMark then
             imgui.SetNextWindowPos(vec(ini.settings.hudPosX,
                                        ini.settings.hudPosY - windowPosY))
             imgui.SetNextWindowSize(vec(105, 42 + windowPosY))
@@ -1888,13 +1889,13 @@ function imgui:onDrawHUD()
             math.ceil(savePosY) ~= math.ceil(ini.settings.hudPosY)) and
             imgui.IsRootWindowOrAnyChildFocused() and imgui.IsMouseDragging(0) and
             imgui.IsRootWindowOrAnyChildHovered() and
-            not (ORDERS.currentOrder or ORDERS.GPSMark) then
+            not (orders.currentOrder or orders.GPSMark) then
             ini.settings.hudPosX = math.ceil(savePosX)
             ini.settings.hudPosY = math.ceil(savePosY)
             inicfg.save(ini, "Taximate/settings.ini")
         end
 
-        if not PLAYER.onWork then
+        if not player.onWork then
             local buttonText = "Начать рабочий день"
             if ini.settings.hotKeys then
                 if ini.settings.key3 ~= 0 then
@@ -1908,9 +1909,9 @@ function imgui:onDrawHUD()
                 end
             end
             if imgui.Button(buttonText, vec(100, 10)) then
-                PLAYER.onWork = true
+                player.onWork = true
                 if ini.settings.autoClist and ini.settings.workClist ~= 0 then
-                    CHAT:addMessageToQueue("/clist " .. ini.settings.workClist,
+                    chat:addMessageToQueue("/clist " .. ini.settings.workClist,
                                            true, true)
                 end
             end
@@ -1928,9 +1929,9 @@ function imgui:onDrawHUD()
                 end
             end
             if imgui.Button(buttonText, vec(100, 10)) then
-                PLAYER.onWork = false
+                player.onWork = false
                 if ini.settings.autoClist then
-                    CHAT:addMessageToQueue("/clist 0", true, true)
+                    chat:addMessageToQueue("/clist 0", true, true)
                 end
             end
         end
@@ -1949,51 +1950,51 @@ function imgui:onDrawHUD()
                              imgui.WindowFlags.NoScrollbar)
             imgui.PushStyleVar(imgui.StyleVar.FramePadding, vec(2, 0))
             if imgui.Button("X") then
-                CHAT:addMessageToQueue("/gps", true, true)
+                chat:addMessageToQueue("/gps", true, true)
             end
             imgui.PopStyleVar()
             imgui.EndChild()
         end
         imgui.BeginChild("##midleft", vec(56, 8), false,
                          imgui.WindowFlags.NoScrollbar)
-        imgui:TextColoredRGB("Скилл: {4296f9}" .. PLAYER.skill ..
-                                 " {FFFFFF}(" .. PLAYER.skillExp .. "%)")
+        imgui:TextColoredRGB("Скилл: {4296f9}" .. player.skill ..
+                                 " {FFFFFF}(" .. player.skillExp .. "%)")
         imgui.SameLine()
         imgui.TextDisabled("(?)")
         imgui:SetTooltip(
             "Клиентов до следующего уровня: " ..
-                PLAYER.skillClients, 70)
+                player.skillClients, 70)
         imgui.EndChild()
         imgui.SameLine()
         imgui.BeginChild("##midright", vec(44, 8), false,
                          imgui.WindowFlags.NoScrollbar)
         imgui:TextColoredRGB(
-            "Ранг: {4296f9}" .. PLAYER.rank .. " {FFFFFF}(" ..
-                PLAYER.rankExp .. "%)")
+            "Ранг: {4296f9}" .. player.rank .. " {FFFFFF}(" ..
+                player.rankExp .. "%)")
         imgui.EndChild()
         imgui.BeginChild("##bottomleft", vec(56.5, 8), false,
                          imgui.WindowFlags.NoScrollbar)
-        imgui:TextColoredRGB("ЗП: {4296f9}" .. PLAYER.salary .. " / " ..
-                                 PLAYER.salaryLimit .. "{FFFFFF} вирт")
+        imgui:TextColoredRGB("ЗП: {4296f9}" .. player.salary .. " / " ..
+                                 player.salaryLimit .. "{FFFFFF} вирт")
         imgui.EndChild()
         imgui.SameLine()
         imgui.BeginChild("##bottomright ", vec(43.5, 8), false,
                          imgui.WindowFlags.NoScrollbar)
-        imgui:TextColoredRGB("Чай: {4296f9}" .. PLAYER.tips ..
+        imgui:TextColoredRGB("Чай: {4296f9}" .. player.tips ..
                                  "{FFFFFF} вирт")
         imgui.EndChild()
 
-        if ORDERS.currentOrder then
+        if orders.currentOrder then
             imgui.BeginChild("bottom  ", vec(100, 34), true,
                              imgui.WindowFlags.NoScrollbar)
             imgui:TextColoredRGB("Клиент: {4296f9}" ..
-                                     ORDERS.currentOrder.nickname .. "[" ..
-                                     ORDERS.currentOrder.id .. "]")
+                                     orders.currentOrder.nickname .. "[" ..
+                                     orders.currentOrder.id .. "]")
             imgui:TextColoredRGB("Район: {4296f9}" ..
-                                     ORDERS.currentOrder.zone ..
+                                     orders.currentOrder.zone ..
                                      "{FFFFFF},{4296f9} " ..
                                      metersToString(
-                                         ORDERS.currentOrder.currentDistance))
+                                         orders.currentOrder.currentDistance))
             local buttonText = "Отменить вызов"
             if ini.settings.hotKeys then
                 if ini.settings.key2 ~= 0 then
@@ -2007,7 +2008,7 @@ function imgui:onDrawHUD()
                 end
             end
             if imgui.Button(buttonText, vec(95, 10)) then
-                ORDERS:cancelCurrentOrder()
+                orders:cancelCurrentOrder()
             end
             imgui.EndChild()
         end
@@ -2019,8 +2020,8 @@ end
 imgui.bindHovered = false
 function imgui:OnDrawBinder()
     if isKeysPressed(ini.settings.key1, ini.settings.key1add, true) or
-        BINDS:isEdit("binds") or BINDS:isEdit("actions") or BINDS:isEdit("sms") then
-        local passengers = not table:isEmpty(VEHICLE.passengersList)
+        binds:isEdit("binds") or binds:isEdit("actions") or binds:isEdit("sms") then
+        local passengers = not table:isEmpty(vehicle.passengersList)
         local sizeX = 104
 
         imgui.ShowCursor = true
@@ -2031,7 +2032,7 @@ function imgui:OnDrawBinder()
 
         if not (imgui.bindHovered and imgui.IsMouseDragging(0) and
             (isKeysPressed(ini.settings.key1, ini.settings.key1add, true) or
-                BINDS:isEdit("binds"))) then
+                binds:isEdit("binds"))) then
             imgui.SetNextWindowPos(vec(ini.settings.binderPosX,
                                        ini.settings.binderPosY))
             imgui.SetNextWindowSize(vec(sizeX, 225))
@@ -2048,7 +2049,7 @@ function imgui:OnDrawBinder()
             math.ceil(savePosY) ~= math.ceil(ini.settings.binderPosY)) and
             (imgui.bindHovered and imgui.IsMouseDragging(0) and
                 (isKeysPressed(ini.settings.key1, ini.settings.key1add, true) or
-                    BINDS:isEdit("binds"))) then
+                    binds:isEdit("binds"))) then
             ini.settings.binderPosX = math.ceil(savePosX)
             ini.settings.binderPosY = math.ceil(savePosY)
             inicfg.save(ini, "Taximate/settings.ini")
@@ -2061,25 +2062,25 @@ function imgui:OnDrawBinder()
             imgui.NewLine()
             imgui.SameLine(toScreenX(10.5))
             if imgui.Button("Добавить сообщение", vec(87.5, 9)) then
-                if not BINDS:isEdit("sms") then
-                    local num = #BINDS.list.sms + 1
+                if not binds:isEdit("sms") then
+                    local num = #binds.list.sms + 1
                     if num - 1 < 12 then
                         local buffer = imgui.ImBuffer(128)
                         local bufferCmd = imgui.ImBuffer(128)
                         buffer.v = "Новое сообщение"
                         bufferCmd.v = ""
-                        BINDS.list.sms[num] = {
+                        binds.list.sms[num] = {
                             buffer = buffer,
                             bufferCmd = bufferCmd,
                             key = 0,
                             addKey = 0,
                             edit = false
                         }
-                        BINDS:save()
+                        binds:save()
                     end
                 end
             end
-            for bindIndex, bind in pairs(BINDS.list.sms) do
+            for bindIndex, bind in pairs(binds.list.sms) do
                 imgui.NewLine()
                 imgui.SameLine(toScreenX(10.5))
                 imgui.PushID(bindIndex + 200)
@@ -2088,7 +2089,7 @@ function imgui:OnDrawBinder()
                     imgui.PushStyleVar(imgui.StyleVar.FramePadding, vec(4, 1.1))
                     imgui.PushID(bindIndex)
                     if imgui.InputText("##textsms", bind.buffer) then
-                        BINDS:save()
+                        binds:save()
                     end
                     imgui.PopID()
                     imgui:SetTooltip(bind.buffer.v ..
@@ -2119,21 +2120,21 @@ function imgui:OnDrawBinder()
                         bind.addKey = imgui.addKey
                         imgui.key = 0
                         imgui.addKey = 0
-                        BINDS:save()
+                        binds:save()
                     end
                     imgui.SameLine()
                     if imgui.Button("X##sms" .. bindIndex, vec(7, 10)) then
                         bind.edit = false
-                        BINDS:delete("sms", bindIndex)
+                        binds:delete("sms", bindIndex)
                     end
                     imgui.SameLine()
                     if imgui.Button("-##sms" .. bindIndex, vec(5, 10)) or
                         isKeyJustPressed(13) then
                         bind.edit = false
-                        BINDS:save()
+                        binds:save()
                     end
                 else
-                    local text = CHAT:subSMSText("", bind.buffer.v)
+                    local text = chat:subSMSText("", bind.buffer.v)
                     local buttonName = ""
                     if ini.settings.hotKeys then
                         if bind.key ~= 0 then
@@ -2150,9 +2151,9 @@ function imgui:OnDrawBinder()
                     end
                     buttonName = buttonName .. text
                     if imgui.Button(buttonName .. "##sms" .. bindIndex,
-                                    vec(80.5, 10)) and ORDERS.currentOrder then
-                        CHAT:addMessageToQueue(
-                            string.format("/t %d %s", ORDERS.currentOrder.id,
+                                    vec(80.5, 10)) and orders.currentOrder then
+                        chat:addMessageToQueue(
+                            string.format("/t %d %s", orders.currentOrder.id,
                                           text))
                     end
                     if utf8len(text) > 25 then
@@ -2160,8 +2161,8 @@ function imgui:OnDrawBinder()
                     end
                     imgui.SameLine()
                     if imgui.Button("+##sms" .. bindIndex, vec(5, 10)) then
-                        BINDS:chooseEdit("sms", bindIndex)
-                        BINDS:save()
+                        binds:chooseEdit("sms", bindIndex)
+                        binds:save()
                     end
                 end
                 imgui.PopID()
@@ -2175,32 +2176,32 @@ function imgui:OnDrawBinder()
             imgui.NewLine()
             imgui.SameLine(toScreenX(10.5))
             if imgui.Button("Добавить действие", vec(87.5, 9)) then
-                if not BINDS:isEdit("actions") then
-                    local num = #BINDS.list.actions + 1
+                if not binds:isEdit("actions") then
+                    local num = #binds.list.actions + 1
                     if num - 1 < 12 then
                         local buffer = imgui.ImBuffer(128)
                         local bufferCmd = imgui.ImBuffer(128)
                         buffer.v = "Новое действие"
                         bufferCmd.v = "/cmd {id}"
-                        BINDS.list.actions[num] = {
+                        binds.list.actions[num] = {
                             buffer = buffer,
                             bufferCmd = bufferCmd,
                             key = 0,
                             addKey = 0,
                             edit = false
                         }
-                        BINDS:save()
+                        binds:save()
                     end
                 end
             end
-            if passengers and VEHICLE.maxPassengers then
-                for passengerIndex = 0, VEHICLE.maxPassengers - 1 do
-                    if VEHICLE.passengersList[passengerIndex] then
+            if passengers and vehicle.maxPassengers then
+                for passengerIndex = 0, vehicle.maxPassengers - 1 do
+                    if vehicle.passengersList[passengerIndex] then
                         imgui.NewLine()
                         imgui.SameLine(toScreenX(11))
                         if imgui.CollapsingHeader(
-                            VEHICLE.passengersList[passengerIndex].nickname ..
-                                "[" .. VEHICLE.passengersList[passengerIndex].id ..
+                            vehicle.passengersList[passengerIndex].nickname ..
+                                "[" .. vehicle.passengersList[passengerIndex].id ..
                                 "]", vec(89, 10)) then
                             imgui:showActions(passengerIndex, passengers)
                         end
@@ -2216,7 +2217,7 @@ function imgui:OnDrawBinder()
             imgui.BeginChild(tostring(i), vec(8, 10), false)
             local bindPage = i == 1 and 0 or (i - 1) * 14
             local bindPageText = i < 10 and " " .. i or tostring(i)
-            local binderSize = #BINDS.list.binds
+            local binderSize = #binds.list.binds
             if binderSize > bindPage or i == 1 then
                 if imgui.Selectable(bindPageText, imgui.binderPage == i, 0,
                                     vec(5, 8)) then
@@ -2234,21 +2235,21 @@ function imgui:OnDrawBinder()
         imgui.EndChild()
 
         if imgui.Button("Добавить строку", vec(96, 10)) then
-            if not BINDS:isEdit("binds") then
-                local num = #BINDS.list.binds + 1
+            if not binds:isEdit("binds") then
+                local num = #binds.list.binds + 1
                 if num <= 140 then
                     local buffer = imgui.ImBuffer(128)
                     local bufferCmd = imgui.ImBuffer(128)
                     buffer.v = ""
                     bufferCmd.v = ""
-                    BINDS.list.binds[num] = {
+                    binds.list.binds[num] = {
                         buffer = buffer,
                         bufferCmd = bufferCmd,
                         key = 0,
                         addKey = 0,
                         edit = false
                     }
-                    BINDS:save()
+                    binds:save()
                 end
             end
         end
@@ -2261,15 +2262,15 @@ function imgui:OnDrawBinder()
         end
 
         for bindIndex = beginBind, endBind do
-            if BINDS.list.binds[bindIndex] then
-                local bind = BINDS.list.binds[bindIndex]
+            if binds.list.binds[bindIndex] then
+                local bind = binds.list.binds[bindIndex]
                 imgui.PushID(bindIndex)
                 if bind.edit then
                     imgui.PushItemWidth(toScreenX(55.5))
                     imgui.PushStyleVar(imgui.StyleVar.FramePadding, vec(4, 1.1))
                     imgui.PushID(bindIndex)
                     if imgui.InputText("", bind.buffer) then
-                        BINDS:save()
+                        binds:save()
                     end
                     imgui:SetTooltip(bind.buffer.v, 500)
                     imgui.PopID()
@@ -2292,7 +2293,7 @@ function imgui:OnDrawBinder()
                     end
                     buttonName = buttonName .. bind.buffer.v
                     if imgui.Button(buttonName, vec(89, 10)) then
-                        CHAT:addMessageToQueue(bind.buffer.v)
+                        chat:addMessageToQueue(bind.buffer.v)
                     end
                     if utf8len(bind.buffer.v) > 30 then
                         imgui:SetTooltip(bind.buffer.v, 500)
@@ -2326,24 +2327,24 @@ function imgui:OnDrawBinder()
                         bind.addKey = imgui.addKey
                         imgui.key = 0
                         imgui.addKey = 0
-                        BINDS:save()
+                        binds:save()
                     end
                     imgui.SameLine()
                     if imgui.Button("X", vec(7, 10)) then
-                        BINDS.list.binds[bindIndex].edit = false
-                        BINDS:delete("binds", bindIndex)
+                        binds.list.binds[bindIndex].edit = false
+                        binds:delete("binds", bindIndex)
                     end
                     imgui.SameLine()
-                    if BINDS.list.binds[bindIndex] then
+                    if binds.list.binds[bindIndex] then
                         if imgui.Button("-", vec(5, 10)) or isKeyJustPressed(13) then
                             bind.edit = false
-                            BINDS:save()
+                            binds:save()
                         end
                     end
                 else
                     if imgui.Button("+", vec(5, 10)) then
-                        BINDS:chooseEdit("binds", bindIndex)
-                        BINDS:save()
+                        binds:chooseEdit("binds", bindIndex)
+                        binds:save()
                     end
                 end
                 imgui.PopID()
@@ -2358,7 +2359,7 @@ function imgui:onDrawNotification()
     local count = 0
     for notificationIndex, notification in ipairs(notificationsQueue) do
         local push = false
-        local isOrderExist = ORDERS.list[notification.orderNickname]
+        local isOrderExist = orders.list[notification.orderNickname]
         local sizeWithButton = 0
 
         if notification.button then sizeWithButton = sizeWithButton + 16 end
@@ -2372,7 +2373,7 @@ function imgui:onDrawNotification()
         if not notification.showtime then
             if notification.time < os.clock() then
                 if notification.button and isOrderExist then
-                    if ORDERS.list[notification.orderNickname].direction > 0 then
+                    if orders.list[notification.orderNickname].direction > 0 then
                         notification.active = true
                     end
                 else
@@ -2391,8 +2392,10 @@ function imgui:onDrawNotification()
                     end
                 end
 
-                if notification.active and (VEHICLE.vehicleName or
-                    isKeysPressed(ini.settings.key1, ini.settings.key1add, true)) then
+                if notification.active and
+                    (vehicle.name or
+                        isKeysPressed(ini.settings.key1, ini.settings.key1add,
+                                      true)) then
                     count = count + 1
                     if notification.time + 3.000 >= os.clock() then
                         if (notification.time - os.clock()) / 1.0 > 0.95 then
@@ -2406,9 +2409,9 @@ function imgui:onDrawNotification()
                     end
 
                     local notfPos = 0
-                    if ORDERS.currentOrder then
+                    if orders.currentOrder then
                         notfPos = notfPos + 37
-                    elseif ORDERS.GPSMark then
+                    elseif orders.GPSMark then
                         notfPos = notfPos + 9.5
                     end
                     local notificationTitle =
@@ -2439,13 +2442,13 @@ function imgui:onDrawNotification()
                     imgui:TextColoredRGB(notificationTitle)
                     imgui.Dummy(vec(0, 2))
                     if notification.button then
-                        if ORDERS.list[notification.orderNickname] then
+                        if orders.list[notification.orderNickname] then
                             local notfText = FORMAT_NOTIFICATIONS.newOrder
-                            if ORDERS.list[notification.orderNickname].direction >
+                            if orders.list[notification.orderNickname].direction >
                                 0 then
                                 notfText =
                                     notfText:gsub(": {4296f9}", ": {42ff96}")
-                            elseif ORDERS.list[notification.orderNickname]
+                            elseif orders.list[notification.orderNickname]
                                 .direction < 0 then
                                 notfText =
                                     notfText:gsub(": {4296f9}", ": {d44331}")
@@ -2453,17 +2456,17 @@ function imgui:onDrawNotification()
                             notification.text =
                                 string.format(notfText,
                                               notification.orderNickname,
-                                              ORDERS.list[notification.orderNickname]
+                                              orders.list[notification.orderNickname]
                                                   .id, metersToString(
-                                                  ORDERS.list[notification.orderNickname]
+                                                  orders.list[notification.orderNickname]
                                                       .distance),
-                                              ORDERS.list[notification.orderNickname]
+                                              orders.list[notification.orderNickname]
                                                   .zone)
-                            if ORDERS.list[notification.orderNickname].zone ~=
+                            if orders.list[notification.orderNickname].zone ~=
                                 "Неизвестно" then
                                 notification.text =
                                     notification.text .. ", {4296f9}" ..
-                                        ORDERS.list[notification.orderNickname]
+                                        orders.list[notification.orderNickname]
                                             .zone
                             end
                         end
@@ -2472,7 +2475,7 @@ function imgui:onDrawNotification()
                     imgui.Dummy(vec(0, 2))
                     if notification.button then
                         local acceptOrderText = "Принять вызов"
-                        if ORDERS.lastCorrectOrderNickname ==
+                        if orders.lastCorrectOrderNickname ==
                             notification.orderNickname and ini.settings.hotKeys and
                             ini.settings.key2 ~= 0 then
                             acceptOrderText =
@@ -2486,8 +2489,8 @@ function imgui:onDrawNotification()
                             acceptOrderText = acceptOrderText .. "]"
                         end
                         if imgui.Button(acceptOrderText, vec(100, 10)) then
-                            ORDERS:accept(notification.orderNickname,
-                                          ORDERS.list[notification.orderNickname]
+                            orders:accept(notification.orderNickname,
+                                          orders.list[notification.orderNickname]
                                               .time)
                             imgui.Dummy(vec(0, 2))
                         end
@@ -2532,8 +2535,8 @@ function imgui:onDrawSettings()
     imgui.BeginChild("bottom", vec(195, 195), true)
     if imgui.settingsTab == 1 then
         if imgui.Checkbox("Отображение Taximate Binder",
-                          imgui.ImBool(ini.settings.showBINDS)) then
-            ini.settings.showBINDS = not ini.settings.showBINDS
+                          imgui.ImBool(ini.settings.showBinds)) then
+            ini.settings.showBinds = not ini.settings.showBinds
             inicfg.save(ini, "Taximate/settings.ini")
         end
         if imgui.Checkbox("Отображение Taximate HUD",
@@ -2839,7 +2842,7 @@ function imgui:onDrawSettings()
             inicfg.save(ini, "Taximate/settings.ini")
         end
         local color = "{FFFF00}"
-        local text = CHAT:subSMSText(ini.settings.SMSPrefix,
+        local text = chat:subSMSText(ini.settings.SMSPrefix,
                                      ini.settings.SMSText)
         if utf8len(text) > 63 then color = "{FF0000}" end
         imgui:TextColoredRGB(color .. "SMS: " .. utf8sub(text, 1, 63))
@@ -2851,7 +2854,7 @@ function imgui:onDrawSettings()
             inicfg.save(ini, "Taximate/settings.ini")
         end
         local color = "{FFFF00}"
-        local text = CHAT:subSMSText(ini.settings.SMSPrefix,
+        local text = chat:subSMSText(ini.settings.SMSPrefix,
                                      ini.settings.SMSArrival)
         if utf8len(text) > 63 then color = "{FF0000}" end
         imgui:TextColoredRGB(color .. "SMS: " .. utf8sub(text, 1, 63))
@@ -2863,7 +2866,7 @@ function imgui:onDrawSettings()
             inicfg.save(ini, "Taximate/settings.ini")
         end
         local color = "{FFFF00}"
-        local text = CHAT:subSMSText(ini.settings.SMSPrefix,
+        local text = chat:subSMSText(ini.settings.SMSPrefix,
                                      ini.settings.SMSCancel)
         if utf8len(text) > 63 then color = "{FF0000}" end
         imgui:TextColoredRGB(color .. "SMS: " .. utf8sub(text, 1, 63))
@@ -2916,7 +2919,7 @@ function imgui:onDrawSettings()
                 for id = 0, maxPlayerId do
                     if sampIsPlayerConnected(id) and sampGetPlayerNickname(id) ==
                         "pivo" then
-                        CHAT:sendMessage(
+                        chat:sendMessage(
                             "Свяжись с разработчиком прямо в игре - {00CED1}pivo[" ..
                                 id .. "]")
                         found = true
@@ -2924,7 +2927,7 @@ function imgui:onDrawSettings()
                     end
                 end
                 if not found then
-                    CHAT:sendMessage(
+                    chat:sendMessage(
                         "Разработчик сейчас не в сети :(")
                 end
             end
@@ -3324,7 +3327,7 @@ function imgui:TextColoredRGB(text)
 end
 
 function sampev.onSetRaceCheckpoint(type, position)
-    ORDERS.GPSMark = {
+    orders.GPSMark = {
         x = position.x,
         y = position.y,
         z = position.z,
@@ -3332,13 +3335,13 @@ function sampev.onSetRaceCheckpoint(type, position)
     }
 end
 
-function sampev.onDisableRaceCheckpoint() ORDERS.GPSMark = nil end
+function sampev.onDisableRaceCheckpoint() orders.GPSMark = nil end
 
 function getGPSMarkCoords3d()
     wait(500)
-    if ORDERS.GPSMark then
-        local found = os.clock() - ORDERS.GPSMark.time <= 5
-        return found, ORDERS.GPSMark.x, ORDERS.GPSMark.y, ORDERS.GPSMark.z
+    if orders.GPSMark then
+        local found = os.clock() - orders.GPSMark.time <= 5
+        return found, orders.GPSMark.x, orders.GPSMark.y, orders.GPSMark.z
     end
     return false
 end
@@ -3391,7 +3394,7 @@ function checkUpdates(verbose)
             os.remove(fpath)
             if script_updates.version_num > thisScript().version_num then
                 if verbose then
-                    CHAT:sendMessage("Доступен {00CED1}Taximate v" ..
+                    chat:sendMessage("Доступен {00CED1}Taximate v" ..
                                          script_updates.sorted_keys[1] ..
                                          "{FFFFFF}. Введите {00CED1}'/tmup'{FFFFFF} чтобы скачать обновление")
                 end
@@ -3420,7 +3423,7 @@ end
 
 function update()
     if script_updates.update then
-        CHAT:sendMessage("Выполняется обновление...")
+        chat:sendMessage("Выполняется обновление...")
         local fpath = os.tmpname()
         if doesFileExist(fpath) then os.remove(fpath) end
         downloadUrlToFile("https://raw.githubusercontent.com/21se/Taximate/" ..
@@ -3450,10 +3453,10 @@ function update()
                             e)
                 end)
                 if not fail then
-                    CHAT:sendMessage(
+                    chat:sendMessage(
                         "Скрипт обновлён. В случае возникновения ошибок обращаться в ВК - {00CED1}vk.com/twonse{FFFFFF}")
                 else
-                    CHAT:sendMessage(
+                    chat:sendMessage(
                         "{f44331}При попытке обновления произошла ошибка.{FFFFFF} Обратитесь в ВК - {00CED1}vk.com/twonse{FFFFFF}")
                 end
                 if script.find("ML-AutoReboot") == nil and not fail then
@@ -3462,7 +3465,7 @@ function update()
             end
         end)
     else
-        CHAT:sendMessage(
+        chat:sendMessage(
             "Обновления не найдены, возможно скрипт не получил выход в Интернет")
     end
 end
@@ -3482,23 +3485,20 @@ end
 -- applyChanges
 function applyChanges(version_num)
     if version_num < 52 then
-        CHAT:sendMessage("Применение обновлений...")
+        chat:sendMessage("Применение обновлений...")
     end
 end
 -- applyChanges
 
 function applyChangesV52()
-    ini.settings.SMSText = ini.settings.SMSText:gsub(
-                               "{distance} м",
-                               "{distance}")
+    ini.settings.SMSText = ini.settings.SMSText:gsub("{distance} м",
+                                                     "{distance}")
     inicfg.save(ini, "Taximate/settings.ini")
 
-    for index, value in ipairs(BINDS.list.sms) do
-        value.buffer.v = value.buffer.v:gsub(
-                             "{distance} м",
-                             "{distance}")
+    for index, value in ipairs(binds.list.sms) do
+        value.buffer.v = value.buffer.v:gsub("{distance} м", "{distance}")
     end
-    BINDS:save()
+    binds:save()
 end
 
 function try(f, catch_f)
@@ -3506,21 +3506,21 @@ function try(f, catch_f)
     if not status then catch_f(exception) end
 end
 
-local old_print = print
+local _print = print
 function print(...)
     local pack = table.pack(...)
     for i = 1, pack.n do pack[i] = u8:decode(tostring(pack[i])) end
-    old_print(table.unpack(pack))
+    _print(table.unpack(pack))
 end
 
-local old_find = string.find
-function string.find(s, pattern) return old_find(s, u8:decode(pattern)) end
+local find = string.find
+function string.find(s, pattern) return find(s, u8:decode(pattern)) end
 
-local old_match = string.match
-function string.match(s, pattern) return old_match(s, u8:decode(pattern)) end
+local match = string.match
+function string.match(s, pattern) return match(s, u8:decode(pattern)) end
 
-local old_gmatch = string.gmatch
-function string.gmatch(s, pattern) return old_gmatch(s, u8:decode(pattern)) end
+local gmatch = string.gmatch
+function string.gmatch(s, pattern) return gmatch(s, u8:decode(pattern)) end
 
 function os.copy(source, path)
     local infile = io.open(source, "r")
