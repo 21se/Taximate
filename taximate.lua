@@ -3489,14 +3489,14 @@ end
 
 function applyChangesV52()
     ini.settings.SMSText = ini.settings.SMSText:gsub(
-                               "Жёлтый {carname} в пути. Дистанция: {distance} м",
-                               "Жёлтый {carname} в пути. Дистанция: {distance}")
+                               "{distance} м",
+                               "{distance}")
     inicfg.save(ini, "Taximate/settings.ini")
 
     for index, value in ipairs(BINDS.list.sms) do
         value.buffer.v = value.buffer.v:gsub(
-                             "Жёлтый {carname} в пути. Дистанция: {distance} м",
-                             "Жёлтый {carname} в пути. Дистанция: {distance}")
+                             "{distance} м",
+                             "{distance}")
     end
     BINDS:save()
 end
