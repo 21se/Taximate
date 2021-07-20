@@ -1100,7 +1100,7 @@ ini = {
     settings = {
         checkUpdates = true,
         showHUD = true,
-        showBinds = true,
+        showBindMenu  = true,
         sounds = true,
         notifications = true,
         sendSMS = true,
@@ -1766,7 +1766,7 @@ function imgui.OnDrawFrame()
         not (ini.settings.fastMapCompatibility and isKeyDown(fastMapKey)) then
         imgui.onDrawNotification()
         if ini.settings.showHUD then imgui.onDrawHUD() end
-        if ini.settings.showBinds then imgui.OnDrawBinder() end
+        if ini.settings.showBindMenu  then imgui.OnDrawBinder() end
         if imgui.showSettings.v then imgui.onDrawSettings() end
     end
 end
@@ -2535,8 +2535,8 @@ function imgui.onDrawSettings()
     imgui.BeginChild("bottom", vec(195, 195), true)
     if imgui.settingsTab == 1 then
         if imgui.Checkbox("Отображение Taximate Binder",
-                          imgui.ImBool(ini.settings.showBinds)) then
-            ini.settings.showBinds = not ini.settings.showBinds
+                          imgui.ImBool(ini.settings.showBindMenu )) then
+            ini.settings.showBindMenu  = not ini.settings.showBindMenu 
             inicfg.save(ini, "Taximate/settings.ini")
         end
         if imgui.Checkbox("Отображение Taximate HUD",
