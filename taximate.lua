@@ -3496,9 +3496,9 @@ end
 
 -- applyChanges
 function applyChanges(version_num)
-    if version_num < 52 then
-        chat.sendMessage("Применение обновлений...")
-    end
+    -- if version_num < 53 then
+        
+    -- end
 end
 -- applyChanges
 
