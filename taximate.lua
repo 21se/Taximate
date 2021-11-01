@@ -1,7 +1,7 @@
 script_author("21se")
 script_moonloader(026)
 script_version("1.3.5")
-script_version_number(52)
+script_version_number(53)
 script_url("github.com/21se/Taximate")
 script_name(string.format("Taximate v%s (%d)", thisScript().version,
                           thisScript().version_num))
@@ -96,7 +96,7 @@ function main()
     player.id = playerID
 
     server = sampGetCurrentServerName():gsub("|", "")
-    server = (server:find("02") and "two" or
+    server = (server:find("ZeroTwo") and "two" or
                  (server:find("Revolution") and "revolution" or
                      (server:find("Legacy") and "legacy" or
                          (server:find("Classic") and "classic" or ""))))
