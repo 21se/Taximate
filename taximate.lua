@@ -7,7 +7,6 @@ script_name(string.format("Taximate v%s (%d)", thisScript().version,
                           thisScript().version_num))
 local script_updates = {update = false}
 local script_branch = "master"
-local server = ""
 
 local moonloader = require "moonloader"
 local inicfg = require "inicfg"
@@ -94,17 +93,6 @@ function main()
     local _, playerID = sampGetPlayerIdByCharHandle(PLAYER_PED)
     player.nickname = sampGetPlayerNickname(playerID)
     player.id = playerID
-
-    server = sampGetCurrentServerName():gsub("|", "")
-    server = (server:find("ZeroTwo") and "two" or
-                 (server:find("Revolution") and "revolution" or
-                     (server:find("Legacy") and "legacy" or
-                         (server:find("Classic") and "classic" or ""))))
-
-    if server == "" then
-        thisScript():unload()
-        return
-    end
 
     chat.sendMessage(
         "Меню настроек скрипта - {00CED1}/tm{FFFFFF}, страница скрипта: {00CED1}" ..
@@ -2922,27 +2910,6 @@ function imgui.onDrawSettings()
         imgui.SameLine()
         if imgui.Button("VK") then
             os.execute("start https://vk.com/twonse")
-        end
-        imgui.SameLine()
-        if imgui.Button("Samp-Rp Revolution") then
-            if server == "revolution" then
-                local found = false
-                local maxPlayerId = sampGetMaxPlayerId(false)
-                for id = 0, maxPlayerId do
-                    if sampIsPlayerConnected(id) and sampGetPlayerNickname(id) ==
-                        "pivo" then
-                        chat.sendMessage(
-                            "Свяжись с разработчиком прямо в игре - {00CED1}pivo[" ..
-                                id .. "]")
-                        found = true
-                        break
-                    end
-                end
-                if not found then
-                    chat.sendMessage(
-                        "Разработчик сейчас не в сети :(")
-                end
-            end
         end
         imgui.Text("История обновлений")
         imgui.BeginChild("changelog", vec(190, 135), true)
