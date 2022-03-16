@@ -2909,7 +2909,7 @@ function imgui.onDrawSettings()
         end
         imgui.SameLine()
         if imgui.Button("VK") then
-            os.execute("start https://vk.com/twonse")
+            os.execute("start https://vk.com/id387503690")
         end
         imgui.Text("История обновлений")
         imgui.BeginChild("changelog", vec(190, 135), true)
