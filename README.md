@@ -1,5 +1,4 @@
 # [Скачать Taximate](https://github.com/21se/Taximate/releases)
-### [Поддержать разработчика](https://qiwi.com/n/TWONSE)
 
 ## Зависимости (установить перед запуском скрипта)
 -   [SAMP 0.3.7 R1](http://files.sa-mp.com/sa-mp-0.3.7-install.exe)
@@ -34,5 +33,5 @@
 
 ## Связь
 
-- [VK](https://vk.com/twonse)
+- [VK](https://vk.com/id387503690)
 - [GitHub issue](https://github.com/21se/Taximate/issues/new)
