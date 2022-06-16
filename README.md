@@ -33,5 +33,4 @@
 
 ## Связь
 
-- [VK](https://vk.com/id387503690)
 - [GitHub issue](https://github.com/21se/Taximate/issues/new)
