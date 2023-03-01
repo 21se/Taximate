@@ -72,7 +72,11 @@ local MESSAGES = {
     taxiChecker = "<< Бесплатное такси >>",
     skill = "Скилл: (%d+)	Опыт: .+ (%d+%.%d+)%%",
     rank = "Ранг: (%d+)  	Опыт: .+ (%d+%.%d+)%%",
-    order = "%[%d+%] (.+)%[ID:(%d+)%]	(.+)	(.+)	"
+    order = "%[%d+%] (.+)%[ID:(%d+)%]	(.+)	(.+)	",
+    repair = "^ Механик [a-zA-Z0-9_]+ хочет отремонтировать ваш автомобиль за %d+ вирт{FFFFFF} %(%( Нажмите Y/N для принятия/отмены %)%)$",
+    repairFormat = "^ Механик .+ хочет отремонтировать ваш автомобиль за (%d+) вирт{FFFFFF} %(%( Нажмите Y/N для принятия/отмены %)%)$",
+    refill = "^ Механик [a-zA-Z0-9_]+ хочет заправить ваш автомобиль за %d+ вирт{FFFFFF} %(%( Нажмите Y/N для принятия/отмены %)%)$",
+    refillFormat = "^ Механик .+ хочет заправить ваш автомобиль за (%d+) вирт{FFFFFF} %(%( Нажмите Y/N для принятия/отмены %)%)$"
 }
 
 local FORMAT_NOTIFICATIONS = {
@@ -468,6 +472,16 @@ function chat.handleInputMessage(message)
                 chat.hiddenMessages[qMessage].bool = false
             end
             orders.orderAccepted = false
+        elseif string.find(message, MESSAGES.repair) and ini.settings.autoRepair then
+            local cost = tonumber(string.match(message, MESSAGES.repairFormat))
+            if cost > 1 then
+                chat.addMessageToQueue("/ac repair")    
+            end
+        elseif string.find(message, MESSAGES.refill) and ini.settings.autoRefill then
+            local cost = tonumber(string.match(message, MESSAGES.refillFormat))
+            if cost <= ini.settings.maxAutoRefillCost then
+                chat.addMessageToQueue("/ac refill")    
+            end
         end
     end)
 end
@@ -1127,7 +1141,10 @@ ini = {
         ignoreCanceledOrder = true,
         canceledOrderDelay = 120,
         cruiseControl = true,
-        seatsNotify = true
+        seatsNotify = true,
+        autoRepair = true,
+        autoRefill = true,
+        maxAutoRefillCost = 2000
     }
 }
 
@@ -1137,7 +1154,8 @@ local defaults = {
     SMSTimer = 30,
     ordersDistanceUpdateTimer = 5,
     soundVolume = 50,
-    canceledOrderDelay = 120
+    canceledOrderDelay = 120,
+    maxAutoRefillCost = 2000
 }
 
 sounds = {list = {}}
@@ -1680,6 +1698,7 @@ function imgui.initBuffers()
     imgui.ordersDistanceUpdateTimer = imgui.ImInt(ini.settings
                                                       .ordersDistanceUpdateTimer)
     imgui.soundVolume = imgui.ImInt(ini.settings.soundVolume)
+    imgui.maxAutoRefillCost = imgui.ImInt(ini.settings.maxAutoRefillCost)
 end
 
 function imgui.showActions(passengerIndex, passengers)
@@ -2548,7 +2567,6 @@ function imgui.onDrawSettings()
             "Для работы требуется выставить минимальную громкость игрового радио и перезапустить игру",
             90)
         imgui.SameLine()
-        imgui.SameLine()
         imgui.PushItemWidth(toScreenX(43))
         if imgui.SliderInt("", imgui.soundVolume, 0, 100) then
             if imgui.soundVolume.v < 0 or imgui.soundVolume.v > 100 then
@@ -2706,6 +2724,31 @@ function imgui.onDrawSettings()
                                                     .fastMapCompatibility
             inicfg.save(ini, "Taximate/settings.ini")
         end
+        if imgui.Checkbox(
+            "Автопринятие починки автомобиля",
+            imgui.ImBool(ini.settings.autoRepair)) then
+            ini.settings.autoRepair = not ini.settings.autoRepair
+            inicfg.save(ini, "Taximate/settings.ini")
+        end
+        if imgui.Checkbox(
+            "Автопринятие заправки автомобиля, макс. цена:",
+            imgui.ImBool(ini.settings.autoRefill)) then
+            ini.settings.autoRefill = not ini.settings.autoRefill
+            inicfg.save(ini, "Taximate/settings.ini")
+        end
+        imgui.SameLine()
+        imgui.PushItemWidth(toScreenX(40))
+        if imgui.SliderInt("вирт", imgui.maxAutoRefillCost, 500, 5000) then
+            if imgui.maxAutoRefillCost.v < 500 or
+                imgui.maxAutoRefillCost.v > 5000 then
+                imgui.maxAutoRefillCost.v =
+                    defaults.maxAutoRefillCost
+            end
+            ini.settings.maxAutoRefillCost =
+                imgui.maxAutoRefillCost.v
+            inicfg.save(ini, "Taximate/settings.ini")
+        end
+        imgui.SameLine()
     elseif imgui.settingsTab == 2 then
         imgui.Text("Открыть Taximate HUD/Binder: ")
         imgui.SameLine()
