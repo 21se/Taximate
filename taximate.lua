@@ -80,7 +80,7 @@ local MESSAGES = {
 }
 
 local FORMAT_NOTIFICATIONS = {
-    newOrder = "Вызов от {4296f9}%s[%s]\nДистанция: {4296f9}%s",
+    newOrder = "Вызов от {4296f9}%s[%s]{ffffff} (%s)\nДистанция: {4296f9}%s",
     orderAccepted = "Принят вызов от {4296f9}%s[%s]\nДистанция: {4296f9}%s",
     cruiseControlEnabled = "Круиз-контроль {42ff96}включён",
     cruiseControlDisabled = "Круиз-контроль {d44331}выключен"
@@ -142,10 +142,6 @@ function main()
         checkUpdates(false)
         update()
     end)
-
-    -- +TODO: убрать в версии 53
-    applyChangesV52()
-    --
 
     if ini.settings.checkUpdates then lua_thread.create(checkUpdates) end
 
@@ -426,7 +422,8 @@ function chat.handleInputMessage(message)
                                                   orders.list[passengerNickname]
                                                       .nickname,
                                                   orders.list[passengerNickname]
-                                                      .id, metersToString(
+                                                      .id,
+                                                  metersToString(
                                                       orders.list[passengerNickname]
                                                           .distance)), 10)
                     end
@@ -640,6 +637,7 @@ end
 
 function orders.add(nickname, id, distance, time)
     local posX, posY = getCharCoordinates(PLAYER_PED)
+    local level = sampGetPlayerScore(id)
     orders.list[nickname] = {
         nickname = nickname,
         id = id,
@@ -656,7 +654,8 @@ function orders.add(nickname, id, distance, time)
         repeatCount = 0,
         direction = 0,
         tempCircles = {{x = posX, y = posY, radius = distance}, nil, nil},
-        zone = "Неизвестно"
+        zone = "Неизвестно",
+        level = level
     }
 end
 
@@ -827,9 +826,15 @@ end
 
 function orders.handle(orderNickname, orderDistance, orderClock)
     if not orders.currentOrder then
+        local level = orders.list[orderNickname].level
+        local acceptByLevel = level == 0
+            or (level >= 1 and level <= 2 and ini.settings.autoAccept1_2) 
+            or (level >= 3 and level <= 5 and ini.settings.autoAccept3_5)
+            or (level >= 6 and ini.settings.autoAccept6)
+
         if not table.contains(orderNickname, vehicle.lastPassengersList) then
             if table.isEmpty(vehicle.passengersList) then
-                if orders.autoAccept then
+                if orders.autoAccept and acceptByLevel then
                     if orderDistance <= ini.settings.maxDistanceToAcceptOrder and
                         os.clock() - 60 < orderClock then
                         orders.accept(orderNickname, orderClock)
@@ -855,6 +860,7 @@ function orders.handle(orderNickname, orderDistance, orderClock)
                                             FORMAT_NOTIFICATIONS.newOrder,
                                             orderNickname,
                                             orders.list[orderNickname].id,
+                                            orders.list[orderNickname].level,
                                             orderDistance,
                                             orders.list[orderNickname].zone),
                                         15, orderNickname)
@@ -1144,7 +1150,10 @@ ini = {
         seatsNotify = true,
         autoRepair = true,
         autoRefill = true,
-        maxAutoRefillCost = 2000
+        maxAutoRefillCost = 2000,
+        autoAccept1_2 = true,
+        autoAccept3_5 = true,
+        autoAccept6 = true
     }
 }
 
@@ -1996,7 +2005,9 @@ function imgui.onDrawHUD()
                              imgui.WindowFlags.NoScrollbar)
             imgui.TextColoredRGB("Клиент: {4296f9}" ..
                                      orders.currentOrder.nickname .. "[" ..
-                                     orders.currentOrder.id .. "]")
+                                     orders.currentOrder.id .. "]{ffffff} (" ..
+                                     orders.currentOrder.level .. ")"
+                                    )
             imgui.TextColoredRGB("Район: {4296f9}" ..
                                      orders.currentOrder.zone ..
                                      "{FFFFFF},{4296f9} " ..
@@ -2464,8 +2475,8 @@ function imgui.onDrawNotification()
                                 string.format(notfText,
                                               notification.orderNickname,
                                               orders.list[notification.orderNickname]
-                                                  .id, metersToString(
-                                                  orders.list[notification.orderNickname]
+                                                  .id, orders.list[notification.orderNickname].level,
+                                                  metersToString(orders.list[notification.orderNickname]
                                                       .distance),
                                               orders.list[notification.orderNickname]
                                                   .zone)
@@ -2748,7 +2759,6 @@ function imgui.onDrawSettings()
                 imgui.maxAutoRefillCost.v
             inicfg.save(ini, "Taximate/settings.ini")
         end
-        imgui.SameLine()
     elseif imgui.settingsTab == 2 then
         imgui.Text("Открыть Taximate HUD/Binder: ")
         imgui.SameLine()
@@ -2855,6 +2865,27 @@ function imgui.onDrawSettings()
                 imgui.maxDistanceToGetOrder.v = defaults.maxDistanceToGetOrder
             end
             ini.settings.maxDistanceToGetOrder = imgui.maxDistanceToGetOrder.v
+            inicfg.save(ini, "Taximate/settings.ini")
+        end
+        imgui.NewLine()
+        imgui.Text(
+            "Автопринятие от игроков с уровнем в диапазоне:")
+        imgui.SameLine()
+        if imgui.Checkbox("1-2",
+            imgui.ImBool(ini.settings.autoAccept1_2)) then
+            ini.settings.autoAccept1_2 = not ini.settings.autoAccept1_2
+            inicfg.save(ini, "Taximate/settings.ini")
+        end
+        imgui.SameLine()
+        if imgui.Checkbox("3-5",
+            imgui.ImBool(ini.settings.autoAccept3_5)) then
+            ini.settings.autoAccept3_5 = not ini.settings.autoAccept3_5
+            inicfg.save(ini, "Taximate/settings.ini")
+        end
+        imgui.SameLine()
+        if imgui.Checkbox("6+",
+            imgui.ImBool(ini.settings.autoAccept6)) then
+            ini.settings.autoAccept6 = not ini.settings.autoAccept6
             inicfg.save(ini, "Taximate/settings.ini")
         end
         imgui.NewLine()
