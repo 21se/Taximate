@@ -1,7 +1,7 @@
 script_author("21se")
 script_moonloader(026)
-script_version("1.3.5")
-script_version_number(54)
+script_version("1.3.6")
+script_version_number(55)
 script_url("github.com/21se/Taximate")
 script_name(string.format("Taximate v%s (%d)", thisScript().version, thisScript().version_num))
 local script_updates = {update = false}
