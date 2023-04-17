@@ -284,10 +284,14 @@ chat = {
 function chat.sendMessage(...)
     local message = ""
     local pack = table.pack(...)
-    for i = 1, pack.n do message = message .. tostring(pack[i]) .. " " end
-    sampAddChatMessage(u8:decode("\
+    for i = 1, pack.n do
+        message = message .. tostring(pack[i]) .. " "
+    end
+    sampAddChatMessage(
+        u8:decode("\
 				{00CED1}[Taximate v" .. thisScript().version .. "]{FFFFFF} " .. message),
-                       0xFFFFFF)
+        0xFFFFFF
+    )
 end
 
 function chat.updateAntifloodClock()
@@ -339,11 +343,11 @@ function chat.checkQueueThread()
                             end
                         end
                     end
-                    
+
                     if sendMessage then
                         if message.message == "/en" then
                             sendMessage = vehicle.maxPassengers and not isCarEngineOn(vehicle.handle)
-                        elseif message.message:find("/service ac taxi") then 
+                        elseif message.message:find("/service ac taxi") then
                             sendMessage = not orders.currentOrder
                         end
                     end
@@ -864,8 +868,8 @@ function orders.handle(orderNickname, orderDistance, orderClock)
 
         if not table.contains(orderNickname, vehicle.lastPassengersList) then
             if table.isEmpty(vehicle.passengersList) then
-                local acceptByLevel = level == 0 or 
-                    (level >= 1 and level <= 2 and ini.settings.autoAccept1_2) or
+                local acceptByLevel =
+                    level == 0 or (level >= 1 and level <= 2 and ini.settings.autoAccept1_2) or
                     (level >= 3 and level <= 5 and ini.settings.autoAccept3_5) or
                     (level >= 6 and ini.settings.autoAccept6)
                 local ignoreByBlacklist = ini.settings.blacklistIgnore and blacklist.check(orderNickname)
@@ -970,7 +974,7 @@ function vehicle.refreshFuel()
                     if textdrawString == "Fuel" and sampTextdrawIsExists(textdrawId - 1) then
                         vehicle.fuel = tonumber(sampTextdrawGetString(textdrawId - 1))
                     elseif string.find(textdrawString, MESSAGES.fuelClassic) then
-                        vehicle.fuel = tonumber(string.match(textdrawString, MESSAGES.fuelClassicFormat))         
+                        vehicle.fuel = tonumber(string.match(textdrawString, MESSAGES.fuelClassicFormat))
                     end
                 end
             end
@@ -1455,8 +1459,7 @@ blacklist.sortedNicknames = {}
 
 function blacklist.get()
     local list = {}
-    local blacklistFile = io.open(getWorkingDirectory() ..
-                                      "/config/Taximate/blacklist.json", "r")
+    local blacklistFile = io.open(getWorkingDirectory() .. "/config/Taximate/blacklist.json", "r")
     if blacklistFile then
         local content = blacklistFile:read("*a")
         blacklistFile:close()
@@ -1476,8 +1479,7 @@ function blacklist.get()
 end
 
 function blacklist.save()
-    local blacklistFile = io.open(getWorkingDirectory() ..
-                                      "/config/Taximate/blacklist.json", "w")
+    local blacklistFile = io.open(getWorkingDirectory() .. "/config/Taximate/blacklist.json", "w")
     local json = {}
     for nickname, record in pairs(blacklist.players) do
         json[nickname] = {
@@ -1492,26 +1494,27 @@ function blacklist.save()
 end
 
 function blacklist.sortNicknames()
-    blacklist.sortedNicknames = table.getTableKeysSortedByValue(blacklist.players,
-                                                            "date", false)
+    blacklist.sortedNicknames = table.getTableKeysSortedByValue(blacklist.players, "date", false)
 end
 
 function blacklist.check(nickname)
     if blacklist.players[nickname] then
-        if blacklist.players[nickname].active then return true end
+        if blacklist.players[nickname].active then
+            return true
+        end
     end
 
     for nickname, record in pairs(blacklist.players) do
         local pattern = nickname
-        if (pattern:find('?') or pattern:find('*')) and record.active then
-            pattern = '^' .. pattern .. '$'       
-            pattern = pattern:gsub('?', '[%%w_]')
-            pattern = pattern:gsub('*', '[%%w_]*')
-            
+        if (pattern:find("?") or pattern:find("*")) and record.active then
+            pattern = "^" .. pattern .. "$"
+            pattern = pattern:gsub("?", "[%%w_]")
+            pattern = pattern:gsub("*", "[%%w_]*")
+
             if nickname:lower():match(pattern:lower()) then
                 return true
             end
-        end 
+        end
     end
 
     return false
@@ -1521,7 +1524,7 @@ blacklist.command = function(arg)
     local nickname = ""
     local error = false
     local id = tonumber(arg)
-    if not arg:find('^[%w_%?%*]+$') and not id then
+    if not arg:find("^[%w_%?%*]+$") and not id then
         error = true
     else
         local idstr = ""
@@ -1540,9 +1543,7 @@ blacklist.command = function(arg)
         end
         if blacklist.players[nickname] and not error then
             blacklist.players[nickname] = nil
-            chat.sendMessage(string.format(
-                                    "{00CED1}%s%s{FFFFFF} удален из чёрного списка",
-                                    nickname, idstr))
+            chat.sendMessage(string.format("{00CED1}%s%s{FFFFFF} удален из чёрного списка", nickname, idstr))
         elseif not error then
             blacklist.players[nickname] = {
                 active = true,
@@ -1551,9 +1552,7 @@ blacklist.command = function(arg)
                 date = os.time(os.date("!*t"))
             }
             blacklist.players[nickname].buffer.v = nickname
-            chat.sendMessage(string.format(
-                                 "{00CED1}%s%s{FFFFFF} добавлен в чёрный список",
-                                    nickname, idstr))
+            chat.sendMessage(string.format("{00CED1}%s%s{FFFFFF} добавлен в чёрный список", nickname, idstr))
         end
     end
     if error then
@@ -1726,7 +1725,10 @@ function sampev.onServerMessage(color, message)
                 chat.hiddenMessages["/clist"].bool = false
                 return false
             end
-        elseif string.find(message, MESSAGES.noOrders) or string.find(message, MESSAGES.enterService1) or string.find(message, MESSAGES.enterService2) then
+        elseif
+            string.find(message, MESSAGES.noOrders) or string.find(message, MESSAGES.enterService1) or
+                string.find(message, MESSAGES.enterService2)
+         then
             if chat.hiddenMessages["/service"].bool then
                 chat.hiddenMessages["/service"].bool = false
                 return false
@@ -1748,8 +1750,7 @@ function sampev.onServerMessage(color, message)
             end
             if string.find(message, MESSAGES.orderAcceptedFormat) then
                 dispatcher = true
-                local _, nickname = string.match(message,
-                                                 MESSAGES.orderAcceptedFormat)
+                local _, nickname = string.match(message, MESSAGES.orderAcceptedFormat)
                 if blacklist.check(nickname) and ini.settings.blacklistHide then
                     return false
                 end
@@ -1848,21 +1849,26 @@ end
 function table.getTableKeysSortedByValue(iterTable, valueName, increase)
     local tableKeys = {}
 
-    for key in table.spairs(iterTable, function(t, a, b)
-        if type(t[a][valueName]) ~= "boolean" then
-            if increase then
-                return t[a][valueName] < t[b][valueName]
+    for key in table.spairs(
+        iterTable,
+        function(t, a, b)
+            if type(t[a][valueName]) ~= "boolean" then
+                if increase then
+                    return t[a][valueName] < t[b][valueName]
+                else
+                    return t[a][valueName] > t[b][valueName]
+                end
             else
-                return t[a][valueName] > t[b][valueName]
-            end
-        else
-            if increase then
-                return t[b][valueName]
-            else
-                return t[a][valueName]
+                if increase then
+                    return t[b][valueName]
+                else
+                    return t[a][valueName]
+                end
             end
         end
-    end) do table.insert(tableKeys, key) end
+    ) do
+        table.insert(tableKeys, key)
+    end
 
     return tableKeys
 end
@@ -2026,7 +2032,7 @@ function imgui.onDrawInputWindow()
         "Горячие клавиши",
         imgui.showInputWindow,
         imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize + imgui.WindowFlags.NoScrollbar +
-            imgui.WindowFlags.NoScrollWithMouse + 
+            imgui.WindowFlags.NoScrollWithMouse +
             imgui.WindowFlags.NoMove +
             imgui.WindowFlags.NoTitleBar
     )
@@ -2195,7 +2201,12 @@ function imgui.onDrawHUD()
         end
         if zone then
             local posX, posY = getCharCoordinates(PLAYER_PED)
-            imgui.BeginChild("##upleft", vec(90, 8), false, imgui.WindowFlags.NoScrollbar + imgui.WindowFlags.NoScrollWithMouse)
+            imgui.BeginChild(
+                "##upleft",
+                vec(90, 8),
+                false,
+                imgui.WindowFlags.NoScrollbar + imgui.WindowFlags.NoScrollWithMouse
+            )
             imgui.TextColoredRGB(
                 "GPS: {4296f9}" ..
                     zone ..
@@ -2204,7 +2215,12 @@ function imgui.onDrawHUD()
             )
             imgui.EndChild()
             imgui.SameLine()
-            imgui.BeginChild("##upright", vec(10, 8), false, imgui.WindowFlags.NoScrollbar + imgui.WindowFlags.NoScrollWithMouse)
+            imgui.BeginChild(
+                "##upright",
+                vec(10, 8),
+                false,
+                imgui.WindowFlags.NoScrollbar + imgui.WindowFlags.NoScrollWithMouse
+            )
             imgui.PushStyleVar(imgui.StyleVar.FramePadding, vec(2, 0))
             if imgui.Button("X") then
                 chat.addMessageToQueue("/gps", true, true)
@@ -2212,26 +2228,51 @@ function imgui.onDrawHUD()
             imgui.PopStyleVar()
             imgui.EndChild()
         end
-        imgui.BeginChild("##midleft", vec(56, 8), false, imgui.WindowFlags.NoScrollbar + imgui.WindowFlags.NoScrollWithMouse)
+        imgui.BeginChild(
+            "##midleft",
+            vec(56, 8),
+            false,
+            imgui.WindowFlags.NoScrollbar + imgui.WindowFlags.NoScrollWithMouse
+        )
         imgui.TextColoredRGB("Скилл: {4296f9}" .. player.skill .. " {FFFFFF}(" .. player.skillExp .. "%)")
         imgui.SameLine()
         imgui.TextDisabled("(?)")
         imgui.SetTooltip("Клиентов до следующего уровня: " .. player.skillClients, 70)
         imgui.EndChild()
         imgui.SameLine()
-        imgui.BeginChild("##midright", vec(44, 8), false, imgui.WindowFlags.NoScrollbar + imgui.WindowFlags.NoScrollWithMouse)
+        imgui.BeginChild(
+            "##midright",
+            vec(44, 8),
+            false,
+            imgui.WindowFlags.NoScrollbar + imgui.WindowFlags.NoScrollWithMouse
+        )
         imgui.TextColoredRGB("Ранг: {4296f9}" .. player.rank .. " {FFFFFF}(" .. player.rankExp .. "%)")
         imgui.EndChild()
-        imgui.BeginChild("##bottomleft", vec(56.5, 8), false, imgui.WindowFlags.NoScrollbar + imgui.WindowFlags.NoScrollWithMouse)
+        imgui.BeginChild(
+            "##bottomleft",
+            vec(56.5, 8),
+            false,
+            imgui.WindowFlags.NoScrollbar + imgui.WindowFlags.NoScrollWithMouse
+        )
         imgui.TextColoredRGB("ЗП: {4296f9}" .. player.salary .. " / " .. player.salaryLimit .. "{FFFFFF} вирт")
         imgui.EndChild()
         imgui.SameLine()
-        imgui.BeginChild("##bottomright ", vec(43.5, 8), false, imgui.WindowFlags.NoScrollbar + imgui.WindowFlags.NoScrollWithMouse)
+        imgui.BeginChild(
+            "##bottomright ",
+            vec(43.5, 8),
+            false,
+            imgui.WindowFlags.NoScrollbar + imgui.WindowFlags.NoScrollWithMouse
+        )
         imgui.TextColoredRGB("Чай: {4296f9}" .. player.tips .. "{FFFFFF} вирт")
         imgui.EndChild()
 
         if orders.currentOrder then
-            imgui.BeginChild("bottom  ", vec(100, 34), true, imgui.WindowFlags.NoScrollbar + imgui.WindowFlags.NoScrollWithMouse)
+            imgui.BeginChild(
+                "bottom  ",
+                vec(100, 34),
+                true,
+                imgui.WindowFlags.NoScrollbar + imgui.WindowFlags.NoScrollWithMouse
+            )
             imgui.TextColoredRGB(
                 "Клиент: {4296f9}" ..
                     orders.currentOrder.nickname ..
@@ -2671,7 +2712,7 @@ function imgui.onDrawNotification()
                         "message #" .. notificationIndex,
                         _,
                         imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize + imgui.WindowFlags.NoScrollbar +
-                            imgui.WindowFlags.NoScrollWithMouse + 
+                            imgui.WindowFlags.NoScrollWithMouse +
                             imgui.WindowFlags.NoMove +
                             imgui.WindowFlags.NoTitleBar
                     )
@@ -2746,19 +2787,20 @@ function imgui.onDrawSettings()
         imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize
     )
     imgui.BeginChild("top", vec(195, 9), false)
-    if imgui.Selectable("\t\t\t Настройки", imgui.settingsTab == 1, 0,
-        vec(65, 8)) then imgui.settingsTab = 1 end
-    imgui.SameLine()          
-    if imgui.Selectable("\t\t  Чёрный список", imgui.settingsTab == 2, 0,
-        vec(65, 8)) then imgui.settingsTab = 2 end
-    imgui.SameLine()
-    if imgui.Selectable("\t\t  Информация", imgui.settingsTab == 3, 0,
-        vec(65, 8)) then
-    if imgui.settingsTab ~= 3 and ini.settings.checkUpdates then
-        checkUpdates()
+    if imgui.Selectable("\t\t\t Настройки", imgui.settingsTab == 1, 0, vec(65, 8)) then
+        imgui.settingsTab = 1
     end
-    imgui.settingsTab = 3
-end
+    imgui.SameLine()
+    if imgui.Selectable("\t\t  Чёрный список", imgui.settingsTab == 2, 0, vec(65, 8)) then
+        imgui.settingsTab = 2
+    end
+    imgui.SameLine()
+    if imgui.Selectable("\t\t  Информация", imgui.settingsTab == 3, 0, vec(65, 8)) then
+        if imgui.settingsTab ~= 3 and ini.settings.checkUpdates then
+            checkUpdates()
+        end
+        imgui.settingsTab = 3
+    end
     imgui.EndChild()
     imgui.BeginChild("bottom", vec(195, 155), true)
     if imgui.settingsTab == 1 then
@@ -2782,11 +2824,14 @@ end
                     "Звуковые уведомления, громкость: ",
                     imgui.ImBool(ini.settings.notifications and ini.settings.sounds)
                 )
-            then
+             then
                 ini.settings.sounds = not ini.settings.sounds
                 inicfg.save(ini, "Taximate/settings.ini")
             end
-            imgui.SetTooltip("Для работы требуется выставить минимальную громкость игрового радио и перезапустить игру", 90)
+            imgui.SetTooltip(
+                "Для работы требуется выставить минимальную громкость игрового радио и перезапустить игру",
+                90
+            )
             imgui.SameLine()
             imgui.PushItemWidth(toScreenX(40))
             if imgui.SliderInt("", imgui.soundVolume, 0, 100) then
@@ -2796,7 +2841,10 @@ end
                 ini.settings.soundVolume = imgui.soundVolume.v
                 inicfg.save(ini, "Taximate/settings.ini")
             end
-            imgui.SetTooltip("Для работы требуется выставить минимальную громкость игрового радио и перезапустить игру", 90)
+            imgui.SetTooltip(
+                "Для работы требуется выставить минимальную громкость игрового радио и перезапустить игру",
+                90
+            )
             imgui.NewLine()
         end
         if imgui.CollapsingHeader("Приём вызовов", true, imgui.TreeNodeFlags.DefaultOpen) then
@@ -2841,7 +2889,12 @@ end
                 ini.settings.dispatcherMessages = not ini.settings.dispatcherMessages
                 inicfg.save(ini, "Taximate/settings.ini")
             end
-            if imgui.Checkbox("Не принимать отмененные вызовы в течение", imgui.ImBool(ini.settings.ignoreCanceledOrder)) then
+            if
+                imgui.Checkbox(
+                    "Не принимать отмененные вызовы в течение",
+                    imgui.ImBool(ini.settings.ignoreCanceledOrder)
+                )
+             then
                 ini.settings.ignoreCanceledOrder = not ini.settings.ignoreCanceledOrder
                 inicfg.save(ini, "Taximate/settings.ini")
             end
@@ -2854,7 +2907,12 @@ end
                 ini.settings.canceledOrderDelay = imgui.canceledOrderDelay.v
                 inicfg.save(ini, "Taximate/settings.ini")
             end
-            if imgui.Checkbox("Принимать повторные вызовы от текущего клиента", imgui.ImBool(ini.settings.acceptRepeatOrder)) then
+            if
+                imgui.Checkbox(
+                    "Принимать повторные вызовы от текущего клиента",
+                    imgui.ImBool(ini.settings.acceptRepeatOrder)
+                )
+             then
                 ini.settings.acceptRepeatOrder = not ini.settings.acceptRepeatOrder
                 inicfg.save(ini, "Taximate/settings.ini")
             end
@@ -3099,25 +3157,21 @@ end
             if not ini.settings.autoRefill then
                 imgui.PushStyleColor(imgui.Col.Text, imgui.ImVec4(1, 1, 1, 0.5))
             end
-            imgui.Text(
-                "Максимальная цена заправки:")
+            imgui.Text("Максимальная цена заправки:")
             imgui.SameLine()
             imgui.PushItemWidth(toScreenX(95))
             if imgui.SliderInt("вирт", imgui.maxAutoRefillCost, 500, 5000) then
-                if imgui.maxAutoRefillCost.v < 500 or
-                    imgui.maxAutoRefillCost.v > 5000 then
+                if imgui.maxAutoRefillCost.v < 500 or imgui.maxAutoRefillCost.v > 5000 then
                     imgui.maxAutoRefillCost.v = defaults.maxAutoRefillCost
                 end
                 ini.settings.maxAutoRefillCost = imgui.maxAutoRefillCost.v
                 inicfg.save(ini, "Taximate/settings.ini")
             end
-            imgui.Text(
-                "Минимальный остаток для заправки:")
+            imgui.Text("Минимальный остаток для заправки:")
             imgui.SameLine()
             imgui.PushItemWidth(toScreenX(85))
             if imgui.SliderInt("л.", imgui.autoRefillGauge, 0, 200) then
-                if imgui.autoRefillGauge.v < 0 or
-                    imgui.autoRefillGauge.v > 200 then
+                if imgui.autoRefillGauge.v < 0 or imgui.autoRefillGauge.v > 200 then
                     imgui.autoRefillGauge.v = defaults.autoRefillGauge
                 end
                 ini.settings.autoRefillGauge = imgui.autoRefillGauge.v
@@ -3128,11 +3182,11 @@ end
             end
             imgui.NewLine()
             if
-            imgui.Checkbox(
-                "Обновлять метку на карте если клиент поблизости",
-                imgui.ImBool(ini.settings.updateOrderMark)
-            )
-            then
+                imgui.Checkbox(
+                    "Обновлять метку на карте если клиент поблизости",
+                    imgui.ImBool(ini.settings.updateOrderMark)
+                )
+             then
                 ini.settings.updateOrderMark = not ini.settings.updateOrderMark
                 inicfg.save(ini, "Taximate/settings.ini")
             end
@@ -3154,22 +3208,18 @@ end
             if imgui.Checkbox("Закончить рабочий день при поломке/пустом баке", imgui.ImBool(ini.settings.finishWork)) then
                 ini.settings.finishWork = not ini.settings.finishWork
                 inicfg.save(ini, "Taximate/settings.ini")
-            end 
+            end
             if imgui.Checkbox("Совместимость с FastMap", imgui.ImBool(ini.settings.fastMapCompatibility)) then
                 ini.settings.fastMapCompatibility = not ini.settings.fastMapCompatibility
                 inicfg.save(ini, "Taximate/settings.ini")
             end
         end
     elseif imgui.settingsTab == 2 then
-        if imgui.Checkbox(
-            "Не принимать вызовы от игроков в списке",
-            imgui.ImBool(ini.settings.blacklistIgnore)) then
+        if imgui.Checkbox("Не принимать вызовы от игроков в списке", imgui.ImBool(ini.settings.blacklistIgnore)) then
             ini.settings.blacklistIgnore = not ini.settings.blacklistIgnore
             inicfg.save(ini, "Taximate/settings.ini")
         end
-        if imgui.Checkbox(
-            "Скрывать вызовы от игроков в списке",
-            imgui.ImBool(ini.settings.blacklistHide)) then
+        if imgui.Checkbox("Скрывать вызовы от игроков в списке", imgui.ImBool(ini.settings.blacklistHide)) then
             ini.settings.blacklistHide = not ini.settings.blacklistHide
             inicfg.save(ini, "Taximate/settings.ini")
         end
@@ -3178,10 +3228,11 @@ end
         imgui.PopItemWidth()
         imgui.SameLine()
         local bufferValue = imgui.blacklistName.v
-        if imgui.Button("Добавить строку", vec(50, 10)) and
-            not blacklist.players[bufferValue] then
-            if bufferValue:find('^[%w_%?%*]+$') and
-                #bufferValue < 25 and #bufferValue > 1 and tonumber(bufferValue) == nil then
+        if imgui.Button("Добавить строку", vec(50, 10)) and not blacklist.players[bufferValue] then
+            if
+                bufferValue:find("^[%w_%?%*]+$") and #bufferValue < 25 and #bufferValue > 1 and
+                    tonumber(bufferValue) == nil
+             then
                 blacklist.players[bufferValue] = {
                     active = true,
                     buffer = imgui.ImBuffer(25),
@@ -3234,8 +3285,10 @@ end
                     imgui.PushID(id)
                     if imgui.Button("Сохранить", vec(40, 10)) then
                         local bufferValue = record.buffer.v
-                        if bufferValue:find('^[%w_%?%*]+$') and #bufferValue < 25 and #bufferValue >
-                            1 and tonumber(bufferValue) == nil then
+                        if
+                            bufferValue:find("^[%w_%?%*]+$") and #bufferValue < 25 and #bufferValue > 1 and
+                                tonumber(bufferValue) == nil
+                         then
                             if record.buffer.v ~= nickname then
                                 blacklist.players[nickname] = nil
                                 blacklist.players[bufferValue] = {
@@ -3424,9 +3477,9 @@ local zones = {
     ["Магазин одежды [LS]"] = {x = 461.51239, y = -1500.866211},
     ["Клуб Alhambra"] = {x = 1827.609253, y = -1682.12207},
     ["Русская мафия"] = {x = 1001.480103, y = 1690.514526},
-	["Автобусный парк [LS]"] = {x = 1672.12, y = -1170.56},
-	["Автобусный парк [SF]"] = {x = -2306.51, y = -97.76},
-	["Автобусный парк [LV]"] = {x = 2568.63, y = 1402.62},
+    ["Автобусный парк [LS]"] = {x = 1672.12, y = -1170.56},
+    ["Автобусный парк [SF]"] = {x = -2306.51, y = -97.76},
+    ["Автобусный парк [LV]"] = {x = 2568.63, y = 1402.62},
     ["Redsands West"] = {x = 1157.925537, y = 2072.282227},
     ["Marina Cluck"] = {x = 928.539917, y = -1352.939331},
     ["Полиция [LV]"] = {x = 2283.758789, y = 2420.525146},
@@ -3603,7 +3656,7 @@ function imgui.ApplyCustomStyle()
     style.ColumnsMinSpacing = toScreenX(0)
     style.DisplayWindowPadding = vec(0, 0)
     style.DisplaySafeAreaPadding = vec(0, 0)
-    
+
     colors[clr.Text] = ImVec4(1.00, 1.00, 1.00, 1.00)
     colors[clr.TextDisabled] = ImVec4(0.50, 0.50, 0.50, 1.00)
     colors[clr.WindowBg] = ImVec4(0.06, 0.06, 0.06, 0.94)
