@@ -873,7 +873,6 @@ function orders.handle(orderNickname, orderDistance, orderClock)
                     (level >= 3 and level <= 5 and ini.settings.autoAccept3_5) or
                     (level >= 6 and ini.settings.autoAccept6)
                 local ignoreByBlacklist = ini.settings.blacklistIgnore and blacklist.check(orderNickname)
-
                 if orders.autoAccept and acceptByLevel and not ignoreByBlacklist then
                     if orderDistance <= ini.settings.maxDistanceToAcceptOrder and os.clock() - 60 < orderClock then
                         orders.accept(orderNickname, orderClock)
@@ -1504,13 +1503,11 @@ function blacklist.check(nickname)
         end
     end
 
-    for nickname, record in pairs(blacklist.players) do
-        local pattern = nickname
-        if (pattern:find("?") or pattern:find("*")) and record.active then
+    for pattern, record in pairs(blacklist.players) do
+        if (pattern:find("%?") or pattern:find("%*")) and record.active then
             pattern = "^" .. pattern .. "$"
-            pattern = pattern:gsub("?", "[%%w_]")
-            pattern = pattern:gsub("*", "[%%w_]*")
-
+            pattern = pattern:gsub("%?", "[%%w_]")
+            pattern = pattern:gsub("%*", "[%%w_]%*")
             if nickname:lower():match(pattern:lower()) then
                 return true
             end
@@ -2929,7 +2926,7 @@ function imgui.onDrawSettings()
                 ini.settings.ordersDistanceUpdateTimer = imgui.ordersDistanceUpdateTimer.v
                 inicfg.save(ini, "Taximate/settings.ini")
             end
-            if imgui.Checkbox("Заводитель двигатель при принятии вызова", imgui.ImBool(ini.settings.startEngine)) then
+            if imgui.Checkbox("Заводить двигатель при принятии вызова", imgui.ImBool(ini.settings.startEngine)) then
                 ini.settings.startEngine = not ini.settings.startEngine
                 inicfg.save(ini, "Taximate/settings.ini")
             end
@@ -3089,6 +3086,24 @@ function imgui.onDrawSettings()
             if not ini.settings.hotKeys then
                 imgui.PopStyleColor()
             end
+            if imgui.Checkbox("Активация круиз-контроля клавишей", imgui.ImBool(ini.settings.cruiseControl)) then
+                ini.settings.cruiseControl = not ini.settings.cruiseControl
+                inicfg.save(ini, "Taximate/settings.ini")
+            end
+            imgui.SameLine()
+            local buttonText = "None"
+            if ini.settings.key4 ~= 0 then
+                buttonText = vkeys.id_to_name(ini.settings.key4)
+            end
+            imgui.PushID(4)
+            if imgui.Button(buttonText, vec(0, 10)) then
+                imgui.key = 0
+                imgui.addKey = 0
+                imgui.showInputWindow.v = true
+                imgui.singleBind = true
+                imgui.key4Edit = true
+            end
+            imgui.PopID()
             if not imgui.showInputWindow.v and imgui.key ~= 0 then
                 if imgui.key == -1 then
                     imgui.key = 0
@@ -3103,43 +3118,18 @@ function imgui.onDrawSettings()
                 elseif imgui.key3Edit then
                     ini.settings.key3 = imgui.key
                     ini.settings.key3add = imgui.addKey
+                elseif imgui.key4Edit then
+                    ini.settings.key4 = imgui.key
                 end
                 inicfg.save(ini, "Taximate/settings.ini")
                 imgui.key1Edit = false
                 imgui.key2Edit = false
                 imgui.key3Edit = false
-                imgui.key = 0
-                imgui.addKey = 0
-            end
-            if imgui.Checkbox("Активация круиз-контроля клавишей", imgui.ImBool(ini.settings.cruiseControl)) then
-                ini.settings.cruiseControl = not ini.settings.cruiseControl
-                inicfg.save(ini, "Taximate/settings.ini")
-            end
-            imgui.SameLine()
-            local buttonText = "None"
-            if ini.settings.key4 ~= 0 then
-                buttonText = vkeys.id_to_name(ini.settings.key4)
-            end
-            imgui.PushID(1)
-            if imgui.Button(buttonText, vec(0, 10)) then
-                imgui.key = 0
-                imgui.addKey = 0
-                imgui.showInputWindow.v = true
-                imgui.singleBind = true
-                imgui.key4Edit = true
-            end
-            if not imgui.showInputWindow.v and imgui.key ~= 0 then
-                if imgui.key == -1 then
-                    imgui.key = 0
-                end
-                if imgui.key4Edit then
-                    ini.settings.key4 = imgui.key
-                end
-                inicfg.save(ini, "Taximate/settings.ini")
+                imgui.key4Edit = false
                 imgui.singleBind = false
                 imgui.key = 0
-            end
-            imgui.PopID()
+                imgui.addKey = 0
+            end  
             imgui.NewLine()
         end
         if imgui.CollapsingHeader("Прочие настройки", true, imgui.TreeNodeFlags.DefaultOpen) then
@@ -3167,10 +3157,10 @@ function imgui.onDrawSettings()
                 ini.settings.maxAutoRefillCost = imgui.maxAutoRefillCost.v
                 inicfg.save(ini, "Taximate/settings.ini")
             end
-            imgui.Text("Минимальный остаток для заправки:")
+            imgui.Text("Минимальный остаток литров для заправки:")
             imgui.SameLine()
-            imgui.PushItemWidth(toScreenX(85))
-            if imgui.SliderInt("л.", imgui.autoRefillGauge, 0, 200) then
+            imgui.PushItemWidth(toScreenX(74))
+            if imgui.SliderInt("##л.", imgui.autoRefillGauge, 0, 200) then
                 if imgui.autoRefillGauge.v < 0 or imgui.autoRefillGauge.v > 200 then
                     imgui.autoRefillGauge.v = defaults.autoRefillGauge
                 end
@@ -3204,7 +3194,9 @@ function imgui.onDrawSettings()
                 ini.settings.markers = not ini.settings.markers
                 inicfg.save(ini, "Taximate/settings.ini")
             end
+            imgui.PushStyleColor(imgui.Col.Text, imgui.ImVec4(1, 0, 0, 1))
             imgui.SetTooltip("Функция даёт преимущество над игроками\nИспользовать на свой страх и риск", 150)
+            imgui.PopStyleColor()
             if imgui.Checkbox("Закончить рабочий день при поломке/пустом баке", imgui.ImBool(ini.settings.finishWork)) then
                 ini.settings.finishWork = not ini.settings.finishWork
                 inicfg.save(ini, "Taximate/settings.ini")
