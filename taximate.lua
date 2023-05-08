@@ -3936,16 +3936,6 @@ function applyChanges(version_num)
 end
 -- applyChanges
 
-function applyChangesV52()
-    ini.settings.SMSText = ini.settings.SMSText:gsub("{distance} м", "{distance}")
-    inicfg.save(ini, "Taximate/settings.ini")
-
-    for index, value in ipairs(binds.list.sms) do
-        value.buffer.v = value.buffer.v:gsub("{distance} м", "{distance}")
-    end
-    binds.save()
-end
-
 function try(f, catch_f)
     local status, exception = pcall(f)
     if not status then
