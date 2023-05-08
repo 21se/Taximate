@@ -1,10 +1,9 @@
 script_author("21se")
 script_moonloader(026)
-script_version("1.3.5")
-script_version_number(54)
+script_version("1.3.6")
+script_version_number(55)
 script_url("github.com/21se/Taximate")
-script_name(string.format("Taximate v%s (%d)", thisScript().version,
-                          thisScript().version_num))
+script_name(string.format("Taximate v%s (%d)", thisScript().version, thisScript().version_num))
 local script_updates = {update = false}
 local script_branch = "master"
 
@@ -31,21 +30,39 @@ local VEHICLE_MODEL_IDS = {
 }
 
 local COLOR_LIST = {
-    "[0] Без цвета", "[1] Зелёный",
-    "[2] Светло-зелёный", "[3] Ярко-зелёный",
-    "[4] Бирюзовый", "[5] Жёлто-зелёный",
-    "[6] Тёмно-зелёный", "[7] Серо-зелёный",
-    "[8] Красный", "[9] Ярко-красный",
-    "[10] Оранжевый", "[11] Коричневый",
-    "[12] Тёмно-красный", "[13] Серо-красный",
-    "[14] Жёлто-оранжевый", "[15] Малиновый",
-    "[16] Розовый", "[17] Синий", "[18] Голубой",
-    "[19] Синяя сталь", "[20] Cине-зелёный",
-    "[21] Тёмно-синий", "[22] Фиолетовый",
-    "[23] Индиго", "[24] Серо-синий", "[25] Жёлтый",
-    "[26] Кукурузный", "[27] Золотой",
-    "[28] Старое золото", "[29] Оливковый",
-    "[30] Серый", "[31] Серебро", "[32] Чёрный",
+    "[0] Без цвета",
+    "[1] Зелёный",
+    "[2] Светло-зелёный",
+    "[3] Ярко-зелёный",
+    "[4] Бирюзовый",
+    "[5] Жёлто-зелёный",
+    "[6] Тёмно-зелёный",
+    "[7] Серо-зелёный",
+    "[8] Красный",
+    "[9] Ярко-красный",
+    "[10] Оранжевый",
+    "[11] Коричневый",
+    "[12] Тёмно-красный",
+    "[13] Серо-красный",
+    "[14] Жёлто-оранжевый",
+    "[15] Малиновый",
+    "[16] Розовый",
+    "[17] Синий",
+    "[18] Голубой",
+    "[19] Синяя сталь",
+    "[20] Cине-зелёный",
+    "[21] Тёмно-синий",
+    "[22] Фиолетовый",
+    "[23] Индиго",
+    "[24] Серо-синий",
+    "[25] Жёлтый",
+    "[26] Кукурузный",
+    "[27] Золотой",
+    "[28] Старое золото",
+    "[29] Оливковый",
+    "[30] Серый",
+    "[31] Серебро",
+    "[32] Чёрный",
     "[33] Белый"
 }
 
@@ -56,7 +73,8 @@ local MESSAGES = {
     orderAcceptedFormat = "^ Диспетчер: (.+) принял вызов от (.+)%[%d+%]$",
     wrongPerson = "^ Диспетчер: вызов от этого человека не поступал$",
     noOrders = "^ Вызовов не поступало$",
-    enterService = "^ Введите: /service$",
+    enterService1 = "^ Введите: /service$",
+    enterService2 = "^ Введите: /service %[call|ac%]  %[cop|medic|taxi|mechanic%]$",
     clist = "^ Цвет выбран$",
     payCheck = "^ Вы заработали .+ вирт. Деньги будут зачислены на ваш банковский счет в .+$",
     payCheckFormat = "^ Вы заработали (.+) / (.+) вирт. Деньги будут зачислены на ваш банковский счет в .+$",
@@ -72,33 +90,43 @@ local MESSAGES = {
     taxiChecker = "<< Бесплатное такси >>",
     skill = "Скилл: (%d+)	Опыт: .+ (%d+%.%d+)%%",
     rank = "Ранг: (%d+)  	Опыт: .+ (%d+%.%d+)%%",
-    order = "%[%d+%] (.+)%[ID:(%d+)%]	(.+)	(.+)	"
+    order = "%[%d+%] (.+)%[ID:(%d+)%]	(.+)	(.+)	",
+    repair = "^ Механик [a-zA-Z0-9_]+ хочет отремонтировать ваш автомобиль за %d+ вирт{FFFFFF} %(%( Нажмите Y/N для принятия/отмены %)%)$",
+    refill = "^ Механик [a-zA-Z0-9_]+ хочет заправить ваш автомобиль за %d+ вирт{FFFFFF} %(%( Нажмите Y/N для принятия/отмены %)%)$",
+    refillFormat = "^ Механик .+ хочет заправить ваш автомобиль за (%d+) вирт{FFFFFF} %(%( Нажмите Y/N для принятия/отмены %)%)$",
+    fuelClassic = "FUEL ~w~%d+",
+    fuelClassicFormat = "FUEL ~w~(%d+)"
 }
 
 local FORMAT_NOTIFICATIONS = {
-    newOrder = "Вызов от {4296f9}%s[%s]\nДистанция: {4296f9}%s",
+    newOrder = "Вызов от {4296f9}%s[%s]{ffffff} (%s)\nДистанция: {4296f9}%s",
     orderAccepted = "Принят вызов от {4296f9}%s[%s]\nДистанция: {4296f9}%s",
     cruiseControlEnabled = "Круиз-контроль {42ff96}включён",
     cruiseControlDisabled = "Круиз-контроль {d44331}выключен"
 }
 
 function main()
+    if not isSampLoaded() or not isSampfuncsLoaded() then
+        return
+    end
 
-    if not isSampLoaded() or not isSampfuncsLoaded() then return end
+    while not isSampAvailable() do
+        wait(100)
+    end
 
-    while not isSampAvailable() do wait(100) end
-
-    repeat wait(100) until sampGetCurrentServerName() ~= "SA-MP"
+    repeat
+        wait(100)
+    until sampGetCurrentServerName() ~= "SA-MP"
 
     local _, playerID = sampGetPlayerIdByCharHandle(PLAYER_PED)
     player.nickname = sampGetPlayerNickname(playerID)
     player.id = playerID
 
-    chat.sendMessage(
-        "Меню настроек скрипта - {00CED1}/tm{FFFFFF}, страница скрипта: {00CED1}" ..
-            thisScript().url)
+    chat.sendMessage("Меню настроек скрипта - {00CED1}/tm{FFFFFF}, страница скрипта: {00CED1}" .. thisScript().url)
 
-    repeat wait(100) until sampGetPlayerScore(player.id) ~= 0
+    repeat
+        wait(100)
+    until sampGetPlayerScore(player.id) ~= 0
 
     if not doesDirectoryExist(getWorkingDirectory() .. "/config") then
         createDirectory(getWorkingDirectory() .. "/config")
@@ -113,10 +141,15 @@ function main()
     sounds.loadSound("correct_order")
     sounds.loadSound("new_passenger")
     imgui.ApplyCustomStyle()
-    imgui.GetIO().Fonts:AddFontFromFileTTF("C:/Windows/Fonts/arial.ttf",
-                                           toScreenX(6), nil, imgui.GetIO()
-                                               .Fonts:GetGlyphRangesCyrillic())
+    imgui.GetIO().Fonts:AddFontFromFileTTF(
+        "C:/Windows/Fonts/arial.ttf",
+        toScreenX(6),
+        nil,
+        imgui.GetIO().Fonts:GetGlyphRangesCyrillic()
+    )
     binds.list = binds.get()
+    blacklist.players = blacklist.get()
+    blacklist.sortNicknames()
 
     imgui.Process = true
     chat.initQueue()
@@ -128,25 +161,33 @@ function main()
     lua_thread.create(vehicle.refreshInfoThread)
     lua_thread.create(orders.deleteOrdersThread)
 
-    sampRegisterChatCommand("taximate", function()
-        imgui.showSettings.v = not imgui.showSettings.v
-    end)
-    sampRegisterChatCommand("tm", function()
-        imgui.showSettings.v = not imgui.showSettings.v
-    end)
-    sampRegisterChatCommand("tmup", function()
-        checkUpdates(false)
-        update()
-    end)
+    sampRegisterChatCommand(
+        "taximate",
+        function()
+            imgui.showSettings.v = not imgui.showSettings.v
+        end
+    )
+    sampRegisterChatCommand(
+        "tm",
+        function()
+            imgui.showSettings.v = not imgui.showSettings.v
+        end
+    )
+    sampRegisterChatCommand(
+        "tmup",
+        function()
+            checkUpdates(false)
+            update()
+        end
+    )
+    sampRegisterChatCommand("tmblacklist", blacklist.command)
+    sampRegisterChatCommand("tmbl", blacklist.command)
 
-    -- +TODO: убрать в версии 53
-    applyChangesV52()
-    --
+    if ini.settings.checkUpdates then
+        lua_thread.create(checkUpdates)
+    end
 
-    if ini.settings.checkUpdates then lua_thread.create(checkUpdates) end
-
-    if doesFileExist(getGameDirectory() .. "/map.asi") and
-        doesFileExist(getGameDirectory() .. "/map.ini") then
+    if doesFileExist(getGameDirectory() .. "/map.asi") and doesFileExist(getGameDirectory() .. "/map.ini") then
         local fastMap = inicfg.load(_, getGameDirectory() .. "/map.ini")
         fastMapKey = fastMap.MAP.key
         fastMap = nil
@@ -156,15 +197,14 @@ function main()
         wait(0)
 
         imgui.ShowCursor = false
+
         if player.onWork then
-            local result, orderNickname, orderDistance, orderClock =
-                orders.get()
+            local result, orderNickname, orderDistance, orderClock = orders.get()
             if result then
                 orders.handle(orderNickname, orderDistance, orderClock)
             end
 
-            orders.autoAccept = table.isEmpty(vehicle.passengersList) and
-                                    not orders.currentOrder
+            orders.autoAccept = table.isEmpty(vehicle.passengersList) and not orders.currentOrder
 
             orders.refreshCurrentOrder()
 
@@ -172,8 +212,7 @@ function main()
                 orders.updateOrdersDistance()
             end
 
-            if isKeysPressed(ini.settings.key3, ini.settings.key3add, false) and
-                ini.settings.hotKeys then
+            if isKeysPressed(ini.settings.key3, ini.settings.key3add, false) and ini.settings.hotKeys then
                 player.onWork = false
                 if ini.settings.autoClist then
                     chat.addMessageToQueue("/clist 0", true, true)
@@ -191,15 +230,12 @@ function main()
 
             if not orders.currentOrder then
                 if orders.lastCorrectOrderNickname then
-                    if isKeysPressed(ini.settings.key2, ini.settings.key2add,
-                                     false) and ini.settings.hotKeys then
-                        orders.accept(orders.lastCorrectOrderNickname,
-                                      orders.lastCorrectOrderClock)
+                    if isKeysPressed(ini.settings.key2, ini.settings.key2add, false) and ini.settings.hotKeys then
+                        orders.accept(orders.lastCorrectOrderNickname, orders.lastCorrectOrderClock)
                     end
                 end
             else
-                if isKeysPressed(ini.settings.key2, ini.settings.key2add, false) and
-                    ini.settings.hotKeys then
+                if isKeysPressed(ini.settings.key2, ini.settings.key2add, false) and ini.settings.hotKeys then
                     orders.cancelCurrentOrder()
                 end
             end
@@ -207,12 +243,10 @@ function main()
             orders.cancelCurrentOrder()
         else
             orders.autoAccept = false
-            if isKeysPressed(ini.settings.key3, ini.settings.key3add, false) and
-                ini.settings.hotKeys then
+            if isKeysPressed(ini.settings.key3, ini.settings.key3add, false) and ini.settings.hotKeys then
                 player.onWork = true
                 if ini.settings.autoClist and ini.settings.workClist ~= 0 then
-                    chat.addMessageToQueue("/clist " .. ini.settings.workClist,
-                                           true, true)
+                    chat.addMessageToQueue("/clist " .. ini.settings.workClist, true, true)
                 end
             end
         end
@@ -247,16 +281,22 @@ chat = {
     }
 }
 
-function chat.sendMessage(message)
-    sampAddChatMessage(u8:decode("\
-				{00CED1}[Taximate v" .. thisScript().version .. "]{FFFFFF} " ..
-                                     tostring(message)), 0xFFFFFF)
+function chat.sendMessage(...)
+    local message = ""
+    local pack = table.pack(...)
+    for i = 1, pack.n do
+        message = message .. tostring(pack[i]) .. " "
+    end
+    sampAddChatMessage(
+        u8:decode("\
+				{00CED1}[Taximate v" .. thisScript().version .. "]{FFFFFF} " .. message),
+        0xFFFFFF
+    )
 end
 
 function chat.updateAntifloodClock()
     chat.antifloodClock = os.clock()
-    if string.sub(chat.lastMessage, 1, 5) == "/sms " or
-        string.sub(chat.lastMessage, 1, 3) == "/t " then
+    if string.sub(chat.lastMessage, 1, 5) == "/sms " or string.sub(chat.lastMessage, 1, 3) == "/t " then
         chat.antifloodClock = chat.antifloodClock + 0.5
     end
 end
@@ -269,8 +309,9 @@ function chat.disableFrozenMessagesProcessingThread()
                 value.bool = false
             end
         end
-        if os.clock() - orders.lastAcceptedOrderClock > 5 and
-            orders.orderAccepted then orders.orderAccepted = false end
+        if os.clock() - orders.lastAcceptedOrderClock > 5 and orders.acceptedNickname ~= nil then
+            orders.acceptedNickname = nil
+        end
     end
 end
 
@@ -280,16 +321,10 @@ function chat.checkQueueThread()
         for messageIndex = 1, chat.queueSize do
             local message = chat.queue[messageIndex]
             if message.message ~= "" then
-                if string.sub(chat.lastMessage, 1, 1) ~= "/" and
-                    string.sub(message.message, 1, 1) ~= "/" then
+                if string.sub(chat.lastMessage, 1, 1) ~= "/" and string.sub(message.message, 1, 1) ~= "/" then
                     chat.antifloodDelay = chat.antifloodDelay + 0.5
                 end
                 if os.clock() - chat.antifloodClock > chat.antifloodDelay then
-                    if string.find(message.message, "/service ac taxi") then
-                        orders.orderAccepted = true
-                        orders.lastAcceptedOrderClock = os.clock()
-                    end
-
                     local sendMessage = true
 
                     local command = string.match(message.message, "^(/[^ ]*).*")
@@ -301,12 +336,19 @@ function chat.checkQueueThread()
                                 sendMessage = false
                             else
                                 chat.hiddenMessages[command].bool =
-                                    (not sampIsDialogActive() or
-                                        not chat.hiddenMessages[command].dialog) and
-                                        chat.dialogClock < os.clock()
+                                    (not sampIsDialogActive() or not chat.hiddenMessages[command].dialog) and
+                                    chat.dialogClock < os.clock()
                                 chat.hiddenMessages[command].clock = os.clock()
                                 sendMessage = chat.hiddenMessages[command].bool
                             end
+                        end
+                    end
+
+                    if sendMessage then
+                        if message.message == "/en" then
+                            sendMessage = vehicle.maxPassengers and not isCarEngineOn(vehicle.handle)
+                        elseif message.message:find("/service ac taxi") then
+                            sendMessage = not orders.currentOrder
                         end
                     end
 
@@ -330,8 +372,7 @@ function chat.subSMSText(prefix, text)
         text = text:gsub("{zone}", getZone(posX, posY))
     end
     if orders.currentOrder then
-        text = text:gsub("{distance}", metersToString(
-                             orders.currentOrder.currentDistance, false))
+        text = text:gsub("{distance}", metersToString(orders.currentOrder.currentDistance, false))
     else
         text = text:gsub("{distance}", "123 м")
     end
@@ -340,7 +381,9 @@ function chat.subSMSText(prefix, text)
     else
         text = text:gsub("{carname}", "Sentinel")
     end
-    if prefix ~= "" then prefix = prefix .. " " end
+    if prefix ~= "" then
+        prefix = prefix .. " "
+    end
     return prefix .. text
 end
 
@@ -348,23 +391,29 @@ function chat.sendNotification(order)
     if ini.settings.sendSMS then
         if not order.arrived and order.showMark then
             if order.currentDistance < 30 and ini.settings.SMSArrival ~= "" then
-                chat.addMessageToQueue(string.format("/t %d %s", order.id,
-                                                     chat.subSMSText(
-                                                         ini.settings.SMSPrefix,
-                                                         ini.settings.SMSArrival)))
+                chat.addMessageToQueue(
+                    string.format(
+                        "/t %d %s",
+                        order.id,
+                        chat.subSMSText(ini.settings.SMSPrefix, ini.settings.SMSArrival)
+                    )
+                )
                 order.arrived = true
-            elseif order.SMSClock < os.clock() and order.updateDistance and
-                ini.settings.SMSText ~= "" then
-                chat.addMessageToQueue(string.format("/t %d %s", order.id,
-                                                     chat.subSMSText(
-                                                         ini.settings.SMSPrefix,
-                                                         ini.settings.SMSText)))
-                if order.firstSMS and vehicle.maxPassengers == 1 and
-                    ini.settings.seatsNotify and ini.settings.SMSSeats ~= "" then
+            elseif order.SMSClock < os.clock() and order.updateDistance and ini.settings.SMSText ~= "" then
+                chat.addMessageToQueue(
+                    string.format("/t %d %s", order.id, chat.subSMSText(ini.settings.SMSPrefix, ini.settings.SMSText))
+                )
+                if
+                    order.firstSMS and vehicle.maxPassengers == 1 and ini.settings.seatsNotify and
+                        ini.settings.SMSSeats ~= ""
+                 then
                     chat.addMessageToQueue(
-                        string.format("/t %d %s", order.id, chat.subSMSText(
-                                          ini.settings.SMSPrefix,
-                                          ini.settings.SMSSeats)))
+                        string.format(
+                            "/t %d %s",
+                            order.id,
+                            chat.subSMSText(ini.settings.SMSPrefix, ini.settings.SMSSeats)
+                        )
+                    )
                     order.firstSMS = false
                 end
                 order.SMSClock = os.clock() + ini.settings.SMSTimer
@@ -377,99 +426,116 @@ function chat.sendNotification(order)
 end
 
 function chat.handleInputMessage(message)
-    lua_thread.create(function()
-        if string.find(message, MESSAGES.newOrder) then
-            local time = os.clock()
-            local nickname, id, distance =
-                string.match(message, MESSAGES.newOrderFormat)
-            distance = stringToMeters(distance)
-            orders.add(nickname, id, distance, time)
-        elseif string.find(message, MESSAGES.orderAccepted) then
-            local driverNickname, passengerNickname =
-                string.match(message, MESSAGES.orderAcceptedFormat)
-            if driverNickname == player.nickname and player.onWork then
-                if orders.orderAccepted then
-                    orders.orderAccepted = false
-                end
-                if orders.currentOrder then
-                    if orders.currentOrder.nickname ~= passengerNickname then
+    lua_thread.create(
+        function()
+            if string.find(message, MESSAGES.newOrder) then
+                local time = os.clock()
+                local nickname, id, distance = string.match(message, MESSAGES.newOrderFormat)
+                distance = stringToMeters(distance)
+                orders.add(nickname, id, distance, time)
+            elseif string.find(message, MESSAGES.orderAccepted) then
+                local driverNickname, passengerNickname = string.match(message, MESSAGES.orderAcceptedFormat)
+                if driverNickname == player.nickname and player.onWork then
+                    if vehicle.maxPassengers and ini.settings.startEngine then
+                        if not isCarEngineOn(vehicle.handle) then
+                            chat.addMessageToQueue("/en")
+                        end
+                    end
+                    if orders.currentOrder then
+                        if orders.currentOrder.nickname ~= passengerNickname then
+                            if ini.settings.notifications and ini.settings.sounds then
+                                sounds.play("new_order")
+                            end
+                            if ini.settings.notifications then
+                                imgui.addNotification(
+                                    string.format(
+                                        FORMAT_NOTIFICATIONS.orderAccepted,
+                                        orders.list[passengerNickname].nickname,
+                                        orders.list[passengerNickname].id,
+                                        metersToString(orders.list[passengerNickname].distance)
+                                    ),
+                                    10
+                                )
+                            end
+                        else
+                            orders.currentOrder.repeatCount = orders.currentOrder.repeatCount + 1
+
+                            orders.updateGPSMark()
+                        end
+                    elseif orders.list[passengerNickname] then
                         if ini.settings.notifications and ini.settings.sounds then
                             sounds.play("new_order")
                         end
                         if ini.settings.notifications then
-                            imgui.addNotification(string.format(
-                                                      FORMAT_NOTIFICATIONS.orderAccepted,
-                                                      orders.list[passengerNickname]
-                                                          .nickname,
-                                                      orders.list[passengerNickname]
-                                                          .id, metersToString(
-                                                          orders.list[passengerNickname]
-                                                              .distance)), 10)
+                            imgui.addNotification(
+                                string.format(
+                                    FORMAT_NOTIFICATIONS.orderAccepted,
+                                    orders.list[passengerNickname].nickname,
+                                    orders.list[passengerNickname].id,
+                                    metersToString(orders.list[passengerNickname].distance)
+                                ),
+                                10
+                            )
                         end
-                    else
-                        orders.currentOrder.repeatCount = orders.currentOrder
-                                                              .repeatCount + 1
+                        orders.currentOrder = orders.list[passengerNickname]
+                        orders.currentOrder.SMSClock = os.clock()
 
                         orders.updateGPSMark()
                     end
-                elseif orders.list[passengerNickname] then
+                end
+                orders.delete(passengerNickname)
+            elseif string.find(message, MESSAGES.GPS) and player.onWork then
+                local text = "Метка на карте обновлена"
+                local result, x, y = getGPSMarkCoords3d()
+                if result then
+                    text = text .. "\nРайон: {4296f9}" .. getZone(x, y)
                     if ini.settings.notifications and ini.settings.sounds then
-                        sounds.play("new_order")
+                        sounds.play("correct_order")
                     end
                     if ini.settings.notifications then
-                        imgui.addNotification(string.format(
-                                                  FORMAT_NOTIFICATIONS.orderAccepted,
-                                                  orders.list[passengerNickname]
-                                                      .nickname,
-                                                  orders.list[passengerNickname]
-                                                      .id, metersToString(
-                                                      orders.list[passengerNickname]
-                                                          .distance)), 10)
+                        imgui.addNotification(text, 5)
                     end
-                    orders.currentOrder = orders.list[passengerNickname]
-                    orders.currentOrder.SMSClock = os.clock()
-
-                    orders.updateGPSMark()
+                end
+            elseif
+                string.find(message, MESSAGES.finishWork) and player.onWork and ini.settings.finishWork and
+                    not orders.currentOrder
+             then
+                player.onWork = false
+                if ini.settings.autoClist and not chat.hiddenMessages["/clist"].bool then
+                    chat.addMessageToQueue("/clist 0", true, true)
+                end
+            elseif string.find(message, MESSAGES.passengerOut) or string.find(message, MESSAGES.passengerOutFree) then
+                player.refresh()
+            elseif string.find(message, MESSAGES.pay) then
+                local sum, nickname = string.match(message, MESSAGES.payFormat)
+                if table.contains(nickname, vehicle.lastPassengersList) then
+                    player.tips = player.tips + sum
+                end
+            elseif string.find(message, MESSAGES.payDay) then
+                player.tips = 0
+                player.refresh()
+            elseif string.find(message, MESSAGES.antiFlood) then
+                chat.updateAntifloodClock()
+                for qMessage in pairs(chat.hiddenMessages) do
+                    chat.hiddenMessages[qMessage].bool = false
+                end
+                orders.acceptedNickname = nil
+            elseif string.find(message, MESSAGES.repair) and ini.settings.autoRepair then
+                if getCarHealth(vehicle.handle) ~= 1000 then
+                    chat.addMessageToQueue("/ac repair")
+                else
+                    chat.addMessageToQueue("/cancel repair")
+                end
+            elseif string.find(message, MESSAGES.refill) and ini.settings.autoRefill and vehicle.fuel then
+                local cost = tonumber(string.match(message, MESSAGES.refillFormat))
+                if cost <= ini.settings.maxAutoRefillCost and vehicle.fuel <= ini.settings.autoRefillGauge then
+                    chat.addMessageToQueue("/ac refill")
+                else
+                    chat.addMessageToQueue("/cancel refill")
                 end
             end
-            orders.delete(passengerNickname)
-        elseif string.find(message, MESSAGES.GPS) and player.onWork then
-            local text = "Метка на карте обновлена"
-            local result, x, y = getGPSMarkCoords3d()
-            if result then
-                text = text .. "\nРайон: {4296f9}" .. getZone(x, y)
-                if ini.settings.notifications and ini.settings.sounds then
-                    sounds.play("correct_order")
-                end
-                if ini.settings.notifications then
-                    imgui.addNotification(text, 5)
-                end
-            end
-        elseif string.find(message, MESSAGES.finishWork) and player.onWork and
-            ini.settings.finishWork and not orders.currentOrder then
-            player.onWork = false
-            if ini.settings.autoClist and not chat.hiddenMessages["/clist"].bool then
-                chat.addMessageToQueue("/clist 0", true, true)
-            end
-        elseif string.find(message, MESSAGES.passengerOut) or
-            string.find(message, MESSAGES.passengerOutFree) then
-            player.refresh()
-        elseif string.find(message, MESSAGES.pay) then
-            local sum, nickname = string.match(message, MESSAGES.payFormat)
-            if table.contains(nickname, vehicle.lastPassengersList) then
-                player.tips = player.tips + sum
-            end
-        elseif string.find(message, MESSAGES.payDay) then
-            player.tips = 0
-            player.refresh()
-        elseif string.find(message, MESSAGES.antiFlood) then
-            chat.updateAntifloodClock()
-            for qMessage in pairs(chat.hiddenMessages) do
-                chat.hiddenMessages[qMessage].bool = false
-            end
-            orders.orderAccepted = false
         end
-    end)
+    )
 end
 
 function chat.initQueue()
@@ -495,10 +561,8 @@ function chat.addMessageToQueue(string, nonRepeat, hideResult)
 
     if not isRepeat then
         for messageIndex = 1, chat.queueSize - 1 do
-            chat.queue[messageIndex].message =
-                chat.queue[messageIndex + 1].message
-            chat.queue[messageIndex].hideResult =
-                chat.queue[messageIndex + 1].hideResult
+            chat.queue[messageIndex].message = chat.queue[messageIndex + 1].message
+            chat.queue[messageIndex].hideResult = chat.queue[messageIndex + 1].hideResult
         end
         chat.queue[chat.queueSize].message = string
         chat.queue[chat.queueSize].hideResult = hideResult
@@ -513,7 +577,7 @@ orders = {
     lastAcceptedOrderClock = os.clock(),
     lastCorrectOrderNickname = nil,
     lastCorrectOrderClock = os.clock(),
-    orderAccepted = false,
+    acceptedNickname = nil,
     updateOrdersDistanceClock = os.clock(),
     currentOrder = nil,
     currentOrderBlip = nil,
@@ -525,15 +589,16 @@ function orders.cancelCurrentOrder()
         sounds.play("correct_order")
     end
     if ini.settings.notifications then
-        imgui.addNotification(
-            "Вызов отменён\nМетка на карте удалена",
-            5)
+        imgui.addNotification("Вызов отменён\nМетка на карте удалена", 5)
     end
     if ini.settings.sendSMSCancel and ini.settings.SMSCancel ~= "" then
-        chat.addMessageToQueue(string.format("/t %d %s", orders.currentOrder.id,
-                                             chat.subSMSText(
-                                                 ini.settings.SMSPrefix,
-                                                 ini.settings.SMSCancel)))
+        chat.addMessageToQueue(
+            string.format(
+                "/t %d %s",
+                orders.currentOrder.id,
+                chat.subSMSText(ini.settings.SMSPrefix, ini.settings.SMSCancel)
+            )
+        )
     end
     orders.canceled[orders.currentOrder.nickname] = os.clock()
     orders.currentOrder = nil
@@ -557,10 +622,8 @@ function orders.updateGPSMark()
         orders.currentOrder.pos.y = posY
         orders.currentOrder.pos.z = posZ
         orders.currentOrder.zone = getZone(posX, posY)
-        orders.currentOrder.distance = getDistanceToCoords3d(
-                                           orders.currentOrder.pos.x,
-                                           orders.currentOrder.pos.y,
-                                           orders.currentOrder.pos.z)
+        orders.currentOrder.distance =
+            getDistanceToCoords3d(orders.currentOrder.pos.x, orders.currentOrder.pos.y, orders.currentOrder.pos.z)
         orders.currentOrder.currentDistance = orders.currentOrder.distance
         orders.currentOrder.showMark = true
     end
@@ -572,12 +635,15 @@ function orders.calculate2dCoords(circle1, circle2, circle3)
 
     local d = math.sqrt((dY * dY) + (dX * dX))
 
-    if d > (circle1.radius + circle2.radius) then return false end
+    if d > (circle1.radius + circle2.radius) then
+        return false
+    end
 
-    if d < math.abs(circle1.radius - circle2.radius) then return false end
+    if d < math.abs(circle1.radius - circle2.radius) then
+        return false
+    end
 
-    local a = ((circle1.radius * circle1.radius) -
-                  (circle2.radius * circle2.radius) + (d * d)) / (2.0 * d)
+    local a = ((circle1.radius * circle1.radius) - (circle2.radius * circle2.radius) + (d * d)) / (2.0 * d)
 
     local point2X = circle1.x + (dX * a / d)
     local point2Y = circle1.y + (dY * a / d)
@@ -615,9 +681,7 @@ function orders.updateOrdersDistance()
             if not orders.currentOrder then
                 if not chat.hiddenMessages["/service"].bool then
                     chat.addMessageToQueue("/service", true, true)
-                    orders.updateOrdersDistanceClock = os.clock() +
-                                                           ini.settings
-                                                               .ordersDistanceUpdateTimer
+                    orders.updateOrdersDistanceClock = os.clock() + ini.settings.ordersDistanceUpdateTimer
                 end
             end
         end
@@ -626,6 +690,7 @@ end
 
 function orders.add(nickname, id, distance, time)
     local posX, posY = getCharCoordinates(PLAYER_PED)
+    local level = sampGetPlayerScore(id)
     orders.list[nickname] = {
         nickname = nickname,
         id = id,
@@ -642,7 +707,8 @@ function orders.add(nickname, id, distance, time)
         repeatCount = 0,
         direction = 0,
         tempCircles = {{x = posX, y = posY, radius = distance}, nil, nil},
-        zone = "Неизвестно"
+        zone = "Неизвестно",
+        level = level
     }
 end
 
@@ -651,76 +717,62 @@ function orders.refreshCurrentOrder()
         if sampIsPlayerConnected(orders.currentOrder.id) then
             if vehicle.maxPassengers then
                 chat.sendNotification(orders.currentOrder)
-                local charInStream, charHandle =
-                    sampGetCharHandleBySampPlayerId(orders.currentOrder.id)
+                local charInStream, charHandle = sampGetCharHandleBySampPlayerId(orders.currentOrder.id)
                 if charInStream and ini.settings.updateOrderMark then
-                    orders.currentOrder.pos.x, orders.currentOrder.pos.y, orders.currentOrder
-                        .pos.z = getCharCoordinates(charHandle)
-                    orders.currentOrder.zone = getZone(
-                                                   orders.currentOrder.pos.x,
-                                                   orders.currentOrder.pos.y)
+                    orders.currentOrder.pos.x, orders.currentOrder.pos.y, orders.currentOrder.pos.z =
+                        getCharCoordinates(charHandle)
+                    orders.currentOrder.zone = getZone(orders.currentOrder.pos.x, orders.currentOrder.pos.y)
                     if orders.currentOrder.showMark then
                         if not orders.currentOrderBlip then
-                            orders.currentOrderBlip = addBlipForCoord(
-                                                          orders.currentOrder
-                                                              .pos.x,
-                                                          orders.currentOrder
-                                                              .pos.y,
-                                                          orders.currentOrder
-                                                              .pos.z)
+                            orders.currentOrderBlip =
+                                addBlipForCoord(
+                                orders.currentOrder.pos.x,
+                                orders.currentOrder.pos.y,
+                                orders.currentOrder.pos.z
+                            )
                             changeBlipColour(orders.currentOrderBlip, 0xBB0000FF)
-                            orders.currentOrderCheckpoint = createCheckpoint(1,
-                                                                             orders.currentOrder
-                                                                                 .pos
-                                                                                 .x,
-                                                                             orders.currentOrder
-                                                                                 .pos
-                                                                                 .y,
-                                                                             orders.currentOrder
-                                                                                 .pos
-                                                                                 .z,
-                                                                             orders.currentOrder
-                                                                                 .pos
-                                                                                 .x,
-                                                                             orders.currentOrder
-                                                                                 .pos
-                                                                                 .y,
-                                                                             orders.currentOrder
-                                                                                 .pos
-                                                                                 .z,
-                                                                             2.99)
+                            orders.currentOrderCheckpoint =
+                                createCheckpoint(
+                                1,
+                                orders.currentOrder.pos.x,
+                                orders.currentOrder.pos.y,
+                                orders.currentOrder.pos.z,
+                                orders.currentOrder.pos.x,
+                                orders.currentOrder.pos.y,
+                                orders.currentOrder.pos.z,
+                                2.99
+                            )
                             chat.addMessageToQueue("/gps", true, true)
                             if ini.settings.notifications then
-                                imgui.addNotification(
-                                    "Клиент поблизости\nМетка на карте обновлена",
-                                    5)
+                                imgui.addNotification("Клиент поблизости\nМетка на карте обновлена", 5)
                             end
-                            if ini.settings.notifications and
-                                ini.settings.sounds then
+                            if ini.settings.notifications and ini.settings.sounds then
                                 sounds.play("correct_order")
                             end
                         else
                             removeBlip(orders.currentOrderBlip)
-                            orders.currentOrderBlip = addBlipForCoord(
-                                                          orders.currentOrder
-                                                              .pos.x,
-                                                          orders.currentOrder
-                                                              .pos.y,
-                                                          orders.currentOrder
-                                                              .pos.z)
+                            orders.currentOrderBlip =
+                                addBlipForCoord(
+                                orders.currentOrder.pos.x,
+                                orders.currentOrder.pos.y,
+                                orders.currentOrder.pos.z
+                            )
                             changeBlipColour(orders.currentOrderBlip, 0xBB0000FF)
-                            setCheckpointCoords(orders.currentOrderCheckpoint,
-                                                orders.currentOrder.pos.x,
-                                                orders.currentOrder.pos.y,
-                                                orders.currentOrder.pos.z)
+                            setCheckpointCoords(
+                                orders.currentOrderCheckpoint,
+                                orders.currentOrder.pos.x,
+                                orders.currentOrder.pos.y,
+                                orders.currentOrder.pos.z
+                            )
                         end
 
                         if orders.currentOrderBlip then
                             local distance =
                                 getDistanceToCoords3d(
-                                    orders.currentOrder.pos.x,
-                                    orders.currentOrder.pos.y,
-                                    orders.currentOrder.pos.z)
+                                orders.currentOrder.pos.x,
+                                orders.currentOrder.pos.y,
+                                orders.currentOrder.pos.z
+                            )
                             if distance <= 3 then
                                 removeBlip(orders.currentOrderBlip)
                                 deleteCheckpoint(orders.currentOrderCheckpoint)
@@ -735,20 +787,20 @@ function orders.refreshCurrentOrder()
                 if orders.currentOrder.pos.x then
                     orders.currentOrder.currentDistance =
                         getDistanceToCoords3d(
-                            orders.currentOrder.pos.x,
-                            orders.currentOrder.pos.y, orders.currentOrder.pos.z)
+                        orders.currentOrder.pos.x,
+                        orders.currentOrder.pos.y,
+                        orders.currentOrder.pos.z
+                    )
                     orders.currentOrder.updateDistance = true
                 end
 
-                if vehicle.isPassengerIn(vehicle.handle,
-                                         orders.currentOrder.nickname) then
+                if vehicle.isPassengerIn(vehicle.handle, orders.currentOrder.nickname) then
                     orders.currentOrder = nil
                 end
             end
         else
             if ini.settings.notifications then
-                imgui.addNotification(
-                    "Клиент оффлайн\nВызов отменён", 5)
+                imgui.addNotification("Клиент оффлайн\nВызов отменён", 5)
             end
             if ini.settings.notifications and ini.settings.sounds then
                 sounds.play("correct_order")
@@ -764,7 +816,9 @@ function orders.refreshCurrentOrder()
     end
 end
 
-function orders.delete(nickname) orders.list[nickname] = nil end
+function orders.delete(nickname)
+    orders.list[nickname] = nil
+end
 
 function orders.accept(nickname, orderClock)
     if orders.canceled[nickname] and ini.settings.ignoreCanceledOrder then
@@ -773,11 +827,10 @@ function orders.accept(nickname, orderClock)
     if orders.list[nickname] then
         if orderClock then
             if orders.lastAcceptedOrderClock ~= orderClock then
-                if not orders.orderAccepted then
-                    chat.addMessageToQueue(
-                        "/service ac taxi " .. orders.list[nickname].id)
+                if orders.acceptedNickname == nil then
                     orders.lastAcceptedOrderClock = orders.list[nickname].time
-                    orders.orderAccepted = false
+                    orders.acceptedNickname = nickname
+                    chat.addMessageToQueue("/service ac taxi " .. orders.list[nickname].id)
                 end
             end
         end
@@ -788,8 +841,7 @@ function orders.deleteOrdersThread()
     while true do
         wait(1000)
         for nickname, order in pairs(orders.list) do
-            if os.clock() - order.time > 600 or
-                not sampIsPlayerConnected(order.id) then
+            if os.clock() - order.time > 600 or not sampIsPlayerConnected(order.id) then
                 orders.delete(nickname)
             end
         end
@@ -802,8 +854,7 @@ function orders.deleteOrdersThread()
 end
 
 function orders.get()
-    for keyIndex, key in ipairs(table.getTableKeysSortedByValue(orders.list,
-                                                                "time", false)) do
+    for keyIndex, key in ipairs(table.getTableKeysSortedByValue(orders.list, "time", false)) do
         if orders.list[key] then
             return true, key, orders.list[key].distance, orders.list[key].time
         end
@@ -813,46 +864,58 @@ end
 
 function orders.handle(orderNickname, orderDistance, orderClock)
     if not orders.currentOrder then
+        local level = orders.list[orderNickname].level
+
         if not table.contains(orderNickname, vehicle.lastPassengersList) then
             if table.isEmpty(vehicle.passengersList) then
-                if orders.autoAccept then
-                    if orderDistance <= ini.settings.maxDistanceToAcceptOrder and
-                        os.clock() - 60 < orderClock then
+                local acceptByLevel =
+                    level == 0 or (level >= 1 and level <= 2 and ini.settings.autoAccept1_2) or
+                    (level >= 3 and level <= 5 and ini.settings.autoAccept3_5) or
+                    (level >= 6 and ini.settings.autoAccept6)
+                local ignoreByBlacklist = ini.settings.blacklistIgnore and blacklist.check(orderNickname)
+                if orders.autoAccept and acceptByLevel and not ignoreByBlacklist then
+                    if orderDistance <= ini.settings.maxDistanceToAcceptOrder and os.clock() - 60 < orderClock then
                         orders.accept(orderNickname, orderClock)
                     end
                 end
             else
-                if orderDistance <= ini.settings.maxDistanceToGetOrder and
-                    os.clock() - 60 < orderClock then
+                if orderDistance <= ini.settings.maxDistanceToGetOrder and os.clock() - 60 < orderClock then
                     if not orders.list[orderNickname].correct then
                         orders.list[orderNickname].correct = true
                         orders.lastCorrectOrderNickname = orderNickname
                         orders.lastCorrectOrderClock = os.clock()
-                        lua_thread.create(function()
-                            wait(500)
-                            if orders.list[orderNickname] then
-                                if ini.settings.notifications and
-                                    ini.settings.sounds then
-                                    sounds.play("correct_order")
-                                end
-                                if ini.settings.notifications then
-                                    imgui.addNotificationWithButton(
-                                        string.format(
-                                            FORMAT_NOTIFICATIONS.newOrder,
-                                            orderNickname,
-                                            orders.list[orderNickname].id,
-                                            orderDistance,
-                                            orders.list[orderNickname].zone),
-                                        15, orderNickname)
+                        lua_thread.create(
+                            function()
+                                wait(500)
+                                if orders.list[orderNickname] then
+                                    if ini.settings.notifications and ini.settings.sounds then
+                                        sounds.play("correct_order")
+                                    end
+                                    if ini.settings.notifications then
+                                        imgui.addNotificationWithButton(
+                                            string.format(
+                                                FORMAT_NOTIFICATIONS.newOrder,
+                                                orderNickname,
+                                                orders.list[orderNickname].id,
+                                                orders.list[orderNickname].level,
+                                                orderDistance,
+                                                orders.list[orderNickname].zone
+                                            ),
+                                            15,
+                                            orderNickname
+                                        )
+                                    end
                                 end
                             end
-                        end)
+                        )
                     end
                 end
             end
         end
-    elseif orderNickname == orders.currentOrder.nickname and
-        ini.settings.acceptRepeatOrder and orders.currentOrder.repeatCount < 3 then
+    elseif
+        orderNickname == orders.currentOrder.nickname and ini.settings.acceptRepeatOrder and
+            orders.currentOrder.repeatCount < 3
+     then
         orders.accept(orderNickname, orderClock)
     end
 end
@@ -863,10 +926,11 @@ vehicle = {
     passengersList = {},
     maxPassengers = nil,
     name = nil,
-    vehicleHandle = nil,
+    handle = nil,
     markers = {},
     cruiseControlEnabled = false,
-    gasPressed = false
+    gasPressed = false,
+    updateFuelClock = os.clock() - 5
 }
 
 function vehicle.refreshInfoThread()
@@ -874,6 +938,7 @@ function vehicle.refreshInfoThread()
         wait(0)
         vehicle.name, vehicle.handle, vehicle.maxPassengers = vehicle.getInfo()
         vehicle.refreshPassengersList()
+        vehicle.refreshFuel()
     end
 end
 
@@ -889,13 +954,33 @@ function vehicle.addPassenger(passengerNickname)
 
     if not isPassengerInVehicle then
         for passengerindex = vehicle.lastPassengersListSize, 1, -1 do
-            vehicle.lastPassengersList[passengerindex] =
-                vehicle.lastPassengersList[passengerindex - 1]
+            vehicle.lastPassengersList[passengerindex] = vehicle.lastPassengersList[passengerindex - 1]
         end
         vehicle.lastPassengersList[1] = passengerNickname
         if ini.settings.notifications and ini.settings.sounds then
             sounds.play("new_passenger")
         end
+    end
+end
+
+function vehicle.refreshFuel()
+    if vehicle.maxPassengers and ini.settings.autoRefill then
+        if os.clock() - vehicle.updateFuelClock > 5 then
+            vehicle.fuel = 0
+            for textdrawId = 0, 2100 do
+                if sampTextdrawIsExists(textdrawId) then
+                    local textdrawString = sampTextdrawGetString(textdrawId)
+                    if textdrawString == "Fuel" and sampTextdrawIsExists(textdrawId - 1) then
+                        vehicle.fuel = tonumber(sampTextdrawGetString(textdrawId - 1))
+                    elseif string.find(textdrawString, MESSAGES.fuelClassic) then
+                        vehicle.fuel = tonumber(string.match(textdrawString, MESSAGES.fuelClassicFormat))
+                    end
+                end
+            end
+            vehicle.updateFuelClock = os.clock()
+        end
+    else
+        vehicle.fuel = nil
     end
 end
 
@@ -907,10 +992,8 @@ function vehicle.refreshPassengersList()
 
         for seatIndex = 0, vehicle.maxPassengers - 1 do
             if not isCarPassengerSeatFree(vehicle.handle, seatIndex) then
-                local passengerHandle = getCharInCarPassengerSeat(
-                                            vehicle.handle, seatIndex)
-                local result, passengerID =
-                    sampGetPlayerIdByCharHandle(passengerHandle)
+                local passengerHandle = getCharInCarPassengerSeat(vehicle.handle, seatIndex)
+                local result, passengerID = sampGetPlayerIdByCharHandle(passengerHandle)
                 if result then
                     local passengerNickname = sampGetPlayerNickname(passengerID)
                     vehicle.passengersList[seatIndex] = {
@@ -945,8 +1028,7 @@ function vehicle.isTaxi(vehicleHandle)
     if result then
         for textId = 0, 2048 do
             if sampIs3dTextDefined(textId) then
-                local string, _, _, _, _, _, _, _, vehicleId =
-                    sampGet3dTextInfoById(textId)
+                local string, _, _, _, _, _, _, _, vehicleId = sampGet3dTextInfoById(textId)
                 if string.find(string, MESSAGES.taxiChecker) and vehicleId == id then
                     return true
                 end
@@ -960,13 +1042,13 @@ end
 function vehicle.isPassengerIn(vehicleHandle, nickname)
     for seatIndex = 0, vehicle.maxPassengers - 1 do
         if not isCarPassengerSeatFree(vehicleHandle, seatIndex) then
-            local passengerHandle = getCharInCarPassengerSeat(vehicleHandle,
-                                                              seatIndex)
-            local result, passengerID = sampGetPlayerIdByCharHandle(
-                                            passengerHandle)
+            local passengerHandle = getCharInCarPassengerSeat(vehicleHandle, seatIndex)
+            local result, passengerID = sampGetPlayerIdByCharHandle(passengerHandle)
             if result then
                 local passengerNickname = sampGetPlayerNickname(passengerID)
-                if nickname == passengerNickname then return true end
+                if nickname == passengerNickname then
+                    return true
+                end
             end
         end
     end
@@ -989,14 +1071,12 @@ function vehicle.drawMarkers()
             local charInStream, charHandle = sampGetCharHandleBySampPlayerId(id)
             if charInStream then
                 if not vehicle.markers[id] then
-                    if isCharInAnyCar(charHandle) and sampGetPlayerColor(id) ==
-                        16777215 then
+                    if isCharInAnyCar(charHandle) and sampGetPlayerColor(id) == 16777215 then
                         vehicle.markers[id] = addBlipForChar(charHandle)
                         changeBlipDisplay(vehicle.markers[id], 2)
                         changeBlipColour(vehicle.markers[id], 0xFFFFFF25)
                     end
-                elseif not isCharInAnyCar(charHandle) or sampGetPlayerColor(id) ~=
-                    16777215 then
+                elseif not isCharInAnyCar(charHandle) or sampGetPlayerColor(id) ~= 16777215 then
                     removeBlip(vehicle.markers[id])
                     vehicle.markers[id] = nil
                 end
@@ -1018,14 +1098,15 @@ function vehicle.clearMarkers()
 end
 
 function vehicle.cruiseControl()
-    if not isCharInAnyCar(PLAYER_PED) then return end
+    if not isCharInAnyCar(PLAYER_PED) then
+        return
+    end
     local car = storeCarCharIsInNoSave(PLAYER_PED)
     if vehicle.cruiseControlEnabled then
         if not isCarEngineOn(car) or not isCharInAnyCar(PLAYER_PED) then
             vehicle.cruiseControlEnabled = false
             if ini.settings.notifications then
-                imgui.addNotification(
-                    FORMAT_NOTIFICATIONS.cruiseControlDisabled, 2, -8)
+                imgui.addNotification(FORMAT_NOTIFICATIONS.cruiseControlDisabled, 2, -8)
             end
             return
         end
@@ -1034,8 +1115,7 @@ function vehicle.cruiseControl()
         if vehicle.gasPressed and not isKeyDown(87) then
             vehicle.gasPressed = false
         end
-        if isCarEngineOn(car) and isCharInAnyCar(PLAYER_PED) and PLAYER_PED ==
-            getDriverOfCar(car) then
+        if isCarEngineOn(car) and isCharInAnyCar(PLAYER_PED) and PLAYER_PED == getDriverOfCar(car) then
             if isKeyJustPressed(ini.settings.key4) then
                 vehicle.cruiseControlEnabled = not vehicle.cruiseControlEnabled
                 if ini.settings.notifications then
@@ -1046,18 +1126,21 @@ function vehicle.cruiseControl()
                     imgui.addNotification(text, 2, -8)
                 end
                 vehicle.gasPressed = true
-            elseif vehicle.cruiseControlEnabled and
-                not isKeyJustPressed(ini.settings.key4) and
-                (isKeyDown(87) or isKeyDown(83)) and not vehicle.gasPressed then
+            elseif
+                vehicle.cruiseControlEnabled and not isKeyJustPressed(ini.settings.key4) and
+                    (isKeyDown(87) or isKeyDown(83)) and
+                    not vehicle.gasPressed
+             then
                 vehicle.cruiseControlEnabled = false
                 if ini.settings.notifications then
-                    imgui.addNotification(
-                        FORMAT_NOTIFICATIONS.cruiseControlDisabled, 2, -8)
+                    imgui.addNotification(FORMAT_NOTIFICATIONS.cruiseControlDisabled, 2, -8)
                 end
             end
         end
     end
-    if vehicle.cruiseControlEnabled then setGameKeyState(16, 255) end
+    if vehicle.cruiseControlEnabled then
+        setGameKeyState(16, 255)
+    end
 end
 
 player = {
@@ -1088,7 +1171,7 @@ ini = {
     settings = {
         checkUpdates = true,
         showHUD = true,
-        showBindMenu  = true,
+        showBindMenu = true,
         sounds = true,
         notifications = true,
         sendSMS = true,
@@ -1127,7 +1210,17 @@ ini = {
         ignoreCanceledOrder = true,
         canceledOrderDelay = 120,
         cruiseControl = true,
-        seatsNotify = true
+        seatsNotify = true,
+        autoRepair = true,
+        autoRefill = true,
+        maxAutoRefillCost = 3000,
+        autoRefillGauge = 50,
+        autoAccept1_2 = true,
+        autoAccept3_5 = true,
+        autoAccept6 = true,
+        blacklistIgnore = true,
+        blacklistHide = true,
+        startEngine = true
     }
 }
 
@@ -1137,23 +1230,21 @@ local defaults = {
     SMSTimer = 30,
     ordersDistanceUpdateTimer = 5,
     soundVolume = 50,
-    canceledOrderDelay = 120
+    canceledOrderDelay = 120,
+    maxAutoRefillCost = 3000,
+    autoRefillGauge = 50
 }
 
 sounds = {list = {}}
 
 function sounds.loadSound(soundName)
-    sounds.list[soundName] = loadAudioStream(
-                                 getWorkingDirectory() .. "/rsc/" .. soundName ..
-                                     ".mp3")
+    sounds.list[soundName] = loadAudioStream(getWorkingDirectory() .. "/rsc/" .. soundName .. ".mp3")
 end
 
 function sounds.play(soundName)
     if sounds.list[soundName] then
-        setAudioStreamVolume(sounds.list[soundName],
-                             ini.settings.soundVolume / 100)
-        setAudioStreamState(sounds.list[soundName],
-                            moonloader.audiostream_state.PLAY)
+        setAudioStreamVolume(sounds.list[soundName], ini.settings.soundVolume / 100)
+        setAudioStreamState(sounds.list[soundName], moonloader.audiostream_state.PLAY)
     end
 end
 
@@ -1172,7 +1263,8 @@ binds = {
             {text = ")", cmd = "", key = 0, addKey = 0},
             {text = "Почини", cmd = "", key = 0, addKey = 0},
             {text = "Заправь", cmd = "", key = 0, addKey = 0},
-            {text = "/rkt", cmd = "", key = 0, addKey = 0}, {
+            {text = "/rkt", cmd = "", key = 0, addKey = 0},
+            {
                 text = "/b Скрипт для таксистов - Taximate",
                 cmd = "",
                 key = 0,
@@ -1193,17 +1285,20 @@ binds = {
                 cmd = "",
                 key = 0,
                 addKey = 0
-            }, {
+            },
+            {
                 text = "Жёлтый {carname} прибыл на место вызова",
                 cmd = "",
                 key = 0,
                 addKey = 0
-            }, {
+            },
+            {
                 text = "Вызов отменён, закажите новое такси",
                 cmd = "",
                 key = 0,
                 addKey = 0
-            }, {text = "Скоро буду", cmd = "", key = 0, addKey = 0},
+            },
+            {text = "Скоро буду", cmd = "", key = 0, addKey = 0},
             {text = "Да", cmd = "", key = 0, addKey = 0},
             {text = "Нет", cmd = "", key = 0, addKey = 0}
         }
@@ -1224,8 +1319,7 @@ end
 function binds.get()
     local list = {}
 
-    local bindsFile = io.open(getWorkingDirectory() ..
-                                  "/config/Taximate/binds.json", "r")
+    local bindsFile = io.open(getWorkingDirectory() .. "/config/Taximate/binds.json", "r")
 
     local json = nil
 
@@ -1243,18 +1337,22 @@ function binds.get()
                 json = jsonFromFile
                 break
             else
-                table.insert(newjson.binds, {
-                    text = value.text,
-                    cmd = "",
-                    key = value.key,
-                    addKey = value.addKey
-                })
+                table.insert(
+                    newjson.binds,
+                    {
+                        text = value.text,
+                        cmd = "",
+                        key = value.key,
+                        addKey = value.addKey
+                    }
+                )
             end
         end
-        if json == nil then json = newjson end
+        if json == nil then
+            json = newjson
+        end
     else
-        bindsFile = io.open(getWorkingDirectory() ..
-                                "/config/Taximate/binds.json", "w")
+        bindsFile = io.open(getWorkingDirectory() .. "/config/Taximate/binds.json", "w")
         local content = encodeJson(binds.defaults)
         bindsFile:write(content)
         bindsFile:close()
@@ -1268,13 +1366,16 @@ function binds.get()
             local bufferCmd = imgui.ImBuffer(128)
             buffer.v = value.text or ""
             bufferCmd.v = value.cmd or ""
-            table.insert(list[keyname], {
-                buffer = buffer,
-                bufferCmd = bufferCmd,
-                key = value.key or 0,
-                addKey = value.addKey or 0,
-                edit = false
-            })
+            table.insert(
+                list[keyname],
+                {
+                    buffer = buffer,
+                    bufferCmd = bufferCmd,
+                    key = value.key or 0,
+                    addKey = value.addKey or 0,
+                    edit = false
+                }
+            )
         end
     end
 
@@ -1290,24 +1391,28 @@ end
 
 function binds.isEdit(key)
     for bindIndex, bind in pairs(binds.list[key]) do
-        if bind.edit then return true end
+        if bind.edit then
+            return true
+        end
     end
     return false
 end
 
 function binds.save()
-    local bindsFile = io.open(getWorkingDirectory() ..
-                                  "/config/Taximate/binds.json", "w")
+    local bindsFile = io.open(getWorkingDirectory() .. "/config/Taximate/binds.json", "w")
     local json = {}
     for keyname, bind in pairs(binds.list) do
         json[keyname] = {}
         for index, value in pairs(bind) do
-            table.insert(json[keyname], {
-                text = value.buffer.v,
-                cmd = value.bufferCmd.v,
-                key = value.key,
-                addKey = value.addKey
-            })
+            table.insert(
+                json[keyname],
+                {
+                    text = value.buffer.v,
+                    cmd = value.bufferCmd.v,
+                    key = value.key,
+                    addKey = value.addKey
+                }
+            )
         end
     end
     local content = encodeJson(json)
@@ -1320,18 +1425,22 @@ function binds.pressProcessingThread()
         wait(0)
         for key, binds in pairs(binds.list) do
             for index, bind in ipairs(binds) do
-                if isKeysPressed(bind.key, bind.addKey, false) and
-                    not imgui.showInputWindow.v and not sampIsDialogActive() and
-                    not sampIsChatInputActive() and not isPauseMenuActive() and
-                    ini.settings.hotKeys then
+                if
+                    isKeysPressed(bind.key, bind.addKey, false) and not imgui.showInputWindow.v and
+                        not sampIsDialogActive() and
+                        not sampIsChatInputActive() and
+                        not isPauseMenuActive() and
+                        ini.settings.hotKeys
+                 then
                     local text = bind.buffer.v
                     if key == "sms" then
                         if orders.currentOrder then
-                            text = string.format("/t %d %s",
-                                                 orders.currentOrder.id,
-                                                 chat.subSMSText(
-                                                     ini.settings.SMSPrefix,
-                                                     bind.buffer.v))
+                            text =
+                                string.format(
+                                "/t %d %s",
+                                orders.currentOrder.id,
+                                chat.subSMSText(ini.settings.SMSPrefix, bind.buffer.v)
+                            )
                             chat.addMessageToQueue(text)
                         end
                     else
@@ -1343,33 +1452,135 @@ function binds.pressProcessingThread()
     end
 end
 
-function sampev.onShowDialog(DdialogId, Dstyle, Dtitle, Dbutton1, Dbutton2,
-                             Dtext)
+blacklist = {}
+blacklist.players = {}
+blacklist.sortedNicknames = {}
+
+function blacklist.get()
+    local list = {}
+    local blacklistFile = io.open(getWorkingDirectory() .. "/config/Taximate/blacklist.json", "r")
+    if blacklistFile then
+        local content = blacklistFile:read("*a")
+        blacklistFile:close()
+        local jsonFromFile = decodeJson(content)
+        for nickname, record in pairs(jsonFromFile) do
+            list[nickname] = {
+                active = record.active,
+                buffer = imgui.ImBuffer(25),
+                edit = false,
+                date = record.date
+            }
+            list[nickname].buffer.v = nickname
+        end
+    end
+
+    return list
+end
+
+function blacklist.save()
+    local blacklistFile = io.open(getWorkingDirectory() .. "/config/Taximate/blacklist.json", "w")
+    local json = {}
+    for nickname, record in pairs(blacklist.players) do
+        json[nickname] = {
+            active = record.active,
+            date = record.date
+        }
+    end
+    local content = encodeJson(json)
+    blacklistFile:write(content)
+    blacklistFile:close()
+    blacklist.sortNicknames()
+end
+
+function blacklist.sortNicknames()
+    blacklist.sortedNicknames = table.getTableKeysSortedByValue(blacklist.players, "date", false)
+end
+
+function blacklist.check(nickname)
+    if blacklist.players[nickname] then
+        if blacklist.players[nickname].active then
+            return true
+        end
+    end
+
+    for pattern, record in pairs(blacklist.players) do
+        if (pattern:find("%?") or pattern:find("%*")) and record.active then
+            pattern = "^" .. pattern .. "$"
+            pattern = pattern:gsub("%?", "[%%w_]")
+            pattern = pattern:gsub("%*", "[%%w_]%*")
+            if nickname:lower():match(pattern:lower()) then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
+blacklist.command = function(arg)
+    local nickname = ""
+    local error = false
+    local id = tonumber(arg)
+    if not arg:find("^[%w_%?%*]+$") and not id then
+        error = true
+    else
+        local idstr = ""
+        if id then
+            if id >= 0 and id <= 999 and sampIsPlayerConnected(id) then
+                nickname = sampGetPlayerNickname(id)
+                idstr = "[" .. id .. "]"
+            else
+                error = true
+            end
+        else
+            nickname = arg
+        end
+        if #nickname > 25 or #nickname < 1 then
+            error = true
+        end
+        if blacklist.players[nickname] and not error then
+            blacklist.players[nickname] = nil
+            chat.sendMessage(string.format("{00CED1}%s%s{FFFFFF} удален из чёрного списка", nickname, idstr))
+        elseif not error then
+            blacklist.players[nickname] = {
+                active = true,
+                buffer = imgui.ImBuffer(25),
+                edit = false,
+                date = os.time(os.date("!*t"))
+            }
+            blacklist.players[nickname].buffer.v = nickname
+            chat.sendMessage(string.format("{00CED1}%s%s{FFFFFF} добавлен в чёрный список", nickname, idstr))
+        end
+    end
+    if error then
+        chat.sendMessage("Введите: /tmbl [Nick_Name/id]")
+    else
+        blacklist.save()
+    end
+end
+
+function sampev.onShowDialog(DdialogId, Dstyle, Dtitle, Dbutton1, Dbutton2, Dtext)
     if player.connected then
         if Dstyle == 0 and string.find(Dtext, "Таксист") then
-            lua_thread.create(function()
-                local line = 0
-                for string in string.gmatch(Dtext, "[^\n]+") do
-                    line = line + 1
-                    if line == 5 then
-                        player.skill, player.skillExp =
-                            string.match(string, MESSAGES.skill)
-                        player.skillClients = math.ceil(
-                                                  (100 - player.skillExp) /
-                                                      (((9600 / 100 *
-                                                          (1.1 ^
-                                                              (50 - player.skill))) *
-                                                          100) /
-                                                          (5000 *
-                                                              (1.1 ^
-                                                                  player.skill))))
-                    end
-                    if line == 6 then
-                        player.rank, player.rankExp =
-                            string.match(string, MESSAGES.rank)
+            lua_thread.create(
+                function()
+                    local line = 0
+                    for string in string.gmatch(Dtext, "[^\n]+") do
+                        line = line + 1
+                        if line == 5 then
+                            player.skill, player.skillExp = string.match(string, MESSAGES.skill)
+                            player.skillClients =
+                                math.ceil(
+                                (100 - player.skillExp) /
+                                    (((9600 / 100 * (1.1 ^ (50 - player.skill))) * 100) / (5000 * (1.1 ^ player.skill)))
+                            )
+                        end
+                        if line == 6 then
+                            player.rank, player.rankExp = string.match(string, MESSAGES.rank)
+                        end
                     end
                 end
-            end)
+            )
             if chat.hiddenMessages["/jskill"].bool then
                 chat.hiddenMessages["/jskill"].bool = false
                 sampSendDialogResponse(DdialogId, 0)
@@ -1382,108 +1593,103 @@ function sampev.onShowDialog(DdialogId, Dstyle, Dtitle, Dbutton1, Dbutton2,
                 sampSendDialogResponse(DdialogId, 0)
                 return false
             else
-                lua_thread.create(function()
-                    if orders.currentOrderBlip then
-                        orders.currentOrder.showMark = false
-                        removeBlip(orders.currentOrderBlip)
-                        deleteCheckpoint(orders.currentOrderCheckpoint)
-                        orders.currentOrderBlip = nil
-                        orders.currentOrderCheckpoint = nil
+                lua_thread.create(
+                    function()
+                        if orders.currentOrderBlip then
+                            orders.currentOrder.showMark = false
+                            removeBlip(orders.currentOrderBlip)
+                            deleteCheckpoint(orders.currentOrderCheckpoint)
+                            orders.currentOrderBlip = nil
+                            orders.currentOrderCheckpoint = nil
+                        end
                     end
-                end)
+                )
             end
         elseif string.find(Dtitle, "Вызовы") then
-            lua_thread.create(function()
-                local ordersList = {}
+            lua_thread.create(
+                function()
+                    local ordersList = {}
 
-                for string in string.gmatch(Dtext, "[^\n]+") do
-                    local nickname, id, time, distance
-                    if string:find("/service ac taxi") then
-                        nickname, id, time, distance =
-                            string.match(string, MESSAGES.order)
-                    else
-                        nickname, id, time, distance =
-                            string.match(string, utf8sub(MESSAGES.order, 1,
-                                                         utf8len(MESSAGES.order) -
-                                                             1))
-                    end
-                    time = stringToSeconds(time)
-                    distance = stringToMeters(distance)
-                    if orders.list[nickname] then
-                        if distance < orders.list[nickname].distance then
-                            orders.list[nickname].direction = 1
-                        elseif distance > orders.list[nickname].distance then
-                            orders.list[nickname].direction = -1
+                    for string in string.gmatch(Dtext, "[^\n]+") do
+                        local nickname, id, time, distance
+                        if string:find("/service ac taxi") then
+                            nickname, id, time, distance = string.match(string, MESSAGES.order)
+                        else
+                            nickname, id, time, distance =
+                                string.match(string, utf8sub(MESSAGES.order, 1, utf8len(MESSAGES.order) - 1))
                         end
-                        orders.list[nickname].distance = distance
-                        orders.list[nickname].time = os.clock() - time
-                    else
-                        orders.add(nickname, id, distance, os.clock() - time)
-                    end
-                    table.insert(ordersList, nickname)
-                    local posX, posY = getCharCoordinates(PLAYER_PED)
-                    if not orders.list[nickname].tempCircles[1] then
-                        orders.list[nickname].tempCircles[1] = {
-                            x = posX,
-                            y = posY,
-                            radius = distance
-                        }
-                    elseif not orders.list[nickname].tempCircles[2] then
-                        if math.abs(orders.list[nickname].tempCircles[1].x -
-                                        posX) > 15 or
-                            math.abs(
-                                orders.list[nickname].tempCircles[1].y - posY) >
-                            15 then
-                            orders.list[nickname].tempCircles[2] = {
+                        time = stringToSeconds(time)
+                        distance = stringToMeters(distance)
+                        if orders.list[nickname] then
+                            if distance < orders.list[nickname].distance then
+                                orders.list[nickname].direction = 1
+                            elseif distance > orders.list[nickname].distance then
+                                orders.list[nickname].direction = -1
+                            end
+                            orders.list[nickname].distance = distance
+                            orders.list[nickname].time = os.clock() - time
+                        else
+                            orders.add(nickname, id, distance, os.clock() - time)
+                        end
+                        table.insert(ordersList, nickname)
+                        local posX, posY = getCharCoordinates(PLAYER_PED)
+                        if not orders.list[nickname].tempCircles[1] then
+                            orders.list[nickname].tempCircles[1] = {
                                 x = posX,
                                 y = posY,
                                 radius = distance
                             }
-                        end
-                    elseif not orders.list[nickname].tempCircles[3] then
-                        if (math.abs(orders.list[nickname].tempCircles[1].x -
-                                         posX) > 15 or
-                            math.abs(
-                                orders.list[nickname].tempCircles[1].y - posY) >
-                            15) and
-                            (math.abs(
-                                orders.list[nickname].tempCircles[2].x - posX) >
-                                15 or
-                                math.abs(
-                                    orders.list[nickname].tempCircles[2].y -
-                                        posY) > 15) then
-                            orders.list[nickname].tempCircles[3] = {
-                                x = posX,
-                                y = posY,
-                                radius = distance
-                            }
-                            local result, calcX, calcY =
-                                orders.calculate2dCoords(
+                        elseif not orders.list[nickname].tempCircles[2] then
+                            if
+                                math.abs(orders.list[nickname].tempCircles[1].x - posX) > 15 or
+                                    math.abs(orders.list[nickname].tempCircles[1].y - posY) > 15
+                             then
+                                orders.list[nickname].tempCircles[2] = {
+                                    x = posX,
+                                    y = posY,
+                                    radius = distance
+                                }
+                            end
+                        elseif not orders.list[nickname].tempCircles[3] then
+                            if
+                                (math.abs(orders.list[nickname].tempCircles[1].x - posX) > 15 or
+                                    math.abs(orders.list[nickname].tempCircles[1].y - posY) > 15) and
+                                    (math.abs(orders.list[nickname].tempCircles[2].x - posX) > 15 or
+                                        math.abs(orders.list[nickname].tempCircles[2].y - posY) > 15)
+                             then
+                                orders.list[nickname].tempCircles[3] = {
+                                    x = posX,
+                                    y = posY,
+                                    radius = distance
+                                }
+                                local result, calcX, calcY =
+                                    orders.calculate2dCoords(
                                     orders.list[nickname].tempCircles[1],
                                     orders.list[nickname].tempCircles[2],
-                                    orders.list[nickname].tempCircles[3])
-                            if result then
-                                orders.list[nickname].pos = {
-                                    x = calcX,
-                                    y = calcY,
-                                    z = 30
-                                }
-                                orders.list[nickname].zone = getZone(calcX,
-                                                                     calcY)
-                            end
+                                    orders.list[nickname].tempCircles[3]
+                                )
+                                if result then
+                                    orders.list[nickname].pos = {
+                                        x = calcX,
+                                        y = calcY,
+                                        z = 30
+                                    }
+                                    orders.list[nickname].zone = getZone(calcX, calcY)
+                                end
 
-                            orders.list[nickname].tempCircles[1] = nil
-                            orders.list[nickname].tempCircles[2] = nil
-                            orders.list[nickname].tempCircles[3] = nil
+                                orders.list[nickname].tempCircles[1] = nil
+                                orders.list[nickname].tempCircles[2] = nil
+                                orders.list[nickname].tempCircles[3] = nil
+                            end
+                        end
+                    end
+                    for order in pairs(orders.list) do
+                        if not table.contains(order, ordersList) then
+                            orders.delete(order)
                         end
                     end
                 end
-                for order in pairs(orders.list) do
-                    if not table.contains(order, ordersList) then
-                        orders.delete(order)
-                    end
-                end
-            end)
+            )
             if chat.hiddenMessages["/service"].bool then
                 chat.hiddenMessages["/service"].bool = false
                 sampSendDialogResponse(DdialogId, 0)
@@ -1502,8 +1708,7 @@ function sampev.onServerMessage(color, message)
         if string.find(message, MESSAGES.service) then
             return false
         elseif string.find(message, MESSAGES.payCheck) then
-            player.salary, player.salaryLimit =
-                string.match(message, MESSAGES.payCheckFormat)
+            player.salary, player.salaryLimit = string.match(message, MESSAGES.payCheckFormat)
             if not player.salary then
                 player.salary = 0
                 player.salaryLimit = 0
@@ -1517,24 +1722,38 @@ function sampev.onServerMessage(color, message)
                 chat.hiddenMessages["/clist"].bool = false
                 return false
             end
-        elseif string.find(message, MESSAGES.noOrders) or
-            string.find(message, MESSAGES.enterService) then
+        elseif
+            string.find(message, MESSAGES.noOrders) or string.find(message, MESSAGES.enterService1) or
+                string.find(message, MESSAGES.enterService2)
+         then
             if chat.hiddenMessages["/service"].bool then
                 chat.hiddenMessages["/service"].bool = false
                 return false
             end
         elseif string.find(message, MESSAGES.wrongPerson) then
-            if orders.orderAccepted then
-                orders.orderAccepted = false
+            if orders.acceptedNickname ~= nil then
+                orders.acceptedNickname = nil
                 return false
             end
         else
             chat.handleInputMessage(message)
-            if string.find(message, MESSAGES.newOrderFormat) or
-                string.find(message, MESSAGES.orderAcceptedFormat) then
-                if not ini.settings.dispatcherMessages then
+            local dispatcher = false
+            if string.find(message, MESSAGES.newOrderFormat) then
+                dispatcher = true
+                local nickname = string.match(message, MESSAGES.newOrderFormat)
+                if blacklist.check(nickname) and ini.settings.blacklistHide then
                     return false
                 end
+            end
+            if string.find(message, MESSAGES.orderAcceptedFormat) then
+                dispatcher = true
+                local _, nickname = string.match(message, MESSAGES.orderAcceptedFormat)
+                if blacklist.check(nickname) and ini.settings.blacklistHide then
+                    return false
+                end
+            end
+            if dispatcher and not ini.settings.dispatcherMessages then
+                return false
             end
         end
     end
@@ -1552,10 +1771,8 @@ end
 
 function sampev.onSendSpawn()
     if player.onWork then
-        if ini.settings.autoClist and not chat.hiddenMessages["/clist"].bool and
-            ini.settings.workClist ~= 0 then
-            chat.addMessageToQueue("/clist " .. ini.settings.workClist, true,
-                                   true)
+        if ini.settings.autoClist and not chat.hiddenMessages["/clist"].bool and ini.settings.workClist ~= 0 then
+            chat.addMessageToQueue("/clist " .. ini.settings.workClist, true, true)
         end
     end
 end
@@ -1602,10 +1819,17 @@ end
 function table.spairs(iterTable, order)
     local keys = {}
 
-    for key in pairs(iterTable) do keys[#keys + 1] = key end
+    for key in pairs(iterTable) do
+        keys[#keys + 1] = key
+    end
 
     if order then
-        table.sort(keys, function(a, b) return order(iterTable, a, b) end)
+        table.sort(
+            keys,
+            function(a, b)
+                return order(iterTable, a, b)
+            end
+        )
     else
         table.sort(keys)
     end
@@ -1613,38 +1837,61 @@ function table.spairs(iterTable, order)
     local index = 0
     return function()
         index = index + 1
-        if keys[index] then return keys[index], iterTable[keys[index]] end
+        if keys[index] then
+            return keys[index], iterTable[keys[index]]
+        end
     end
 end
 
 function table.getTableKeysSortedByValue(iterTable, valueName, increase)
     local tableKeys = {}
 
-    for key in table.spairs(iterTable, function(t, a, b)
-        if increase then
-            return t[a][valueName] < t[b][valueName]
-        else
-            return t[a][valueName] > t[b][valueName]
+    for key in table.spairs(
+        iterTable,
+        function(t, a, b)
+            if type(t[a][valueName]) ~= "boolean" then
+                if increase then
+                    return t[a][valueName] < t[b][valueName]
+                else
+                    return t[a][valueName] > t[b][valueName]
+                end
+            else
+                if increase then
+                    return t[b][valueName]
+                else
+                    return t[a][valueName]
+                end
+            end
         end
-    end) do table.insert(tableKeys, key) end
+    ) do
+        table.insert(tableKeys, key)
+    end
 
     return tableKeys
 end
 
 function table.contains(value, table)
-    if type(table) == "nil" then return false, nil end
+    if type(table) == "nil" then
+        return false, nil
+    end
 
     for index = 1, #table do
-        if value == table[index] then return true, index end
+        if value == table[index] then
+            return true, index
+        end
     end
 
     return false, nil
 end
 
 function table.isEmpty(table)
-    if type(table) == "nil" then return true end
+    if type(table) == "nil" then
+        return true
+    end
 
-    for _, _ in pairs(table) do return false end
+    for _, _ in pairs(table) do
+        return false
+    end
     return true
 end
 
@@ -1660,6 +1907,8 @@ function imgui.initBuffers()
     imgui.singleBind = false
     imgui.key = 0
     imgui.addKey = 0
+    imgui.blacklistName = imgui.ImBuffer(25)
+    imgui.blacklistName.v = "Nick_Name"
     imgui.SMSPrefix = imgui.ImBuffer(126)
     imgui.SMSPrefix.v = ini.settings.SMSPrefix
     imgui.SMSText = imgui.ImBuffer(126)
@@ -1673,25 +1922,28 @@ function imgui.initBuffers()
     imgui.workClist = imgui.ImInt(ini.settings.workClist)
     imgui.SMSTimer = imgui.ImInt(ini.settings.SMSTimer)
     imgui.canceledOrderDelay = imgui.ImInt(ini.settings.canceledOrderDelay)
-    imgui.maxDistanceToAcceptOrder = imgui.ImInt(ini.settings
-                                                     .maxDistanceToAcceptOrder)
-    imgui.maxDistanceToGetOrder =
-        imgui.ImInt(ini.settings.maxDistanceToGetOrder)
-    imgui.ordersDistanceUpdateTimer = imgui.ImInt(ini.settings
-                                                      .ordersDistanceUpdateTimer)
+    imgui.maxDistanceToAcceptOrder = imgui.ImInt(ini.settings.maxDistanceToAcceptOrder)
+    imgui.maxDistanceToGetOrder = imgui.ImInt(ini.settings.maxDistanceToGetOrder)
+    imgui.ordersDistanceUpdateTimer = imgui.ImInt(ini.settings.ordersDistanceUpdateTimer)
     imgui.soundVolume = imgui.ImInt(ini.settings.soundVolume)
+    imgui.maxAutoRefillCost = imgui.ImInt(ini.settings.maxAutoRefillCost)
+    imgui.autoRefillGauge = imgui.ImInt(ini.settings.autoRefillGauge)
 end
 
 function imgui.showActions(passengerIndex, passengers)
     for bindIndex, bind in pairs(binds.list.actions) do
         imgui.NewLine()
         local x1 = 10.5
-        if passengers then x1 = x1 + 10 end
+        if passengers then
+            x1 = x1 + 10
+        end
         imgui.SameLine(toScreenX(x1))
         imgui.PushID(passengerIndex + 100)
         if bind.edit then
             local x2 = 29.67
-            if not passengers then x2 = x2 + 5 end
+            if not passengers then
+                x2 = x2 + 5
+            end
             imgui.PushItemWidth(toScreenX(x2))
             imgui.PushStyleVar(imgui.StyleVar.FramePadding, vec(4, 1.1))
             imgui.PushID(bindIndex)
@@ -1708,28 +1960,29 @@ function imgui.showActions(passengerIndex, passengers)
             imgui.PopID()
             imgui.PopStyleVar()
             imgui.PopItemWidth()
-            imgui.SetTooltip(bind.bufferCmd.v ..
-                                 "\n\nУказанный в сообщении токен '{id}' заменится на id пассажира",
-                             500)
+            imgui.SetTooltip(
+                bind.bufferCmd.v .. "\n\nУказанный в сообщении токен '{id}' заменится на id пассажира",
+                500
+            )
             imgui.SameLine()
             if imgui.Button("X##actions" .. bindIndex, vec(7, 10)) then
                 binds.list.actions[bindIndex].edit = false
                 binds.delete("actions", bindIndex)
             end
             imgui.SameLine()
-            if imgui.Button("-##actions" .. bindIndex, vec(5, 10)) or
-                isKeyJustPressed(13) then
+            if imgui.Button("-##actions" .. bindIndex, vec(5, 10)) or isKeyJustPressed(13) then
                 bind.edit = false
                 binds.save()
             end
         else
             local x2 = 80.5
-            if passengers then x2 = x2 - 10 end
-            if imgui.Button(bind.buffer.v .. "##actions", vec(x2, 10)) and
-                passengerIndex ~= -1 then
-                chat.addMessageToQueue(bind.bufferCmd.v:gsub("{id}", tostring(
-                                                                 vehicle.passengersList[passengerIndex]
-                                                                     .id)))
+            if passengers then
+                x2 = x2 - 10
+            end
+            if imgui.Button(bind.buffer.v .. "##actions", vec(x2, 10)) and passengerIndex ~= -1 then
+                chat.addMessageToQueue(
+                    bind.bufferCmd.v:gsub("{id}", tostring(vehicle.passengersList[passengerIndex].id))
+                )
             end
             imgui.SameLine()
             if imgui.Button("+##actions" .. bindIndex, vec(5, 10)) then
@@ -1742,30 +1995,44 @@ function imgui.showActions(passengerIndex, passengers)
 end
 
 function imgui.OnDrawFrame()
-    if (isKeysPressed(ini.settings.key1, ini.settings.key1add, true) or
-        imgui.showInputWindow.v) and not sampIsDialogActive() and
-        not sampIsChatInputActive() and not isPauseMenuActive() then
+    if
+        (isKeysPressed(ini.settings.key1, ini.settings.key1add, true) or imgui.showInputWindow.v) and
+            not sampIsDialogActive() and
+            not sampIsChatInputActive() and
+            not isPauseMenuActive()
+     then
         imgui.ShowCursor = true
     end
     if imgui.showInputWindow.v then
         imgui.onDrawInputWindow()
-    elseif not sampIsDialogActive() and not sampIsChatInputActive() and
-        not isPauseMenuActive() and
-        not (ini.settings.fastMapCompatibility and isKeyDown(fastMapKey)) then
+    elseif
+        not sampIsDialogActive() and not sampIsChatInputActive() and not isPauseMenuActive() and
+            not (ini.settings.fastMapCompatibility and isKeyDown(fastMapKey))
+     then
         imgui.onDrawNotification()
-        if ini.settings.showHUD then imgui.onDrawHUD() end
-        if ini.settings.showBindMenu  then imgui.OnDrawBinder() end
-        if imgui.showSettings.v then imgui.onDrawSettings() end
+        if ini.settings.showHUD then
+            imgui.onDrawHUD()
+        end
+        if ini.settings.showBindMenu then
+            imgui.OnDrawBinder()
+        end
+        if imgui.showSettings.v then
+            imgui.onDrawSettings()
+        end
     end
 end
 
 function imgui.onDrawInputWindow()
     imgui.SetNextWindowPos(vec(280, 165))
     imgui.SetNextWindowSize(vec(90, 76))
-    imgui.Begin("Горячие клавиши", imgui.showInputWindow,
-                imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize +
-                    imgui.WindowFlags.NoScrollbar + imgui.WindowFlags.NoMove +
-                    imgui.WindowFlags.NoTitleBar)
+    imgui.Begin(
+        "Горячие клавиши",
+        imgui.showInputWindow,
+        imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize + imgui.WindowFlags.NoScrollbar +
+            imgui.WindowFlags.NoScrollWithMouse +
+            imgui.WindowFlags.NoMove +
+            imgui.WindowFlags.NoTitleBar
+    )
     imgui.Dummy(vec(15, 0))
     imgui.SameLine()
     if not imgui.singleBind then
@@ -1784,44 +2051,49 @@ function imgui.onDrawInputWindow()
         imgui.Text("+ " .. vkeys.id_to_name(imgui.addKey))
     end
 
-    lua_thread.create(function()
-        repeat
-            wait(0)
-            for k, v in pairs(vkeys) do
-                if wasKeyPressed(v) then
-                    if v < 160 or v > 165 then
-                        if imgui.key == 0 and k ~= "VK_ESCAPE" and k ~=
-                            "VK_RETURN" and k ~= "VK_BACK" and k ~= "VK_LBUTTON" and
-                            k ~= "VK_RBUTTON" then
-                            imgui.key = v
-                        elseif imgui.key ~= v and imgui.addKey == 0 and k ~=
-                            "VK_ESCAPE" and k ~= "VK_RETURN" and k ~= "VK_BACK" and
-                            k ~= "VK_LBUTTON" and k ~= "VK_RBUTTON" and
-                            not imgui.singleBind then
-                            imgui.addKey = v
-                        elseif k == "VK_ESCAPE" then
-                            imgui.key = 0
-                            imgui.addKey = 0
-                            imgui.showInputWindow.v = false
-                        elseif k == "VK_RETURN" then
-                            imgui.showInputWindow.v = false
-                        elseif k == "VK_BACK" then
-                            imgui.key = 0
-                            imgui.addKey = 0
+    lua_thread.create(
+        function()
+            repeat
+                wait(0)
+                for k, v in pairs(vkeys) do
+                    if wasKeyPressed(v) then
+                        if v < 160 or v > 165 then
+                            if
+                                imgui.key == 0 and k ~= "VK_ESCAPE" and k ~= "VK_RETURN" and k ~= "VK_BACK" and
+                                    k ~= "VK_LBUTTON" and
+                                    k ~= "VK_RBUTTON"
+                             then
+                                imgui.key = v
+                            elseif
+                                imgui.key ~= v and imgui.addKey == 0 and k ~= "VK_ESCAPE" and k ~= "VK_RETURN" and
+                                    k ~= "VK_BACK" and
+                                    k ~= "VK_LBUTTON" and
+                                    k ~= "VK_RBUTTON" and
+                                    not imgui.singleBind
+                             then
+                                imgui.addKey = v
+                            elseif k == "VK_ESCAPE" then
+                                imgui.key = 0
+                                imgui.addKey = 0
+                                imgui.showInputWindow.v = false
+                            elseif k == "VK_RETURN" then
+                                imgui.showInputWindow.v = false
+                            elseif k == "VK_BACK" then
+                                imgui.key = 0
+                                imgui.addKey = 0
+                            end
                         end
                     end
                 end
-            end
-        until not imgui.showInputWindow.v
-        imgui.showInputWindow.v = false
-    end)
+            until not imgui.showInputWindow.v
+            imgui.showInputWindow.v = false
+        end
+    )
     imgui.Dummy(vec(0, 10))
     if not imgui.singleBind then
-        imgui.Text(
-            "Нажмите клавишу/комбинацию\nBackspace - стереть клавиши")
+        imgui.Text("Нажмите клавишу/комбинацию\nBackspace - стереть клавиши")
     else
-        imgui.Text(
-            "Нажмите клавишу\nBackspace - стереть клавишу")
+        imgui.Text("Нажмите клавишу\nBackspace - стереть клавишу")
     end
     if imgui.Button("Принять", vec(27, 10)) then
         imgui.showInputWindow.v = false
@@ -1842,8 +2114,7 @@ end
 
 imgui.hudHovered = false
 function imgui.onDrawHUD()
-    if vehicle.name or
-        isKeysPressed(ini.settings.key1, ini.settings.key1add, true) then
+    if vehicle.name or isKeysPressed(ini.settings.key1, ini.settings.key1add, true) then
         local windowPosY = 0
         local zone = nil
         local gps = nil
@@ -1855,29 +2126,36 @@ function imgui.onDrawHUD()
             gps = {x = orders.GPSMark.x, y = orders.GPSMark.y}
         end
 
-        if not (imgui.hudHovered and imgui.IsMouseDragging(0) and
-            isKeysPressed(ini.settings.key1, ini.settings.key1add, true)) or
-            orders.currentOrder or orders.GPSMark then
-            imgui.SetNextWindowPos(vec(ini.settings.hudPosX,
-                                       ini.settings.hudPosY - windowPosY))
+        if
+            not (imgui.hudHovered and imgui.IsMouseDragging(0) and
+                isKeysPressed(ini.settings.key1, ini.settings.key1add, true)) or
+                orders.currentOrder or
+                orders.GPSMark
+         then
+            imgui.SetNextWindowPos(vec(ini.settings.hudPosX, ini.settings.hudPosY - windowPosY))
             imgui.SetNextWindowSize(vec(105, 42 + windowPosY))
         end
 
         imgui.PushStyleVar(imgui.StyleVar.Alpha, 0.95)
-        imgui.Begin("Taximate HUD", _,
-                    imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize +
-                        imgui.WindowFlags.NoScrollbar +
-                        imgui.WindowFlags.NoFocusOnAppearing)
+        imgui.Begin(
+            "Taximate HUD",
+            _,
+            imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize + imgui.WindowFlags.NoScrollbar +
+                imgui.WindowFlags.NoScrollWithMouse +
+                imgui.WindowFlags.NoFocusOnAppearing
+        )
         imgui.hudHovered = imgui.IsRootWindowOrAnyChildHovered()
         local newPos = imgui.GetWindowPos()
-        local savePosX, savePosY = convertWindowScreenCoordsToGameScreenCoords(
-                                       newPos.x, newPos.y)
+        local savePosX, savePosY = convertWindowScreenCoordsToGameScreenCoords(newPos.x, newPos.y)
 
-        if (math.ceil(savePosX) ~= math.ceil(ini.settings.hudPosX) or
-            math.ceil(savePosY) ~= math.ceil(ini.settings.hudPosY)) and
-            imgui.IsRootWindowOrAnyChildFocused() and imgui.IsMouseDragging(0) and
-            imgui.IsRootWindowOrAnyChildHovered() and
-            not (orders.currentOrder or orders.GPSMark) then
+        if
+            (math.ceil(savePosX) ~= math.ceil(ini.settings.hudPosX) or
+                math.ceil(savePosY) ~= math.ceil(ini.settings.hudPosY)) and
+                imgui.IsRootWindowOrAnyChildFocused() and
+                imgui.IsMouseDragging(0) and
+                imgui.IsRootWindowOrAnyChildHovered() and
+                not (orders.currentOrder or orders.GPSMark)
+         then
             ini.settings.hudPosX = math.ceil(savePosX)
             ini.settings.hudPosY = math.ceil(savePosY)
             inicfg.save(ini, "Taximate/settings.ini")
@@ -1887,11 +2165,9 @@ function imgui.onDrawHUD()
             local buttonText = "Начать рабочий день"
             if ini.settings.hotKeys then
                 if ini.settings.key3 ~= 0 then
-                    buttonText = buttonText .. " [" ..
-                                     vkeys.id_to_name(ini.settings.key3)
+                    buttonText = buttonText .. " [" .. vkeys.id_to_name(ini.settings.key3)
                     if ini.settings.key3add ~= 0 then
-                        buttonText = buttonText .. " + " ..
-                                         vkeys.id_to_name(ini.settings.key3add)
+                        buttonText = buttonText .. " + " .. vkeys.id_to_name(ini.settings.key3add)
                     end
                     buttonText = buttonText .. "]"
                 end
@@ -1899,19 +2175,16 @@ function imgui.onDrawHUD()
             if imgui.Button(buttonText, vec(100, 10)) then
                 player.onWork = true
                 if ini.settings.autoClist and ini.settings.workClist ~= 0 then
-                    chat.addMessageToQueue("/clist " .. ini.settings.workClist,
-                                           true, true)
+                    chat.addMessageToQueue("/clist " .. ini.settings.workClist, true, true)
                 end
             end
         else
             local buttonText = "Закончить рабочий день"
             if ini.settings.hotKeys then
                 if ini.settings.key3 ~= 0 then
-                    buttonText = buttonText .. " [" ..
-                                     vkeys.id_to_name(ini.settings.key3)
+                    buttonText = buttonText .. " [" .. vkeys.id_to_name(ini.settings.key3)
                     if ini.settings.key3add ~= 0 then
-                        buttonText = buttonText .. " + " ..
-                                         vkeys.id_to_name(ini.settings.key3add)
+                        buttonText = buttonText .. " + " .. vkeys.id_to_name(ini.settings.key3add)
                     end
                     buttonText = buttonText .. "]"
                 end
@@ -1925,17 +2198,26 @@ function imgui.onDrawHUD()
         end
         if zone then
             local posX, posY = getCharCoordinates(PLAYER_PED)
-            imgui.BeginChild("##upleft", vec(90, 8), false,
-                             imgui.WindowFlags.NoScrollbar)
+            imgui.BeginChild(
+                "##upleft",
+                vec(90, 8),
+                false,
+                imgui.WindowFlags.NoScrollbar + imgui.WindowFlags.NoScrollWithMouse
+            )
             imgui.TextColoredRGB(
-                "GPS: {4296f9}" .. zone .. "{FFFFFF}, {4296f9}" ..
-                    metersToString(
-                        math.ceil(
-                            getDistanceBetweenCoords2d(posX, posY, gps.x, gps.y))))
+                "GPS: {4296f9}" ..
+                    zone ..
+                        "{FFFFFF}, {4296f9}" ..
+                            metersToString(math.ceil(getDistanceBetweenCoords2d(posX, posY, gps.x, gps.y)))
+            )
             imgui.EndChild()
             imgui.SameLine()
-            imgui.BeginChild("##upright", vec(10, 8), false,
-                             imgui.WindowFlags.NoScrollbar)
+            imgui.BeginChild(
+                "##upright",
+                vec(10, 8),
+                false,
+                imgui.WindowFlags.NoScrollbar + imgui.WindowFlags.NoScrollWithMouse
+            )
             imgui.PushStyleVar(imgui.StyleVar.FramePadding, vec(2, 0))
             if imgui.Button("X") then
                 chat.addMessageToQueue("/gps", true, true)
@@ -1943,54 +2225,67 @@ function imgui.onDrawHUD()
             imgui.PopStyleVar()
             imgui.EndChild()
         end
-        imgui.BeginChild("##midleft", vec(56, 8), false,
-                         imgui.WindowFlags.NoScrollbar)
-        imgui.TextColoredRGB("Скилл: {4296f9}" .. player.skill ..
-                                 " {FFFFFF}(" .. player.skillExp .. "%)")
+        imgui.BeginChild(
+            "##midleft",
+            vec(56, 8),
+            false,
+            imgui.WindowFlags.NoScrollbar + imgui.WindowFlags.NoScrollWithMouse
+        )
+        imgui.TextColoredRGB("Скилл: {4296f9}" .. player.skill .. " {FFFFFF}(" .. player.skillExp .. "%)")
         imgui.SameLine()
         imgui.TextDisabled("(?)")
-        imgui.SetTooltip(
-            "Клиентов до следующего уровня: " ..
-                player.skillClients, 70)
+        imgui.SetTooltip("Клиентов до следующего уровня: " .. player.skillClients, 70)
         imgui.EndChild()
         imgui.SameLine()
-        imgui.BeginChild("##midright", vec(44, 8), false,
-                         imgui.WindowFlags.NoScrollbar)
-        imgui.TextColoredRGB(
-            "Ранг: {4296f9}" .. player.rank .. " {FFFFFF}(" ..
-                player.rankExp .. "%)")
+        imgui.BeginChild(
+            "##midright",
+            vec(44, 8),
+            false,
+            imgui.WindowFlags.NoScrollbar + imgui.WindowFlags.NoScrollWithMouse
+        )
+        imgui.TextColoredRGB("Ранг: {4296f9}" .. player.rank .. " {FFFFFF}(" .. player.rankExp .. "%)")
         imgui.EndChild()
-        imgui.BeginChild("##bottomleft", vec(56.5, 8), false,
-                         imgui.WindowFlags.NoScrollbar)
-        imgui.TextColoredRGB("ЗП: {4296f9}" .. player.salary .. " / " ..
-                                 player.salaryLimit .. "{FFFFFF} вирт")
+        imgui.BeginChild(
+            "##bottomleft",
+            vec(56.5, 8),
+            false,
+            imgui.WindowFlags.NoScrollbar + imgui.WindowFlags.NoScrollWithMouse
+        )
+        imgui.TextColoredRGB("ЗП: {4296f9}" .. player.salary .. " / " .. player.salaryLimit .. "{FFFFFF} вирт")
         imgui.EndChild()
         imgui.SameLine()
-        imgui.BeginChild("##bottomright ", vec(43.5, 8), false,
-                         imgui.WindowFlags.NoScrollbar)
-        imgui.TextColoredRGB("Чай: {4296f9}" .. player.tips ..
-                                 "{FFFFFF} вирт")
+        imgui.BeginChild(
+            "##bottomright ",
+            vec(43.5, 8),
+            false,
+            imgui.WindowFlags.NoScrollbar + imgui.WindowFlags.NoScrollWithMouse
+        )
+        imgui.TextColoredRGB("Чай: {4296f9}" .. player.tips .. "{FFFFFF} вирт")
         imgui.EndChild()
 
         if orders.currentOrder then
-            imgui.BeginChild("bottom  ", vec(100, 34), true,
-                             imgui.WindowFlags.NoScrollbar)
-            imgui.TextColoredRGB("Клиент: {4296f9}" ..
-                                     orders.currentOrder.nickname .. "[" ..
-                                     orders.currentOrder.id .. "]")
-            imgui.TextColoredRGB("Район: {4296f9}" ..
-                                     orders.currentOrder.zone ..
-                                     "{FFFFFF},{4296f9} " ..
-                                     metersToString(
-                                         orders.currentOrder.currentDistance))
+            imgui.BeginChild(
+                "bottom  ",
+                vec(100, 34),
+                true,
+                imgui.WindowFlags.NoScrollbar + imgui.WindowFlags.NoScrollWithMouse
+            )
+            imgui.TextColoredRGB(
+                "Клиент: {4296f9}" ..
+                    orders.currentOrder.nickname ..
+                        "[" .. orders.currentOrder.id .. "]{ffffff} (" .. orders.currentOrder.level .. ")"
+            )
+            imgui.TextColoredRGB(
+                "Район: {4296f9}" ..
+                    orders.currentOrder.zone ..
+                        "{FFFFFF},{4296f9} " .. metersToString(orders.currentOrder.currentDistance)
+            )
             local buttonText = "Отменить вызов"
             if ini.settings.hotKeys then
                 if ini.settings.key2 ~= 0 then
-                    buttonText = buttonText .. " [" ..
-                                     vkeys.id_to_name(ini.settings.key2)
+                    buttonText = buttonText .. " [" .. vkeys.id_to_name(ini.settings.key2)
                     if ini.settings.key2add ~= 0 then
-                        buttonText = buttonText .. " + " ..
-                                         vkeys.id_to_name(ini.settings.key2add)
+                        buttonText = buttonText .. " + " .. vkeys.id_to_name(ini.settings.key2add)
                     end
                     buttonText = buttonText .. "]"
                 end
@@ -2007,22 +2302,23 @@ end
 
 imgui.bindHovered = false
 function imgui.OnDrawBinder()
-    if isKeysPressed(ini.settings.key1, ini.settings.key1add, true) or
-        binds.isEdit("binds") or binds.isEdit("actions") or binds.isEdit("sms") then
+    if
+        isKeysPressed(ini.settings.key1, ini.settings.key1add, true) or binds.isEdit("binds") or binds.isEdit("actions") or
+            binds.isEdit("sms")
+     then
         local passengers = not table.isEmpty(vehicle.passengersList)
         local sizeX = 104
 
         imgui.ShowCursor = true
 
         local flags =
-            imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize +
-                imgui.WindowFlags.AlwaysVerticalScrollbar
+            imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize + imgui.WindowFlags.AlwaysVerticalScrollbar
 
-        if not (imgui.bindHovered and imgui.IsMouseDragging(0) and
-            (isKeysPressed(ini.settings.key1, ini.settings.key1add, true) or
-                binds.isEdit("binds"))) then
-            imgui.SetNextWindowPos(vec(ini.settings.binderPosX,
-                                       ini.settings.binderPosY))
+        if
+            not (imgui.bindHovered and imgui.IsMouseDragging(0) and
+                (isKeysPressed(ini.settings.key1, ini.settings.key1add, true) or binds.isEdit("binds")))
+         then
+            imgui.SetNextWindowPos(vec(ini.settings.binderPosX, ini.settings.binderPosY))
             imgui.SetNextWindowSize(vec(sizeX, 225))
         end
 
@@ -2030,14 +2326,14 @@ function imgui.OnDrawBinder()
         imgui.Begin("Taximate Binder", _, flags)
         imgui.bindHovered = imgui.IsRootWindowOrAnyChildHovered()
         local newPos = imgui.GetWindowPos()
-        local savePosX, savePosY = convertWindowScreenCoordsToGameScreenCoords(
-                                       newPos.x, newPos.y)
+        local savePosX, savePosY = convertWindowScreenCoordsToGameScreenCoords(newPos.x, newPos.y)
 
-        if (math.ceil(savePosX) ~= math.ceil(ini.settings.binderPosX) or
-            math.ceil(savePosY) ~= math.ceil(ini.settings.binderPosY)) and
-            (imgui.bindHovered and imgui.IsMouseDragging(0) and
-                (isKeysPressed(ini.settings.key1, ini.settings.key1add, true) or
-                    binds.isEdit("binds"))) then
+        if
+            (math.ceil(savePosX) ~= math.ceil(ini.settings.binderPosX) or
+                math.ceil(savePosY) ~= math.ceil(ini.settings.binderPosY)) and
+                (imgui.bindHovered and imgui.IsMouseDragging(0) and
+                    (isKeysPressed(ini.settings.key1, ini.settings.key1add, true) or binds.isEdit("binds")))
+         then
             ini.settings.binderPosX = math.ceil(savePosX)
             ini.settings.binderPosY = math.ceil(savePosY)
             inicfg.save(ini, "Taximate/settings.ini")
@@ -2045,8 +2341,7 @@ function imgui.OnDrawBinder()
 
         imgui.NewLine()
         imgui.SameLine(toScreenX(3))
-        if imgui.CollapsingHeader("Отправить СМС клиенту",
-                                  vec(97, 10)) then
+        if imgui.CollapsingHeader("Отправить СМС клиенту", vec(97, 10)) then
             imgui.NewLine()
             imgui.SameLine(toScreenX(10.5))
             if imgui.Button("Добавить сообщение", vec(87.5, 9)) then
@@ -2080,17 +2375,17 @@ function imgui.OnDrawBinder()
                         binds.save()
                     end
                     imgui.PopID()
-                    imgui.SetTooltip(bind.buffer.v ..
-                                         "\n\nДоступные для замены токены:\n{carname}, {distance}, {zone}",
-                                     500)
+                    imgui.SetTooltip(
+                        bind.buffer.v .. "\n\nДоступные для замены токены:\n{carname}, {distance}, {zone}",
+                        500
+                    )
                     imgui.SameLine()
                     local buttonName = "Bind"
                     if bind.key ~= 0 then
                         buttonName = vkeys.id_to_name(bind.key)
                     end
                     if bind.addKey ~= 0 then
-                        buttonName = buttonName .. " + " ..
-                                         vkeys.id_to_name(bind.addKey)
+                        buttonName = buttonName .. " + " .. vkeys.id_to_name(bind.addKey)
                     end
                     if imgui.Button(buttonName .. "##sms", vec(18, 10)) then
                         imgui.key = 0
@@ -2116,33 +2411,27 @@ function imgui.OnDrawBinder()
                         binds.delete("sms", bindIndex)
                     end
                     imgui.SameLine()
-                    if imgui.Button("-##sms" .. bindIndex, vec(5, 10)) or
-                        isKeyJustPressed(13) then
+                    if imgui.Button("-##sms" .. bindIndex, vec(5, 10)) or isKeyJustPressed(13) then
                         bind.edit = false
                         binds.save()
                     end
                 else
-                    local text = chat.subSMSText("", bind.buffer.v)
+                    local text = chat.subSMSText(ini.settings.SMSPrefix, bind.buffer.v)
                     local buttonName = ""
                     if ini.settings.hotKeys then
                         if bind.key ~= 0 then
                             buttonName = "[" .. vkeys.id_to_name(bind.key)
                         end
                         if bind.addKey ~= 0 then
-                            buttonName =
-                                buttonName .. " + " ..
-                                    vkeys.id_to_name(bind.addKey)
+                            buttonName = buttonName .. " + " .. vkeys.id_to_name(bind.addKey)
                         end
                         if buttonName ~= "" then
                             buttonName = buttonName .. "] "
                         end
                     end
                     buttonName = buttonName .. text
-                    if imgui.Button(buttonName .. "##sms" .. bindIndex,
-                                    vec(80.5, 10)) and orders.currentOrder then
-                        chat.addMessageToQueue(
-                            string.format("/t %d %s", orders.currentOrder.id,
-                                          text))
+                    if imgui.Button(buttonName .. "##sms" .. bindIndex, vec(80.5, 10)) and orders.currentOrder then
+                        chat.addMessageToQueue(string.format("/t %d %s", orders.currentOrder.id, text))
                     end
                     if utf8len(text) > 25 then
                         imgui.SetTooltip(text, 500)
@@ -2159,8 +2448,7 @@ function imgui.OnDrawBinder()
 
         imgui.NewLine()
         imgui.SameLine(toScreenX(3))
-        if imgui.CollapsingHeader(
-            "Меню действий с пассажирами") then
+        if imgui.CollapsingHeader("Меню действий с пассажирами") then
             imgui.NewLine()
             imgui.SameLine(toScreenX(10.5))
             if imgui.Button("Добавить действие", vec(87.5, 9)) then
@@ -2187,10 +2475,13 @@ function imgui.OnDrawBinder()
                     if vehicle.passengersList[passengerIndex] then
                         imgui.NewLine()
                         imgui.SameLine(toScreenX(11))
-                        if imgui.CollapsingHeader(
-                            vehicle.passengersList[passengerIndex].nickname ..
-                                "[" .. vehicle.passengersList[passengerIndex].id ..
-                                "]", vec(89, 10)) then
+                        if
+                            imgui.CollapsingHeader(
+                                vehicle.passengersList[passengerIndex].nickname ..
+                                    "[" .. vehicle.passengersList[passengerIndex].id .. "]",
+                                vec(89, 10)
+                            )
+                         then
                             imgui.showActions(passengerIndex, passengers)
                         end
                     end
@@ -2207,8 +2498,7 @@ function imgui.OnDrawBinder()
             local bindPageText = i < 10 and " " .. i or tostring(i)
             local binderSize = #binds.list.binds
             if binderSize > bindPage or i == 1 then
-                if imgui.Selectable(bindPageText, imgui.binderPage == i, 0,
-                                    vec(5, 8)) then
+                if imgui.Selectable(bindPageText, imgui.binderPage == i, 0, vec(5, 8)) then
                     imgui.binderPage = i
                 end
             else
@@ -2218,7 +2508,9 @@ function imgui.OnDrawBinder()
                 imgui.TextDisabled(bindPageText)
             end
             imgui.EndChild()
-            if i < 10 then imgui.SameLine() end
+            if i < 10 then
+                imgui.SameLine()
+            end
         end
         imgui.EndChild()
 
@@ -2271,9 +2563,7 @@ function imgui.OnDrawBinder()
                             buttonName = "[" .. vkeys.id_to_name(bind.key)
                         end
                         if bind.addKey ~= 0 then
-                            buttonName =
-                                buttonName .. " + " ..
-                                    vkeys.id_to_name(bind.addKey)
+                            buttonName = buttonName .. " + " .. vkeys.id_to_name(bind.addKey)
                         end
                         if buttonName ~= "" then
                             buttonName = buttonName .. "] "
@@ -2297,8 +2587,7 @@ function imgui.OnDrawBinder()
                         buttonName = vkeys.id_to_name(bind.key)
                     end
                     if bind.addKey ~= 0 then
-                        buttonName = buttonName .. " + " ..
-                                         vkeys.id_to_name(bind.addKey)
+                        buttonName = buttonName .. " + " .. vkeys.id_to_name(bind.addKey)
                     end
                     if imgui.Button(buttonName, vec(23, 10)) then
                         imgui.key = 0
@@ -2350,11 +2639,11 @@ function imgui.onDrawNotification()
         local isOrderExist = orders.list[notification.orderNickname]
         local sizeWithButton = 0
 
-        if notification.button then sizeWithButton = sizeWithButton + 16 end
+        if notification.button then
+            sizeWithButton = sizeWithButton + 16
+        end
 
-        if notification.active and
-            (notification.time < os.clock() or
-                (notification.button and not isOrderExist)) then
+        if notification.active and (notification.time < os.clock() or (notification.button and not isOrderExist)) then
             notification.active = false
         end
 
@@ -2380,18 +2669,16 @@ function imgui.onDrawNotification()
                     end
                 end
 
-                if notification.active and
-                    (vehicle.name or
-                        isKeysPressed(ini.settings.key1, ini.settings.key1add,
-                                      true)) then
+                if
+                    notification.active and
+                        (vehicle.name or isKeysPressed(ini.settings.key1, ini.settings.key1add, true))
+                 then
                     count = count + 1
                     if notification.time + 3.000 >= os.clock() then
                         if (notification.time - os.clock()) / 1.0 > 0.95 then
                             imgui.PushStyleVar(imgui.StyleVar.Alpha, 0.95)
                         else
-                            imgui.PushStyleVar(imgui.StyleVar.Alpha,
-                                               (notification.time - os.clock()) /
-                                                   1.0)
+                            imgui.PushStyleVar(imgui.StyleVar.Alpha, (notification.time - os.clock()) / 1.0)
                         end
                         push = true
                     end
@@ -2402,60 +2689,52 @@ function imgui.onDrawNotification()
                     elseif orders.GPSMark then
                         notfPos = notfPos + 9.5
                     end
-                    local notificationTitle =
-                        "{4296f9}Taximate notification\t\t\t\t\t{FFFFFF}" ..
-                            notification.date
+                    local notificationTitle = "{4296f9}Taximate notification\t\t\t\t\t{FFFFFF}" .. notification.date
 
                     notfList.pos = {
                         x = ini.settings.hudPosX,
-                        y = notfList.pos.y -
-                            (notfList.size.y + 10 + sizeWithButton +
-                                notification.addSize)
+                        y = notfList.pos.y - (notfList.size.y + 10 + sizeWithButton + notification.addSize)
                     }
-                    imgui.SetNextWindowPos(vec(notfList.pos.x,
-                                               notfList.pos.y - notfPos))
-                    imgui.SetNextWindowSize(vec(105,
-                                                sizeWithButton + notfList.size.y +
-                                                    imgui.GetStyle().ItemSpacing
-                                                        .y +
-                                                    imgui.GetStyle()
-                                                        .WindowPadding.y - 5 +
-                                                    notification.addSize))
-                    imgui.Begin("message #" .. notificationIndex, _,
-                                imgui.WindowFlags.NoCollapse +
-                                    imgui.WindowFlags.NoResize +
-                                    imgui.WindowFlags.NoScrollbar +
-                                    imgui.WindowFlags.NoMove +
-                                    imgui.WindowFlags.NoTitleBar)
+                    imgui.SetNextWindowPos(vec(notfList.pos.x, notfList.pos.y - notfPos))
+                    imgui.SetNextWindowSize(
+                        vec(
+                            105,
+                            sizeWithButton + notfList.size.y + imgui.GetStyle().ItemSpacing.y +
+                                imgui.GetStyle().WindowPadding.y -
+                                5 +
+                                notification.addSize
+                        )
+                    )
+                    imgui.Begin(
+                        "message #" .. notificationIndex,
+                        _,
+                        imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize + imgui.WindowFlags.NoScrollbar +
+                            imgui.WindowFlags.NoScrollWithMouse +
+                            imgui.WindowFlags.NoMove +
+                            imgui.WindowFlags.NoTitleBar
+                    )
                     imgui.TextColoredRGB(notificationTitle)
                     imgui.Dummy(vec(0, 2))
                     if notification.button then
                         if orders.list[notification.orderNickname] then
                             local notfText = FORMAT_NOTIFICATIONS.newOrder
-                            if orders.list[notification.orderNickname].direction >
-                                0 then
-                                notfText =
-                                    notfText:gsub(": {4296f9}", ": {42ff96}")
-                            elseif orders.list[notification.orderNickname]
-                                .direction < 0 then
-                                notfText =
-                                    notfText:gsub(": {4296f9}", ": {d44331}")
+                            if orders.list[notification.orderNickname].direction > 0 then
+                                notfText = notfText:gsub(": {4296f9}", ": {42ff96}")
+                            elseif orders.list[notification.orderNickname].direction < 0 then
+                                notfText = notfText:gsub(": {4296f9}", ": {d44331}")
                             end
                             notification.text =
-                                string.format(notfText,
-                                              notification.orderNickname,
-                                              orders.list[notification.orderNickname]
-                                                  .id, metersToString(
-                                                  orders.list[notification.orderNickname]
-                                                      .distance),
-                                              orders.list[notification.orderNickname]
-                                                  .zone)
-                            if orders.list[notification.orderNickname].zone ~=
-                                "Неизвестно" then
+                                string.format(
+                                notfText,
+                                notification.orderNickname,
+                                orders.list[notification.orderNickname].id,
+                                orders.list[notification.orderNickname].level,
+                                metersToString(orders.list[notification.orderNickname].distance),
+                                orders.list[notification.orderNickname].zone
+                            )
+                            if orders.list[notification.orderNickname].zone ~= "Неизвестно" then
                                 notification.text =
-                                    notification.text .. ", {4296f9}" ..
-                                        orders.list[notification.orderNickname]
-                                            .zone
+                                    notification.text .. ", {4296f9}" .. orders.list[notification.orderNickname].zone
                             end
                         end
                     end
@@ -2463,28 +2742,25 @@ function imgui.onDrawNotification()
                     imgui.Dummy(vec(0, 2))
                     if notification.button then
                         local acceptOrderText = "Принять вызов"
-                        if orders.lastCorrectOrderNickname ==
-                            notification.orderNickname and ini.settings.hotKeys and
-                            ini.settings.key2 ~= 0 then
-                            acceptOrderText =
-                                acceptOrderText .. " [" ..
-                                    vkeys.id_to_name(ini.settings.key2)
+                        if
+                            orders.lastCorrectOrderNickname == notification.orderNickname and ini.settings.hotKeys and
+                                ini.settings.key2 ~= 0
+                         then
+                            acceptOrderText = acceptOrderText .. " [" .. vkeys.id_to_name(ini.settings.key2)
                             if ini.settings.key2add ~= 0 then
-                                acceptOrderText =
-                                    acceptOrderText .. " + " ..
-                                        vkeys.id_to_name(ini.settings.key2add)
+                                acceptOrderText = acceptOrderText .. " + " .. vkeys.id_to_name(ini.settings.key2add)
                             end
                             acceptOrderText = acceptOrderText .. "]"
                         end
                         if imgui.Button(acceptOrderText, vec(100, 10)) then
-                            orders.accept(notification.orderNickname,
-                                          orders.list[notification.orderNickname]
-                                              .time)
+                            orders.accept(notification.orderNickname, orders.list[notification.orderNickname].time)
                             imgui.Dummy(vec(0, 2))
                         end
                     end
                     imgui.End()
-                    if push then imgui.PopStyleVar() end
+                    if push then
+                        imgui.PopStyleVar()
+                    end
                     if not notification.active then
                         notification = nil
                     end
@@ -2500,394 +2776,540 @@ end
 
 function imgui.onDrawSettings()
     imgui.ShowCursor = true
-    local resX, resY = getScreenResolution()
-    imgui.SetNextWindowSize(vec(200, 220))
-    imgui.SetNextWindowPos(vec(220, 90), 2)
-    imgui.Begin("Taximate " .. thisScript().version, imgui.showSettings,
-                imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize)
+    imgui.SetNextWindowSize(vec(200, 180))
+    imgui.SetNextWindowPos(vec(220, 130), 2)
+    imgui.Begin(
+        "Taximate " .. thisScript().version,
+        imgui.showSettings,
+        imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize
+    )
     imgui.BeginChild("top", vec(195, 9), false)
-    if imgui.Selectable("\t\t\t  Функции", imgui.settingsTab == 1, 0,
-                        vec(63, 8)) then imgui.settingsTab = 1 end
+    if imgui.Selectable("\t\t\t Настройки", imgui.settingsTab == 1, 0, vec(65, 8)) then
+        imgui.settingsTab = 1
+    end
     imgui.SameLine()
-    if imgui.Selectable("\t\t\t Параметры", imgui.settingsTab == 2, 0,
-                        vec(63.5, 8)) then imgui.settingsTab = 2 end
+    if imgui.Selectable("\t\t  Чёрный список", imgui.settingsTab == 2, 0, vec(65, 8)) then
+        imgui.settingsTab = 2
+    end
     imgui.SameLine()
-    if imgui.Selectable("\t\t\tИнформация", imgui.settingsTab == 3, 0,
-                        vec(64, 8)) then
+    if imgui.Selectable("\t\t  Информация", imgui.settingsTab == 3, 0, vec(65, 8)) then
         if imgui.settingsTab ~= 3 and ini.settings.checkUpdates then
             checkUpdates()
         end
         imgui.settingsTab = 3
     end
     imgui.EndChild()
-    imgui.BeginChild("bottom", vec(195, 195), true)
+    imgui.BeginChild("bottom", vec(195, 155), true)
     if imgui.settingsTab == 1 then
-        if imgui.Checkbox("Отображение Taximate Binder",
-                          imgui.ImBool(ini.settings.showBindMenu )) then
-            ini.settings.showBindMenu  = not ini.settings.showBindMenu 
-            inicfg.save(ini, "Taximate/settings.ini")
-        end
-        if imgui.Checkbox("Отображение Taximate HUD",
-                          imgui.ImBool(ini.settings.showHUD)) then
-            ini.settings.showHUD = not ini.settings.showHUD
-            inicfg.save(ini, "Taximate/settings.ini")
-        end
-        if imgui.Checkbox("Уведомления",
-                          imgui.ImBool(ini.settings.notifications)) then
-            ini.settings.notifications = not ini.settings.notifications
-            inicfg.save(ini, "Taximate/settings.ini")
-        end
-        imgui.SameLine()
-        if imgui.Checkbox(
-            "Звуковые уведомления, громкость: ",
-            imgui.ImBool(ini.settings.notifications and ini.settings.sounds)) then
-            ini.settings.sounds = not ini.settings.sounds
-            inicfg.save(ini, "Taximate/settings.ini")
-        end
-        imgui.SetTooltip(
-            "Для работы требуется выставить минимальную громкость игрового радио и перезапустить игру",
-            90)
-        imgui.SameLine()
-        imgui.SameLine()
-        imgui.PushItemWidth(toScreenX(43))
-        if imgui.SliderInt("", imgui.soundVolume, 0, 100) then
-            if imgui.soundVolume.v < 0 or imgui.soundVolume.v > 100 then
-                imgui.soundVolume.v = defaults.soundVolume
+        if imgui.CollapsingHeader("Общие настройки", true, imgui.TreeNodeFlags.DefaultOpen) then
+            if imgui.Checkbox("Показывать Taximate Binder", imgui.ImBool(ini.settings.showBindMenu)) then
+                ini.settings.showBindMenu = not ini.settings.showBindMenu
+                inicfg.save(ini, "Taximate/settings.ini")
             end
-            ini.settings.soundVolume = imgui.soundVolume.v
-            inicfg.save(ini, "Taximate/settings.ini")
-        end
-        imgui.SetTooltip(
-            "Для работы требуется выставить минимальную громкость игрового радио и перезапустить игру",
-            90)
-        if imgui.Checkbox(
-            "Автоматическая отправка СМС клиенту раз в",
-            imgui.ImBool(ini.settings.sendSMS)) then
-            ini.settings.sendSMS = not ini.settings.sendSMS
-            inicfg.save(ini, "Taximate/settings.ini")
-        end
-        imgui.SameLine()
-        imgui.PushItemWidth(toScreenX(53))
-        if imgui.SliderInt("сек", imgui.SMSTimer, 15, 90) then
-            if imgui.SMSTimer.v < 15 or imgui.SMSTimer.v > 90 then
-                imgui.SMSTimer.v = defaults.SMSTimer
+            imgui.SameLine()
+            if imgui.Checkbox("Показывать Taximate HUD", imgui.ImBool(ini.settings.showHUD)) then
+                ini.settings.showHUD = not ini.settings.showHUD
+                inicfg.save(ini, "Taximate/settings.ini")
             end
-            ini.settings.SMSTimer = imgui.SMSTimer.v
-            inicfg.save(ini, "Taximate/settings.ini")
-        end
-        if imgui.Checkbox(
-            "Отправка СМС клиенту при отмене вызова",
-            imgui.ImBool(ini.settings.sendSMSCancel)) then
-            ini.settings.sendSMSCancel = not ini.settings.sendSMSCancel
-            inicfg.save(ini, "Taximate/settings.ini")
-        end
-        if imgui.Checkbox(
-            "Отправка СМС об одном пассажирском месте для такси Buffalo",
-            imgui.ImBool(ini.settings.seatsNotify)) then
-            ini.settings.seatsNotify = not ini.settings.seatsNotify
-            inicfg.save(ini, "Taximate/settings.ini")
-        end
-        if imgui.Checkbox("Сообщения от диспетчера",
-                          imgui.ImBool(ini.settings.dispatcherMessages)) then
-            ini.settings.dispatcherMessages = not ini.settings
-                                                  .dispatcherMessages
-            inicfg.save(ini, "Taximate/settings.ini")
-        end
-        if imgui.Checkbox(
-            "Игнорирование отмененных вызовов в течение",
-            imgui.ImBool(ini.settings.ignoreCanceledOrder)) then
-            ini.settings.ignoreCanceledOrder = not ini.settings
-                                                   .ignoreCanceledOrder
-            inicfg.save(ini, "Taximate/settings.ini")
-        end
-        imgui.SameLine()
-        imgui.PushItemWidth(toScreenX(48))
-        if imgui.SliderInt("сек ", imgui.canceledOrderDelay, 0, 600) then
-            if imgui.canceledOrderDelay.v < 0 or imgui.canceledOrderDelay.v >
-                600 then
-                imgui.canceledOrderDelay.v = defaults.canceledOrderDelay
+            if imgui.Checkbox("Уведомления", imgui.ImBool(ini.settings.notifications)) then
+                ini.settings.notifications = not ini.settings.notifications
+                inicfg.save(ini, "Taximate/settings.ini")
             end
-            ini.settings.canceledOrderDelay = imgui.canceledOrderDelay.v
-            inicfg.save(ini, "Taximate/settings.ini")
-        end
-        if imgui.Checkbox(
-            "Обновление метки на карте, если клиент поблизости",
-            imgui.ImBool(ini.settings.updateOrderMark)) then
-            ini.settings.updateOrderMark = not ini.settings.updateOrderMark
-            inicfg.save(ini, "Taximate/settings.ini")
-        end
-        if imgui.Checkbox(
-            "Принятие повторного вызова от клиента",
-            imgui.ImBool(ini.settings.acceptRepeatOrder)) then
-            ini.settings.acceptRepeatOrder = not ini.settings.acceptRepeatOrder
-            inicfg.save(ini, "Taximate/settings.ini")
-        end
-        if imgui.Checkbox(
-            "Автоизменение clist на рабочий цвет:",
-            imgui.ImBool(ini.settings.autoClist)) then
-            ini.settings.autoClist = not ini.settings.autoClist
-            inicfg.save(ini, "Taximate/settings.ini")
-        end
-        imgui.SameLine()
-        imgui.PushItemWidth(toScreenX(65))
-        if imgui.Combo("##Combo", imgui.workClist, COLOR_LIST) then
-            ini.settings.workClist = imgui.workClist.v
-            inicfg.save(ini, "Taximate/settings.ini")
-        end
-        if imgui.Checkbox(
-            "Отображение на карте игроков в транспорте",
-            imgui.ImBool(ini.settings.markers)) then
-            ini.settings.markers = not ini.settings.markers
-            inicfg.save(ini, "Taximate/settings.ini")
-        end
-        imgui.SetTooltip(
-            "Функция даёт преимущество над игроками\nИспользовать на свой страх и риск",
-            150)
-        if imgui.Checkbox(
-            "Окончание рабочего день при поломке/пустом баке",
-            imgui.ImBool(ini.settings.finishWork)) then
-            ini.settings.finishWork = not ini.settings.finishWork
-            inicfg.save(ini, "Taximate/settings.ini")
-        end
-        if imgui.Checkbox(
-            "Активация круиз-контроля клавишей",
-            imgui.ImBool(ini.settings.cruiseControl)) then
-            ini.settings.cruiseControl = not ini.settings.cruiseControl
-            inicfg.save(ini, "Taximate/settings.ini")
-        end
-        imgui.SameLine()
-        local buttonText = "None"
-        if ini.settings.key4 ~= 0 then
-            buttonText = vkeys.id_to_name(ini.settings.key4)
-        end
-        imgui.PushID(1)
-        if imgui.Button(buttonText, vec(0, 10)) then
-            imgui.key = 0
-            imgui.addKey = 0
-            imgui.showInputWindow.v = true
-            imgui.singleBind = true
-            imgui.key4Edit = true
-        end
-        if not imgui.showInputWindow.v and imgui.key ~= 0 then
-            if imgui.key == -1 then imgui.key = 0 end
-            if imgui.key4Edit then ini.settings.key4 = imgui.key end
-            inicfg.save(ini, "Taximate/settings.ini")
-            imgui.singleBind = false
-            imgui.key = 0
-        end
-        imgui.PopID()
-        if imgui.Checkbox(
-            "Обновление дистанции всех вызовов раз в",
-            imgui.ImBool(ini.settings.ordersDistanceUpdate)) then
-            ini.settings.ordersDistanceUpdate = not ini.settings
-                                                    .ordersDistanceUpdate
-            inicfg.save(ini, "Taximate/settings.ini")
-        end
-        imgui.SameLine()
-        imgui.PushItemWidth(toScreenX(59))
-        if imgui.SliderInt("сeк", imgui.ordersDistanceUpdateTimer, 1, 30) then
-            if imgui.ordersDistanceUpdateTimer.v < 1 or
-                imgui.ordersDistanceUpdateTimer.v > 30 then
-                imgui.ordersDistanceUpdateTimer.v =
-                    defaults.ordersDistanceUpdateTimer
+            imgui.SameLine()
+            if
+                imgui.Checkbox(
+                    "Звуковые уведомления, громкость: ",
+                    imgui.ImBool(ini.settings.notifications and ini.settings.sounds)
+                )
+             then
+                ini.settings.sounds = not ini.settings.sounds
+                inicfg.save(ini, "Taximate/settings.ini")
             end
-            ini.settings.ordersDistanceUpdateTimer =
-                imgui.ordersDistanceUpdateTimer.v
-            inicfg.save(ini, "Taximate/settings.ini")
+            imgui.SetTooltip(
+                "Для работы требуется выставить минимальную громкость игрового радио и перезапустить игру",
+                90
+            )
+            imgui.SameLine()
+            imgui.PushItemWidth(toScreenX(40))
+            if imgui.SliderInt("", imgui.soundVolume, 0, 100) then
+                if imgui.soundVolume.v < 0 or imgui.soundVolume.v > 100 then
+                    imgui.soundVolume.v = defaults.soundVolume
+                end
+                ini.settings.soundVolume = imgui.soundVolume.v
+                inicfg.save(ini, "Taximate/settings.ini")
+            end
+            imgui.SetTooltip(
+                "Для работы требуется выставить минимальную громкость игрового радио и перезапустить игру",
+                90
+            )
+            imgui.NewLine()
         end
-        if imgui.Checkbox("Горячие клавиши",
-                          imgui.ImBool(ini.settings.hotKeys)) then
-            ini.settings.hotKeys = not ini.settings.hotKeys
-            inicfg.save(ini, "Taximate/settings.ini")
+        if imgui.CollapsingHeader("Приём вызовов", true, imgui.TreeNodeFlags.DefaultOpen) then
+            imgui.Text("Дистанция для принятия вызова:")
+            imgui.SameLine()
+            imgui.PushItemWidth(toScreenX(95.7))
+            if imgui.SliderInt("м", imgui.maxDistanceToAcceptOrder, 0, 7000) then
+                if imgui.maxDistanceToAcceptOrder.v < 0 or imgui.maxDistanceToAcceptOrder.v > 7000 then
+                    imgui.maxDistanceToAcceptOrder.v = defaults.maxDistanceToAcceptOrder
+                end
+                ini.settings.maxDistanceToAcceptOrder = imgui.maxDistanceToAcceptOrder.v
+                inicfg.save(ini, "Taximate/settings.ini")
+            end
+            imgui.Text("Дистанция для получения доп. вызова:")
+            imgui.SameLine()
+            imgui.PushItemWidth(toScreenX(80.5))
+            if imgui.SliderInt("м##", imgui.maxDistanceToGetOrder, 0, 2000) then
+                if imgui.maxDistanceToGetOrder.v < 0 or imgui.maxDistanceToGetOrder.v > 2000 then
+                    imgui.maxDistanceToGetOrder.v = defaults.maxDistanceToGetOrder
+                end
+                ini.settings.maxDistanceToGetOrder = imgui.maxDistanceToGetOrder.v
+                inicfg.save(ini, "Taximate/settings.ini")
+            end
+            imgui.Text("Принимать вызовы от игроков с уровнем:")
+            imgui.SameLine()
+            if imgui.Checkbox("1-2", imgui.ImBool(ini.settings.autoAccept1_2)) then
+                ini.settings.autoAccept1_2 = not ini.settings.autoAccept1_2
+                inicfg.save(ini, "Taximate/settings.ini")
+            end
+            imgui.SameLine()
+            if imgui.Checkbox("3-5", imgui.ImBool(ini.settings.autoAccept3_5)) then
+                ini.settings.autoAccept3_5 = not ini.settings.autoAccept3_5
+                inicfg.save(ini, "Taximate/settings.ini")
+            end
+            imgui.SameLine()
+            if imgui.Checkbox("6+", imgui.ImBool(ini.settings.autoAccept6)) then
+                ini.settings.autoAccept6 = not ini.settings.autoAccept6
+                inicfg.save(ini, "Taximate/settings.ini")
+            end
+            imgui.NewLine()
+            if imgui.Checkbox("Показывать сообщения диспетчера", imgui.ImBool(ini.settings.dispatcherMessages)) then
+                ini.settings.dispatcherMessages = not ini.settings.dispatcherMessages
+                inicfg.save(ini, "Taximate/settings.ini")
+            end
+            if
+                imgui.Checkbox(
+                    "Не принимать отмененные вызовы в течение",
+                    imgui.ImBool(ini.settings.ignoreCanceledOrder)
+                )
+             then
+                ini.settings.ignoreCanceledOrder = not ini.settings.ignoreCanceledOrder
+                inicfg.save(ini, "Taximate/settings.ini")
+            end
+            imgui.SameLine()
+            imgui.PushItemWidth(toScreenX(50))
+            if imgui.SliderInt("сек ", imgui.canceledOrderDelay, 0, 600) then
+                if imgui.canceledOrderDelay.v < 0 or imgui.canceledOrderDelay.v > 600 then
+                    imgui.canceledOrderDelay.v = defaults.canceledOrderDelay
+                end
+                ini.settings.canceledOrderDelay = imgui.canceledOrderDelay.v
+                inicfg.save(ini, "Taximate/settings.ini")
+            end
+            if
+                imgui.Checkbox(
+                    "Принимать повторные вызовы от текущего клиента",
+                    imgui.ImBool(ini.settings.acceptRepeatOrder)
+                )
+             then
+                ini.settings.acceptRepeatOrder = not ini.settings.acceptRepeatOrder
+                inicfg.save(ini, "Taximate/settings.ini")
+            end
+            if imgui.Checkbox("Обновлять дистанцию вызовов раз в", imgui.ImBool(ini.settings.ordersDistanceUpdate)) then
+                ini.settings.ordersDistanceUpdate = not ini.settings.ordersDistanceUpdate
+                inicfg.save(ini, "Taximate/settings.ini")
+            end
+            imgui.SameLine()
+            imgui.PushItemWidth(toScreenX(71.5))
+            if imgui.SliderInt("сeк", imgui.ordersDistanceUpdateTimer, 1, 30) then
+                if imgui.ordersDistanceUpdateTimer.v < 1 or imgui.ordersDistanceUpdateTimer.v > 30 then
+                    imgui.ordersDistanceUpdateTimer.v = defaults.ordersDistanceUpdateTimer
+                end
+                ini.settings.ordersDistanceUpdateTimer = imgui.ordersDistanceUpdateTimer.v
+                inicfg.save(ini, "Taximate/settings.ini")
+            end
+            if imgui.Checkbox("Заводить двигатель при принятии вызова", imgui.ImBool(ini.settings.startEngine)) then
+                ini.settings.startEngine = not ini.settings.startEngine
+                inicfg.save(ini, "Taximate/settings.ini")
+            end
+            imgui.NewLine()
         end
-        if imgui.Checkbox("Совместимость с FastMap",
-                          imgui.ImBool(ini.settings.fastMapCompatibility)) then
-            ini.settings.fastMapCompatibility = not ini.settings
-                                                    .fastMapCompatibility
-            inicfg.save(ini, "Taximate/settings.ini")
+        if imgui.CollapsingHeader("Отправка сообщений", true, imgui.TreeNodeFlags.DefaultOpen) then
+            if imgui.Checkbox("Отправлять СМС клиенту раз в", imgui.ImBool(ini.settings.sendSMS)) then
+                ini.settings.sendSMS = not ini.settings.sendSMS
+                inicfg.save(ini, "Taximate/settings.ini")
+            end
+            imgui.SameLine()
+            imgui.PushItemWidth(toScreenX(85))
+            if imgui.SliderInt("сек", imgui.SMSTimer, 15, 90) then
+                if imgui.SMSTimer.v < 15 or imgui.SMSTimer.v > 90 then
+                    imgui.SMSTimer.v = defaults.SMSTimer
+                end
+                ini.settings.SMSTimer = imgui.SMSTimer.v
+                inicfg.save(ini, "Taximate/settings.ini")
+            end
+            if imgui.Checkbox("Отправлять СМС клиенту при отмене вызова", imgui.ImBool(ini.settings.sendSMSCancel)) then
+                ini.settings.sendSMSCancel = not ini.settings.sendSMSCancel
+                inicfg.save(ini, "Taximate/settings.ini")
+            end
+            if
+                imgui.Checkbox(
+                    "Отправка СМС об одном пассажирском месте для такси Buffalo",
+                    imgui.ImBool(ini.settings.seatsNotify)
+                )
+             then
+                ini.settings.seatsNotify = not ini.settings.seatsNotify
+                inicfg.save(ini, "Taximate/settings.ini")
+            end
+            imgui.NewLine()
+            imgui.Text("СМС префикс:")
+            imgui.SameLine()
+            imgui.PushItemWidth(toScreenX(60))
+            if imgui.InputText("##SMSPrefix", imgui.SMSPrefix) then
+                ini.settings.SMSPrefix = imgui.SMSPrefix.v
+                inicfg.save(ini, "Taximate/settings.ini")
+            end
+            local color = "{FFFFFF}"
+            local text = chat.subSMSText(ini.settings.SMSPrefix, ini.settings.SMSText)
+            if utf8len(text) > 63 then
+                color = "{FF0000}"
+            end
+            imgui.TextColoredRGB(color .. "Доклад:")
+            imgui.SameLine()
+            imgui.PushItemWidth(toScreenX(165))
+            if imgui.InputText("##SMSText", imgui.SMSText) then
+                ini.settings.SMSText = imgui.SMSText.v
+                inicfg.save(ini, "Taximate/settings.ini")
+            end
+            imgui.SetTooltip("SMS: " .. utf8sub(text, 1, 63), 200)
+            local color = "{FFFFFF}"
+            local text = chat.subSMSText(ini.settings.SMSPrefix, ini.settings.SMSArrival)
+            if utf8len(text) > 63 then
+                color = "{FF0000}"
+            end
+            imgui.TextColoredRGB(color .. "Прибытие:")
+            imgui.SameLine()
+            imgui.PushItemWidth(toScreenX(158))
+            if imgui.InputText("##SMSArrival", imgui.SMSArrival) then
+                ini.settings.SMSArrival = imgui.SMSArrival.v
+                inicfg.save(ini, "Taximate/settings.ini")
+            end
+            imgui.SetTooltip("SMS: " .. utf8sub(text, 1, 63), 200)
+            local color = "{FFFFFF}"
+            local text = chat.subSMSText(ini.settings.SMSPrefix, ini.settings.SMSSeats)
+            if utf8len(text) > 63 then
+                color = "{FF0000}"
+            end
+            imgui.TextColoredRGB(color .. "Одно пасс. место:")
+            imgui.SameLine()
+            imgui.PushItemWidth(toScreenX(139.5))
+            if imgui.InputText("##SMSSeats", imgui.SMSSeats) then
+                ini.settings.SMSSeats = imgui.SMSSeats.v
+                inicfg.save(ini, "Taximate/settings.ini")
+            end
+            imgui.SetTooltip("SMS: " .. utf8sub(text, 1, 63), 200)
+            local color = "{FFFFFF}"
+            local text = chat.subSMSText(ini.settings.SMSPrefix, ini.settings.SMSCancel)
+            if utf8len(text) > 63 then
+                color = "{FF0000}"
+            end
+            imgui.TextColoredRGB(color .. "Отмена вызова:")
+            imgui.SameLine()
+            imgui.PushItemWidth(toScreenX(144.5))
+            if imgui.InputText("##SMSCancel", imgui.SMSCancel) then
+                ini.settings.SMSCancel = imgui.SMSCancel.v
+                inicfg.save(ini, "Taximate/settings.ini")
+            end
+            imgui.SetTooltip("SMS: " .. utf8sub(text, 1, 63), 200)
+            imgui.TextDisabled("Доступные для замены токены: {carname}, {distance}, {zone}")
+            imgui.NewLine()
         end
-    elseif imgui.settingsTab == 2 then
-        imgui.Text("Открыть Taximate HUD/Binder: ")
-        imgui.SameLine()
-        local buttonText = "None"
-        if ini.settings.key1 ~= 0 then
-            buttonText = vkeys.id_to_name(ini.settings.key1)
-        end
-        if ini.settings.key1add ~= 0 then
-            buttonText = buttonText .. " + " ..
-                             vkeys.id_to_name(ini.settings.key1add)
-        end
-        imgui.PushID(1)
-        if imgui.Button(buttonText, vec(0, 10)) then
-            imgui.key = 0
-            imgui.addKey = 0
-            imgui.showInputWindow.v = true
-            imgui.key1Edit = true
-        end
-        imgui.PopID()
-        imgui.Text("Принять/отменить вызов: ")
-        imgui.SameLine()
-        buttonText = "None"
-        if ini.settings.key2 ~= 0 then
-            buttonText = vkeys.id_to_name(ini.settings.key2)
-        end
-        if ini.settings.key2add ~= 0 then
-            buttonText = buttonText .. " + " ..
-                             vkeys.id_to_name(ini.settings.key2add)
-        end
-        imgui.PushID(2)
-        if imgui.Button(buttonText, vec(0, 10)) then
-            imgui.key = 0
-            imgui.addKey = 0
-            imgui.showInputWindow.v = true
-            imgui.key2Edit = true
-        end
-        imgui.PopID()
-        imgui.Text(
-            "Начать/закончить работу таксиста: ")
-        imgui.SameLine()
-        buttonText = "None"
-        if ini.settings.key3 ~= 0 then
-            buttonText = vkeys.id_to_name(ini.settings.key3)
-        end
-        if ini.settings.key3add ~= 0 then
-            buttonText = buttonText .. " + " ..
-                             vkeys.id_to_name(ini.settings.key3add)
-        end
-        imgui.PushID(3)
-        if imgui.Button(buttonText, vec(0, 10)) then
-            imgui.key = 0
-            imgui.addKey = 0
-            imgui.showInputWindow.v = true
-            imgui.key3Edit = true
-        end
-        imgui.PopID()
-
-        if not imgui.showInputWindow.v and imgui.key ~= 0 then
-            if imgui.key == -1 then
+        if imgui.CollapsingHeader("Горячие клавиши", true, imgui.TreeNodeFlags.DefaultOpen) then
+            imgui.PushID("hotkeys")
+            if imgui.Checkbox("Горячие клавиши", imgui.ImBool(ini.settings.hotKeys)) then
+                ini.settings.hotKeys = not ini.settings.hotKeys
+                inicfg.save(ini, "Taximate/settings.ini")
+            end
+            imgui.PopID()
+            imgui.Text("Открыть Taximate HUD/Binder: ")
+            imgui.SameLine()
+            local buttonText = "None"
+            if ini.settings.key1 ~= 0 then
+                buttonText = vkeys.id_to_name(ini.settings.key1)
+            end
+            if ini.settings.key1add ~= 0 then
+                buttonText = buttonText .. " + " .. vkeys.id_to_name(ini.settings.key1add)
+            end
+            imgui.PushID(1)
+            if imgui.Button(buttonText, vec(0, 10)) then
                 imgui.key = 0
                 imgui.addKey = 0
+                imgui.showInputWindow.v = true
+                imgui.key1Edit = true
             end
-            if imgui.key1Edit then
-                ini.settings.key1 = imgui.key
-                ini.settings.key1add = imgui.addKey
-            elseif imgui.key2Edit then
-                ini.settings.key2 = imgui.key
-                ini.settings.key2add = imgui.addKey
-            elseif imgui.key3Edit then
-                ini.settings.key3 = imgui.key
-                ini.settings.key3add = imgui.addKey
+            imgui.PopID()
+            if not ini.settings.hotKeys then
+                imgui.PushStyleColor(imgui.Col.Text, imgui.ImVec4(1, 1, 1, 0.5))
             end
-            inicfg.save(ini, "Taximate/settings.ini")
-            imgui.key1Edit = false
-            imgui.key2Edit = false
-            imgui.key3Edit = false
-            imgui.key = 0
-            imgui.addKey = 0
-        end
-        imgui.NewLine()
-        imgui.Text(
-            "Дистанция для автопринятия вызова:")
-        imgui.SameLine()
-        imgui.Dummy(vec(1.8, 0))
-        imgui.SameLine()
-        imgui.PushItemWidth(toScreenX(84))
-        if imgui.SliderInt("м", imgui.maxDistanceToAcceptOrder, 0, 7000) then
-            if imgui.maxDistanceToAcceptOrder.v < 0 or
-                imgui.maxDistanceToAcceptOrder.v > 7000 then
-                imgui.maxDistanceToAcceptOrder.v =
-                    defaults.maxDistanceToAcceptOrder
+            imgui.Text("Принять/отменить вызов: ")
+            imgui.SameLine()
+            buttonText = "None"
+            if ini.settings.key2 ~= 0 then
+                buttonText = vkeys.id_to_name(ini.settings.key2)
             end
-            ini.settings.maxDistanceToAcceptOrder =
-                imgui.maxDistanceToAcceptOrder.v
-            inicfg.save(ini, "Taximate/settings.ini")
-        end
-        imgui.Text(
-            "Дистанция для получения доп. вызова:")
-        imgui.SameLine()
-        imgui.PushItemWidth(toScreenX(84))
-        if imgui.SliderInt("м ", imgui.maxDistanceToGetOrder, 0, 2000) then
-            if imgui.maxDistanceToGetOrder.v < 0 or
-                imgui.maxDistanceToGetOrder.v > 2000 then
-                imgui.maxDistanceToGetOrder.v = defaults.maxDistanceToGetOrder
+            if ini.settings.key2add ~= 0 then
+                buttonText = buttonText .. " + " .. vkeys.id_to_name(ini.settings.key2add)
             end
-            ini.settings.maxDistanceToGetOrder = imgui.maxDistanceToGetOrder.v
+            imgui.PushID(2)
+            if imgui.Button(buttonText, vec(0, 10)) then
+                imgui.key = 0
+                imgui.addKey = 0
+                imgui.showInputWindow.v = true
+                imgui.key2Edit = true
+            end
+            imgui.PopID()
+            imgui.Text("Начать/закончить работу таксиста: ")
+            imgui.SameLine()
+            buttonText = "None"
+            if ini.settings.key3 ~= 0 then
+                buttonText = vkeys.id_to_name(ini.settings.key3)
+            end
+            if ini.settings.key3add ~= 0 then
+                buttonText = buttonText .. " + " .. vkeys.id_to_name(ini.settings.key3add)
+            end
+            imgui.PushID(3)
+            if imgui.Button(buttonText, vec(0, 10)) then
+                imgui.key = 0
+                imgui.addKey = 0
+                imgui.showInputWindow.v = true
+                imgui.key3Edit = true
+            end
+            imgui.PopID()
+            if not ini.settings.hotKeys then
+                imgui.PopStyleColor()
+            end
+            if imgui.Checkbox("Активация круиз-контроля клавишей", imgui.ImBool(ini.settings.cruiseControl)) then
+                ini.settings.cruiseControl = not ini.settings.cruiseControl
+                inicfg.save(ini, "Taximate/settings.ini")
+            end
+            imgui.SameLine()
+            local buttonText = "None"
+            if ini.settings.key4 ~= 0 then
+                buttonText = vkeys.id_to_name(ini.settings.key4)
+            end
+            imgui.PushID(4)
+            if imgui.Button(buttonText, vec(0, 10)) then
+                imgui.key = 0
+                imgui.addKey = 0
+                imgui.showInputWindow.v = true
+                imgui.singleBind = true
+                imgui.key4Edit = true
+            end
+            imgui.PopID()
+            if not imgui.showInputWindow.v and imgui.key ~= 0 then
+                if imgui.key == -1 then
+                    imgui.key = 0
+                    imgui.addKey = 0
+                end
+                if imgui.key1Edit then
+                    ini.settings.key1 = imgui.key
+                    ini.settings.key1add = imgui.addKey
+                elseif imgui.key2Edit then
+                    ini.settings.key2 = imgui.key
+                    ini.settings.key2add = imgui.addKey
+                elseif imgui.key3Edit then
+                    ini.settings.key3 = imgui.key
+                    ini.settings.key3add = imgui.addKey
+                elseif imgui.key4Edit then
+                    ini.settings.key4 = imgui.key
+                end
+                inicfg.save(ini, "Taximate/settings.ini")
+                imgui.key1Edit = false
+                imgui.key2Edit = false
+                imgui.key3Edit = false
+                imgui.key4Edit = false
+                imgui.singleBind = false
+                imgui.key = 0
+                imgui.addKey = 0
+            end  
+            imgui.NewLine()
+        end
+        if imgui.CollapsingHeader("Прочие настройки", true, imgui.TreeNodeFlags.DefaultOpen) then
+            imgui.Text("Принимать предложения ")
+            imgui.SameLine()
+            if imgui.Checkbox("ремонта ", imgui.ImBool(ini.settings.autoRepair)) then
+                ini.settings.autoRepair = not ini.settings.autoRepair
+                inicfg.save(ini, "Taximate/settings.ini")
+            end
+            imgui.SameLine()
+            if imgui.Checkbox("заправки", imgui.ImBool(ini.settings.autoRefill)) then
+                ini.settings.autoRefill = not ini.settings.autoRefill
+                inicfg.save(ini, "Taximate/settings.ini")
+            end
+            if not ini.settings.autoRefill then
+                imgui.PushStyleColor(imgui.Col.Text, imgui.ImVec4(1, 1, 1, 0.5))
+            end
+            imgui.Text("Максимальная цена заправки:")
+            imgui.SameLine()
+            imgui.PushItemWidth(toScreenX(95))
+            if imgui.SliderInt("вирт", imgui.maxAutoRefillCost, 500, 5000) then
+                if imgui.maxAutoRefillCost.v < 500 or imgui.maxAutoRefillCost.v > 5000 then
+                    imgui.maxAutoRefillCost.v = defaults.maxAutoRefillCost
+                end
+                ini.settings.maxAutoRefillCost = imgui.maxAutoRefillCost.v
+                inicfg.save(ini, "Taximate/settings.ini")
+            end
+            imgui.Text("Минимальный остаток литров для заправки:")
+            imgui.SameLine()
+            imgui.PushItemWidth(toScreenX(74))
+            if imgui.SliderInt("##л.", imgui.autoRefillGauge, 0, 200) then
+                if imgui.autoRefillGauge.v < 0 or imgui.autoRefillGauge.v > 200 then
+                    imgui.autoRefillGauge.v = defaults.autoRefillGauge
+                end
+                ini.settings.autoRefillGauge = imgui.autoRefillGauge.v
+                inicfg.save(ini, "Taximate/settings.ini")
+            end
+            if not ini.settings.autoRefill then
+                imgui.PopStyleColor()
+            end
+            imgui.NewLine()
+            if
+                imgui.Checkbox(
+                    "Обновлять метку на карте если клиент поблизости",
+                    imgui.ImBool(ini.settings.updateOrderMark)
+                )
+             then
+                ini.settings.updateOrderMark = not ini.settings.updateOrderMark
+                inicfg.save(ini, "Taximate/settings.ini")
+            end
+            if imgui.Checkbox("Изменять clist на рабочий цвет:", imgui.ImBool(ini.settings.autoClist)) then
+                ini.settings.autoClist = not ini.settings.autoClist
+                inicfg.save(ini, "Taximate/settings.ini")
+            end
+            imgui.SameLine()
+            imgui.PushItemWidth(toScreenX(65))
+            if imgui.Combo("##Combo", imgui.workClist, COLOR_LIST) then
+                ini.settings.workClist = imgui.workClist.v
+                inicfg.save(ini, "Taximate/settings.ini")
+            end
+            if imgui.Checkbox("Показывать на карте игроков в транспорте", imgui.ImBool(ini.settings.markers)) then
+                ini.settings.markers = not ini.settings.markers
+                inicfg.save(ini, "Taximate/settings.ini")
+            end
+            imgui.PushStyleColor(imgui.Col.Text, imgui.ImVec4(1, 0, 0, 1))
+            imgui.SetTooltip("Функция даёт преимущество над игроками\nИспользовать на свой страх и риск", 150)
+            imgui.PopStyleColor()
+            if imgui.Checkbox("Закончить рабочий день при поломке/пустом баке", imgui.ImBool(ini.settings.finishWork)) then
+                ini.settings.finishWork = not ini.settings.finishWork
+                inicfg.save(ini, "Taximate/settings.ini")
+            end
+            if imgui.Checkbox("Совместимость с FastMap", imgui.ImBool(ini.settings.fastMapCompatibility)) then
+                ini.settings.fastMapCompatibility = not ini.settings.fastMapCompatibility
+                inicfg.save(ini, "Taximate/settings.ini")
+            end
+        end
+    elseif imgui.settingsTab == 2 then
+        if imgui.Checkbox("Не принимать вызовы от игроков в списке", imgui.ImBool(ini.settings.blacklistIgnore)) then
+            ini.settings.blacklistIgnore = not ini.settings.blacklistIgnore
             inicfg.save(ini, "Taximate/settings.ini")
         end
-        imgui.NewLine()
-        imgui.Text("СМС префикс:")
+        if imgui.Checkbox("Скрывать вызовы от игроков в списке", imgui.ImBool(ini.settings.blacklistHide)) then
+            ini.settings.blacklistHide = not ini.settings.blacklistHide
+            inicfg.save(ini, "Taximate/settings.ini")
+        end
+        imgui.PushItemWidth(toScreenX(138))
+        imgui.InputText("##blacklistName", imgui.blacklistName)
+        imgui.PopItemWidth()
         imgui.SameLine()
-        imgui.PushItemWidth(toScreenX(60))
-        if imgui.InputText("##SMSPrefix", imgui.SMSPrefix) then
-            ini.settings.SMSPrefix = imgui.SMSPrefix.v
-            inicfg.save(ini, "Taximate/settings.ini")
+        local bufferValue = imgui.blacklistName.v
+        if imgui.Button("Добавить строку", vec(50, 10)) and not blacklist.players[bufferValue] then
+            if
+                bufferValue:find("^[%w_%?%*]+$") and #bufferValue < 25 and #bufferValue > 1 and
+                    tonumber(bufferValue) == nil
+             then
+                blacklist.players[bufferValue] = {
+                    active = true,
+                    buffer = imgui.ImBuffer(25),
+                    edit = false,
+                    date = os.time(os.date("!*t"))
+                }
+                blacklist.players[bufferValue].buffer.v = bufferValue
+                blacklist.save()
+            end
         end
-        local color = "{FFFFFF}"
-        local text = chat.subSMSText(ini.settings.SMSPrefix,
-                                     ini.settings.SMSText)
-        if utf8len(text) > 63 then color = "{FF0000}" end
-        imgui.TextColoredRGB(color .. "Доклад:")
-        imgui.SameLine()
-        imgui.PushItemWidth(toScreenX(167))
-        if imgui.InputText("##SMSText", imgui.SMSText) then
-            ini.settings.SMSText = imgui.SMSText.v
-            inicfg.save(ini, "Taximate/settings.ini")
+        imgui.TextDisabled("Поддерживаются символы подстановки «?» и «*»")
+        imgui.TextDisabled("? - любой одиночный символ, * - любой набор символов (включая пустой)")
+        imgui.TextDisabled("Команда для добавления/удаления из списка: /tmbl [Nick_Name/id]")
+        imgui.BeginChild("blacklist", vec(190, 87.5), true)
+        for id, nickname in pairs(blacklist.sortedNicknames) do
+            record = blacklist.players[nickname]
+            if record then
+                if imgui.Checkbox("##" .. nickname, imgui.ImBool(record.active)) then
+                    record.active = not record.active
+                    blacklist.save()
+                end
+                imgui.SameLine()
+                if not record.edit then
+                    imgui.Text(nickname)
+                    imgui.SameLine()
+                    imgui.PushID(id)
+                    if imgui.Button("+", vec(6, 9)) then
+                        record.edit = true
+                        for _nickname, _record in pairs(blacklist.players) do
+                            if nickname ~= _nickname then
+                                _record.edit = false
+                            end
+                        end
+                    end
+                    imgui.PopID(id)
+                else
+                    imgui.PushItemWidth(toScreenX(88))
+                    imgui.PushID(id)
+                    imgui.InputText("##" .. id, record.buffer)
+                    imgui.PopID(id)
+                    imgui.PopItemWidth()
+                    imgui.SameLine()
+                    imgui.PushID(id)
+                    if imgui.Button("Удалить", vec(43, 10)) then
+                        blacklist.players[nickname] = nil
+                        blacklist.save()
+                    end
+                    imgui.PopID(id)
+                    imgui.SameLine()
+                    imgui.PushID(id)
+                    if imgui.Button("Сохранить", vec(40, 10)) then
+                        local bufferValue = record.buffer.v
+                        if
+                            bufferValue:find("^[%w_%?%*]+$") and #bufferValue < 25 and #bufferValue > 1 and
+                                tonumber(bufferValue) == nil
+                         then
+                            if record.buffer.v ~= nickname then
+                                blacklist.players[nickname] = nil
+                                blacklist.players[bufferValue] = {
+                                    active = record.active,
+                                    buffer = record.buffer,
+                                    edit = false,
+                                    date = record.date
+                                }
+                                blacklist.save()
+                            else
+                                record.edit = false
+                            end
+                        end
+                    end
+                    imgui.PopID(id)
+                end
+            end
         end
-        imgui.SetTooltip("SMS: " .. utf8sub(text, 1, 63), 200)
-        local color = "{FFFFFF}"
-        local text = chat.subSMSText(ini.settings.SMSPrefix,
-                                     ini.settings.SMSArrival)
-        if utf8len(text) > 63 then color = "{FF0000}" end
-        imgui.TextColoredRGB(color .. "Прибытие:")
-        imgui.SameLine()
-        imgui.PushItemWidth(toScreenX(160))
-        if imgui.InputText("##SMSArrival", imgui.SMSArrival) then
-            ini.settings.SMSArrival = imgui.SMSArrival.v
-            inicfg.save(ini, "Taximate/settings.ini")
-        end
-        imgui.SetTooltip("SMS: " .. utf8sub(text, 1, 63), 200)
-        local color = "{FFFFFF}"
-        local text = chat.subSMSText(ini.settings.SMSPrefix,
-                                     ini.settings.SMSSeats)
-        if utf8len(text) > 63 then color = "{FF0000}" end
-        imgui.TextColoredRGB(color .. "Одно пасс. место:")
-        imgui.SameLine()
-        imgui.PushItemWidth(toScreenX(142))
-        if imgui.InputText("##SMSSeats", imgui.SMSSeats) then
-            ini.settings.SMSSeats = imgui.SMSSeats.v
-            inicfg.save(ini, "Taximate/settings.ini")
-        end
-        imgui.SetTooltip("SMS: " .. utf8sub(text, 1, 63), 200)
-        local color = "{FFFFFF}"
-        local text = chat.subSMSText(ini.settings.SMSPrefix,
-                                     ini.settings.SMSCancel)
-        if utf8len(text) > 63 then color = "{FF0000}" end
-        imgui.TextColoredRGB(color .. "Отмена вызова:")
-        imgui.SameLine()
-        imgui.PushItemWidth(toScreenX(147))
-        if imgui.InputText("##SMSCancel", imgui.SMSCancel) then
-            ini.settings.SMSCancel = imgui.SMSCancel.v
-            inicfg.save(ini, "Taximate/settings.ini")
-        end
-        imgui.SetTooltip("SMS: " .. utf8sub(text, 1, 63), 200)
-        imgui.TextDisabled(
-            "Доступные для замены токены: {carname}, {distance}, {zone}")
-    else
-        if imgui.Checkbox(
-            "Автоматическая проверка обновлений",
-            imgui.ImBool(ini.settings.checkUpdates)) then
+        imgui.EndChild()
+    elseif imgui.settingsTab == 3 then
+        if imgui.Checkbox("Автоматическая проверка обновлений", imgui.ImBool(ini.settings.checkUpdates)) then
             ini.settings.checkUpdates = not ini.settings.checkUpdates
             inicfg.save(ini, "Taximate/settings.ini")
         end
-        imgui.SetTooltip(
-            "Антистиллеры и прочие скрипты могут блокировать проверку обновлений",
-            90)
+        imgui.SetTooltip("Антистиллеры и прочие скрипты могут блокировать проверку обновлений", 90)
         if imgui.Button("Проверить обновления") then
             checkUpdates()
         end
-        imgui.SetTooltip(
-            "Антистиллеры и прочие скрипты могут блокировать проверку обновлений",
-            90)
+        imgui.SetTooltip("Антистиллеры и прочие скрипты могут блокировать проверку обновлений", 90)
         imgui.SameLine()
         if script_updates.update then
             if imgui.Button("Скачать новую версию") then
@@ -2896,9 +3318,7 @@ function imgui.onDrawSettings()
         else
             imgui.Text("Обновления отсутствуют")
         end
-        imgui.SetTooltip(
-            "Антистиллеры и прочие скрипты могут блокировать проверку обновлений",
-            90)
+        imgui.SetTooltip("Антистиллеры и прочие скрипты могут блокировать проверку обновлений", 90)
         if imgui.Button("Перезапустить скрипт") then
             thisScript():reload()
         end
@@ -2912,7 +3332,7 @@ function imgui.onDrawSettings()
             os.execute("start https://vk.com/id387503690")
         end
         imgui.Text("История обновлений")
-        imgui.BeginChild("changelog", vec(190, 135), true)
+        imgui.BeginChild("changelog", vec(190, 95), true)
         if script_updates.changelog then
             for index, key in pairs(script_updates.sorted_keys) do
                 if imgui.CollapsingHeader("Версия " .. key) then
@@ -2923,7 +3343,8 @@ function imgui.onDrawSettings()
             end
         else
             imgui.Text(
-                "История обновлений недоступна...\nАнтистиллеры и прочие скрипты могут блокировать проверку обновлений")
+                "История обновлений недоступна...\nАнтистиллеры и прочие скрипты могут блокировать проверку обновлений"
+            )
         end
         imgui.EndChild()
     end
@@ -3048,7 +3469,9 @@ local zones = {
     ["Магазин одежды [LS]"] = {x = 461.51239, y = -1500.866211},
     ["Клуб Alhambra"] = {x = 1827.609253, y = -1682.12207},
     ["Русская мафия"] = {x = 1001.480103, y = 1690.514526},
-    ["Автобусный парк"] = {x = 1638.358643, y = -1148.711914},
+    ["Автобусный парк [LS]"] = {x = 1672.12, y = -1170.56},
+    ["Автобусный парк [SF]"] = {x = -2306.51, y = -97.76},
+    ["Автобусный парк [LV]"] = {x = 2568.63, y = 1402.62},
     ["Redsands West"] = {x = 1157.925537, y = 2072.282227},
     ["Marina Cluck"] = {x = 928.539917, y = -1352.939331},
     ["Полиция [LV]"] = {x = 2283.758789, y = 2420.525146},
@@ -3161,10 +3584,31 @@ local zones = {
         x = -2267.4973144531,
         y = 123.14111328125
     },
-    ["Админ. деревня"] = {x = 2845.7473144531, y = 2765.578125},
     ["Foster Valley"] = {x = -1922.984375, y = -938.43969726563},
     ["Shady Creeks"] = {x = -1655.234375, y = -1922.6591796875},
-    ["Las Colinas"] = {x = 2566, y = -1054.6638183594}
+    ["Las Colinas"] = {x = 2566, y = -1054.6638183594},
+    ["Офис SF [B] I"] = {x = -2067.65, y = -962.38},
+    ["Офис SF [B] II"] = {x = -2067.65, y = -911.11},
+    ["Офис SF [B] III"] = {x = -2067.65, y = -859.85},
+    ["Офис SF [B] IV"] = {x = -2067.65, y = -808.59},
+    ["Офис SF [B] V"] = {x = -2067.65, y = -757.33},
+    ["Офис LV [A] Elite"] = {x = 2461.47, y = 2245.14},
+    ["Офис LS [C] Classic"] = {x = 1429.97, y = -1481.61},
+    ["Магазин садовода"] = {x = -2579.77, y = 310.06},
+    ["Склад фруктов"] = {x = 969.73, y = 2160.69},
+    ["Скотобаза"] = {x = 984.53, y = 2073.18},
+    ["Ферма коров"] = {x = -1094.28, y = -1660.17},
+    ["Раста магазин"] = {x = -2490.31, y = -16.91},
+    ["Магазин аксессуаров"] = {x = -1882.39, y = 866.40},
+    ["Тренинг центр"] = {x = 1616.18, y = -1897.56},
+    ["Военный музей"] = {x = 1029.46, y = 1135.63},
+    ["Суд"] = {x = -2766.55, y = 375.71},
+    ["Pershing Square"] = {x = 1411.71, y = -1699.70},
+    ["Kings"] = {x = -2059.21, y = 354.39},
+    ["Roca Escalante"] = {x = 2447.68, y = 2376.24},
+    ["Market"] = {x = 1015.19, y = -1508.75},
+    ["Bayside"] = {x = -2510.86, y = 2276.93},
+    ["Игра в Кальмара"] = {x = 1459.40, y = -1009.92}
 }
 
 function getZone(x, y)
@@ -3270,7 +3714,9 @@ function imgui.TextColoredRGB(text)
             return ImVec4(r, g, b, a / 255)
         end
         local color = type(color) == "string" and tonumber(color, 16) or color
-        if type(color) ~= "number" then return end
+        if type(color) ~= "number" then
+            return
+        end
         local r, g, b, a = explode_argb(color)
         return imgui.ImColor(r, g, b, a):GetVec4()
     end
@@ -3283,8 +3729,7 @@ function imgui.TextColoredRGB(text)
                 local n, k = w:find("{........}")
                 local color = getcolor(w:sub(n + 1, k - 1))
                 if color then
-                    text[#text], text[#text + 1] = w:sub(m, n - 1),
-                                                   w:sub(k + 1, #w)
+                    text[#text], text[#text + 1] = w:sub(m, n - 1), w:sub(k + 1, #w)
                     colors_[#colors_ + 1] = color
                     m = n
                 end
@@ -3314,7 +3759,9 @@ function sampev.onSetRaceCheckpoint(type, position)
     }
 end
 
-function sampev.onDisableRaceCheckpoint() orders.GPSMark = nil end
+function sampev.onDisableRaceCheckpoint()
+    orders.GPSMark = nil
+end
 
 function getGPSMarkCoords3d()
     wait(500)
@@ -3342,61 +3789,78 @@ end
 
 function getDistanceToCoords3d(posX, posY, posZ)
     local charPosX, charPosY, charPosZ = getCharCoordinates(PLAYER_PED)
-    local distance = math.ceil(getDistanceBetweenCoords3d(charPosX, charPosY,
-                                                          charPosZ, posX, posY,
-                                                          posZ))
+    local distance = math.ceil(getDistanceBetweenCoords3d(charPosX, charPosY, charPosZ, posX, posY, posZ))
     return distance
 end
 
 function checkUpdates(verbose)
-    if verbose == nil then verbose = true end
+    if verbose == nil then
+        verbose = true
+    end
     local fpath = os.tmpname()
-    if doesFileExist(fpath) then os.remove(fpath) end
-    downloadUrlToFile("https://raw.githubusercontent.com/21se/Taximate/" ..
-                          script_branch .. "/version.json", fpath,
-                      function(_, status, _, _)
-        if status == moonloader.download_status.STATUSEX_ENDDOWNLOAD then
-            if not doesFileExist(fpath) then return false end
-            local file = io.open(fpath, "r")
-            if not file then return false end
-            script_updates = decodeJson(file:read("*a"))
-            script_updates.update_from_version_num = thisScript().version_num
-            script_updates.sorted_keys = {}
-            if script_updates.changelog then
-                for key in pairs(script_updates.changelog) do
-                    table.insert(script_updates.sorted_keys, key)
+    if doesFileExist(fpath) then
+        os.remove(fpath)
+    end
+    downloadUrlToFile(
+        "https://raw.githubusercontent.com/21se/Taximate/" .. script_branch .. "/version.json",
+        fpath,
+        function(_, status, _, _)
+            if status == moonloader.download_status.STATUSEX_ENDDOWNLOAD then
+                if not doesFileExist(fpath) then
+                    return false
                 end
-                table.sort(script_updates.sorted_keys,
-                           function(a, b) return a > b end)
-            end
-            file:close()
-            os.remove(fpath)
-            if script_updates.version_num > thisScript().version_num then
-                if verbose then
-                    chat.sendMessage("Доступен {00CED1}Taximate v" ..
-                                         script_updates.sorted_keys[1] ..
-                                         "{FFFFFF}. Введите {00CED1}'/tmup'{FFFFFF} чтобы скачать обновление")
+                local file = io.open(fpath, "r")
+                if not file then
+                    return false
                 end
-                script_updates.update = true
-                return true
+                script_updates = decodeJson(file:read("*a"))
+                script_updates.update_from_version_num = thisScript().version_num
+                script_updates.sorted_keys = {}
+                if script_updates.changelog then
+                    for key in pairs(script_updates.changelog) do
+                        table.insert(script_updates.sorted_keys, key)
+                    end
+                    table.sort(
+                        script_updates.sorted_keys,
+                        function(a, b)
+                            return a > b
+                        end
+                    )
+                end
+                file:close()
+                os.remove(fpath)
+                if script_updates.version_num > thisScript().version_num then
+                    if verbose then
+                        chat.sendMessage(
+                            "Доступен {00CED1}Taximate v" ..
+                                script_updates.sorted_keys[1] ..
+                                    "{FFFFFF}. Введите {00CED1}'/tmup'{FFFFFF} чтобы скачать обновление"
+                        )
+                    end
+                    script_updates.update = true
+                    return true
+                end
             end
         end
-    end)
+    )
 end
 
 local PressType = {KeyDown = isKeyDown, KeyPressed = wasKeyPressed}
 function keycheck(k)
     local r = true
-    for i = 1, #k.k do r = r and PressType[k.t[i]](k.k[i]) end
+    for i = 1, #k.k do
+        r = r and PressType[k.t[i]](k.k[i])
+    end
     return r
 end
 
 function isKeysPressed(key, addKey, hold)
     if hold then
-        return (isKeyDown(key) and addKey == 0) or
-                   (isKeyDown(key) and isKeyDown(addKey))
+        return (isKeyDown(key) and addKey == 0) or (isKeyDown(key) and isKeyDown(addKey))
     end
-    if addKey == 0 then return isKeyJustPressed(key) end
+    if addKey == 0 then
+        return isKeyJustPressed(key)
+    end
     return keycheck({k = {key, addKey}, t = {"KeyDown", "KeyPressed"}})
 end
 
@@ -3404,56 +3868,60 @@ function update()
     if script_updates.update then
         chat.sendMessage("Выполняется обновление...")
         local fpath = os.tmpname()
-        if doesFileExist(fpath) then os.remove(fpath) end
-        downloadUrlToFile("https://raw.githubusercontent.com/21se/Taximate/" ..
-                              script_branch .. "/taximate.lua", fpath,
-                          function(_, status, _, _)
-            if status == moonloader.download_status.STATUS_ENDDOWNLOADDATA then
-                local fail = false
-                try(function()
-                    os.copy(thisScript().path, thisScript().path .. "old")
-                    local scriptFile = io.open(fpath, "r")
-                    if not scriptFile then
-                        fail = true
-                        print(
-                            "{f44331}При попытке обновления произошла ошибка: не удалось открыть файл")
-                        return
+        if doesFileExist(fpath) then
+            os.remove(fpath)
+        end
+        downloadUrlToFile(
+            "https://raw.githubusercontent.com/21se/Taximate/" .. script_branch .. "/taximate.lua",
+            fpath,
+            function(_, status, _, _)
+                if status == moonloader.download_status.STATUS_ENDDOWNLOADDATA then
+                    local fail = false
+                    try(
+                        function()
+                            os.copy(thisScript().path, thisScript().path .. "old")
+                            local scriptFile = io.open(fpath, "r")
+                            if not scriptFile then
+                                fail = true
+                                print("{f44331}При попытке обновления произошла ошибка: не удалось открыть файл")
+                                return
+                            end
+                            loadChangesFromFile(scriptFile)
+                            scriptFile:close()
+                            applyChanges(thisScript().version_num) -- applyChanges from scriptFile
+                            os.move(fpath, thisScript().path)
+                            os.remove(thisScript().path .. "old")
+                        end,
+                        function(e)
+                            fail = true
+                            os.move(thisScript().path .. "old", thisScript().path)
+                            print("{f44331}При попытке обновления произошла ошибка: " .. e)
+                        end
+                    )
+                    if not fail then
+                        chat.sendMessage(
+                            "Скрипт обновлён. В случае возникновения ошибок обращаться в ВК - {00CED1}vk.com/id387503690{FFFFFF}"
+                        )
+                    else
+                        chat.sendMessage(
+                            "{f44331}При попытке обновления произошла ошибка.{FFFFFF} Обратитесь в ВК - {00CED1}vk.com/id387503690{FFFFFF}"
+                        )
                     end
-                    loadChangesFromFile(scriptFile)
-                    scriptFile:close()
-                    applyChanges(thisScript().version_num) -- applyChanges from scriptFile
-                    os.move(fpath, thisScript().path)
-                    os.remove(thisScript().path .. "old")
-                end, function(e)
-                    fail = true
-                    os.move(thisScript().path .. "old", thisScript().path)
-                    print(
-                        "{f44331}При попытке обновления произошла ошибка: " ..
-                            e)
-                end)
-                if not fail then
-                    chat.sendMessage(
-                        "Скрипт обновлён. В случае возникновения ошибок обращаться в ВК - {00CED1}vk.com/twonse{FFFFFF}")
-                else
-                    chat.sendMessage(
-                        "{f44331}При попытке обновления произошла ошибка.{FFFFFF} Обратитесь в ВК - {00CED1}vk.com/twonse{FFFFFF}")
-                end
-                if script.find("ML-AutoReboot") == nil and not fail then
-                    thisScript():reload()
+                    if script.find("ML-AutoReboot") == nil and not fail then
+                        thisScript():reload()
+                    end
                 end
             end
-        end)
+        )
     else
-        chat.sendMessage(
-            "Обновления не найдены, возможно скрипт не получил выход в Интернет")
+        chat.sendMessage("Обновления не найдены, возможно скрипт не получил выход в Интернет")
     end
 end
 
 function loadChangesFromFile(scriptFile)
     local text = u8:decode(scriptFile:read("*a"))
     if text:find("\n%-%- applyChanges\n.+\n%-%- applyChanges\n") then
-        for changes in text:gmatch(
-                           "\n%-%- applyChanges\n(.+)\n%-%- applyChanges\n") do
+        for changes in text:gmatch("\n%-%- applyChanges\n(.+)\n%-%- applyChanges\n") do
             text = changes
             break
         end
@@ -3464,42 +3932,40 @@ end
 -- applyChanges
 function applyChanges(version_num)
     -- if version_num < 53 then
-        
     -- end
 end
 -- applyChanges
 
-function applyChangesV52()
-    ini.settings.SMSText = ini.settings.SMSText:gsub("{distance} м",
-                                                     "{distance}")
-    inicfg.save(ini, "Taximate/settings.ini")
-
-    for index, value in ipairs(binds.list.sms) do
-        value.buffer.v = value.buffer.v:gsub("{distance} м", "{distance}")
-    end
-    binds.save()
-end
-
 function try(f, catch_f)
     local status, exception = pcall(f)
-    if not status then catch_f(exception) end
+    if not status then
+        catch_f(exception)
+    end
 end
 
 local _print = print
 function print(...)
     local pack = table.pack(...)
-    for i = 1, pack.n do pack[i] = u8:decode(tostring(pack[i])) end
+    for i = 1, pack.n do
+        pack[i] = u8:decode(tostring(pack[i]))
+    end
     _print(table.unpack(pack))
 end
 
 local find = string.find
-function string.find(s, pattern) return find(s, u8:decode(pattern)) end
+function string.find(s, pattern)
+    return find(s, u8:decode(pattern))
+end
 
 local match = string.match
-function string.match(s, pattern) return match(s, u8:decode(pattern)) end
+function string.match(s, pattern)
+    return match(s, u8:decode(pattern))
+end
 
 local gmatch = string.gmatch
-function string.gmatch(s, pattern) return gmatch(s, u8:decode(pattern)) end
+function string.gmatch(s, pattern)
+    return gmatch(s, u8:decode(pattern))
+end
 
 function os.copy(source, path)
     local infile = io.open(source, "r")
@@ -3523,12 +3989,10 @@ function utf8charbytes(s, i)
 
     -- argument checking
     if type(s) ~= "string" then
-        error("bad argument #1 to 'utf8charbytes' (string expected, got " ..
-                  type(s) .. ")")
+        error("bad argument #1 to 'utf8charbytes' (string expected, got " .. type(s) .. ")")
     end
     if type(i) ~= "number" then
-        error("bad argument #2 to 'utf8charbytes' (number expected, got " ..
-                  type(i) .. ")")
+        error("bad argument #2 to 'utf8charbytes' (number expected, got " .. type(i) .. ")")
     end
 
     local c = s:byte(i)
@@ -3542,10 +4006,14 @@ function utf8charbytes(s, i)
         -- UTF8-2
         local c2 = s:byte(i + 1)
 
-        if not c2 then error("UTF-8 string terminated early") end
+        if not c2 then
+            error("UTF-8 string terminated early")
+        end
 
         -- validate byte 2
-        if c2 < 128 or c2 > 191 then error("Invalid UTF-8 character") end
+        if c2 < 128 or c2 > 191 then
+            error("Invalid UTF-8 character")
+        end
 
         return 2
     elseif c >= 224 and c <= 239 then
@@ -3553,7 +4021,9 @@ function utf8charbytes(s, i)
         local c2 = s:byte(i + 1)
         local c3 = s:byte(i + 2)
 
-        if not c2 or not c3 then error("UTF-8 string terminated early") end
+        if not c2 or not c3 then
+            error("UTF-8 string terminated early")
+        end
 
         -- validate byte 2
         if c == 224 and (c2 < 160 or c2 > 191) then
@@ -3565,7 +4035,9 @@ function utf8charbytes(s, i)
         end
 
         -- validate byte 3
-        if c3 < 128 or c3 > 191 then error("Invalid UTF-8 character") end
+        if c3 < 128 or c3 > 191 then
+            error("Invalid UTF-8 character")
+        end
 
         return 3
     elseif c >= 240 and c <= 244 then
@@ -3588,10 +4060,14 @@ function utf8charbytes(s, i)
         end
 
         -- validate byte 3
-        if c3 < 128 or c3 > 191 then error("Invalid UTF-8 character") end
+        if c3 < 128 or c3 > 191 then
+            error("Invalid UTF-8 character")
+        end
 
         -- validate byte 4
-        if c4 < 128 or c4 > 191 then error("Invalid UTF-8 character") end
+        if c4 < 128 or c4 > 191 then
+            error("Invalid UTF-8 character")
+        end
 
         return 4
     else
@@ -3602,9 +4078,7 @@ end
 function utf8len(s)
     -- argument checking
     if type(s) ~= "string" then
-        error(
-            "bad argument #1 to 'utf8len' (string expected, got " .. type(s) ..
-                ")")
+        error("bad argument #1 to 'utf8len' (string expected, got " .. type(s) .. ")")
     end
 
     local pos = 1
@@ -3633,7 +4107,9 @@ function utf8sub(s, i, j)
     local endChar = (j >= 0) and j or l + j + 1
 
     -- can"t have start before end!
-    if startChar > endChar then return "" end
+    if startChar > endChar then
+        return ""
+    end
 
     -- byte offsets to pass to string.sub
     local startByte, endByte = 1, bytes
@@ -3641,7 +4117,9 @@ function utf8sub(s, i, j)
     while pos <= bytes do
         len = len + 1
 
-        if len == startChar then startByte = pos end
+        if len == startChar then
+            startByte = pos
+        end
 
         pos = pos + utf8charbytes(s, pos)
 

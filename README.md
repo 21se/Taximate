@@ -29,8 +29,9 @@
 
 ![ ](https://i.imgur.com/RTmMI61.png)
 ![ ](https://i.imgur.com/nyNEWRR.png)
-![ ](https://i.imgur.com/1rDyS6k.png)
+![ ](https://i.imgur.com/8sdgjke.png)
 
 ## Связь
 
 - [GitHub issue](https://github.com/21se/Taximate/issues/new)
+- [VK](https://vk.com/id387503690)
