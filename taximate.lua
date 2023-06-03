@@ -521,10 +521,14 @@ function chat.handleInputMessage(message)
                 end
                 orders.acceptedNickname = nil
             elseif string.find(message, MESSAGES.repair) and ini.settings.autoRepair then
-                if getCarHealth(vehicle.handle) ~= 1000 then
-                    chat.addMessageToQueue("/ac repair")
-                else
-                    chat.addMessageToQueue("/cancel repair")
+                if isCharInAnyCar(PLAYER_PED) then
+                    local vehicleHandle = storeCarCharIsInNoSave(PLAYER_PED)
+
+                    if getCarHealth(vehicleHandle) ~= 1000 then
+                        chat.addMessageToQueue("/ac repair")
+                    else
+                        chat.addMessageToQueue("/cancel repair")
+                    end
                 end
             elseif string.find(message, MESSAGES.refill) and ini.settings.autoRefill and vehicle.fuel then
                 local cost = tonumber(string.match(message, MESSAGES.refillFormat))
@@ -964,7 +968,7 @@ function vehicle.addPassenger(passengerNickname)
 end
 
 function vehicle.refreshFuel()
-    if vehicle.maxPassengers and ini.settings.autoRefill then
+    if ini.settings.autoRefill then
         if os.clock() - vehicle.updateFuelClock > 5 then
             vehicle.fuel = 0
             for textdrawId = 0, 2100 do
