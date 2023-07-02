@@ -1,7 +1,7 @@
 script_author("21se")
 script_moonloader(026)
 script_version("1.3.6")
-script_version_number(56)
+script_version_number(57)
 script_url("github.com/21se/Taximate")
 script_name(string.format("Taximate v%s (%d)", thisScript().version, thisScript().version_num))
 local script_updates = {update = false}
@@ -2623,7 +2623,7 @@ function imgui.OnDrawBinder()
                         end
                     end
                 else
-                    if imgui.Button("+", vec(5, 10)) then
+                    if imgui.Button("+##" .. bindIndex, vec(5, 10)) then
                         binds.chooseEdit("binds", bindIndex)
                         binds.save()
                     end
