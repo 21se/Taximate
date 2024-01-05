@@ -1,7 +1,7 @@
 script_author("21se")
 script_moonloader(026)
-script_version("1.3.6")
-script_version_number(57)
+script_version("1.3.7")
+script_version_number(58)
 script_url("github.com/21se/Taximate")
 script_name(string.format("Taximate v%s (%d)", thisScript().version, thisScript().version_num))
 local script_updates = {update = false}
@@ -67,14 +67,19 @@ local COLOR_LIST = {
 }
 
 local MESSAGES = {
-    newOrder = "^ Диспетчер: вызов от [a-zA-Z0-9_]+%[%d+%]. Примерное расстояние .+м$",
-    newOrderFormat = "^ Диспетчер: вызов от (.+)%[(%d+)%]. Примерное расстояние (.+)$",
-    orderAccepted = "^ Диспетчер: [a-zA-Z0-9_]+ принял вызов от [a-zA-Z0-9_]+%[%d+%]$",
-    orderAcceptedFormat = "^ Диспетчер: (.+) принял вызов от (.+)%[%d+%]$",
-    wrongPerson = "^ Диспетчер: вызов от этого человека не поступал$",
-    noOrders = "^ Вызовов не поступало$",
+    newOrder = "^ %[Такси%] Диспетчер: Вызов от [a-zA-Z0-9_]+%[%d+%] .+%. Примерное расстояние .+м$",
+    newOrderFormat = "^ %[Такси%] Диспетчер: Вызов от (.+)%[(%d+)%] .+%. Примерное расстояние (.+)$",
+    orderAccepted = "^ %[Такси%] Диспетчер: [a-zA-Z0-9_]+%[%d+%] принял[а]? вызов от [a-zA-Z0-9_]+%[%d+%]$",
+    orderAcceptedFormat = "^ %[Такси%] Диспетчер: (.+)%[%d+%] принял[а]? вызов от (.+)%[%d+%]$",
+    wrongPerson = " ^%[Такси%] Диспетчер: Вызов от этого человека не поступал$",
+    orderCanceled = "^ %[Такси%] Диспетчер: [a-zA-Z0-9_]+%[%d+%] отменил вызов$",
+    orderCanceledFormat = "^ %[Такси%] Диспетчер: (.+)%[%d+%] отменил вызов$",
+    orderCanceledByTaxi = "^ %[Такси%] Диспетчер: Вы отказались от вызова$",
+    orderCanceledByQuit = "^ %[Такси%] Диспетчер: (.+) отменил вызов %(Выход из игры%)$",
+    noOrders1 = "^ Вызовов не поступало$",
+    noOrders2 = " ^%[Такси%] Диспетчер: От вас вызовов не поступало$",
     enterService1 = "^ Введите: /service$",
-    enterService2 = "^ Введите: /service %[call|ac%]  %[cop|medic|taxi|mechanic%]$",
+    enterService2 = "^ Введите: /service %[call / ac / cancel / chat%] %[police / medic / mechanic / food / taxi%]$",
     clist = "^ Цвет выбран$",
     payCheck = "^ Вы заработали .+ вирт. Деньги будут зачислены на ваш банковский счет в .+$",
     payCheckFormat = "^ Вы заработали (.+) / (.+) вирт. Деньги будут зачислены на ваш банковский счет в .+$",
@@ -90,12 +95,13 @@ local MESSAGES = {
     taxiChecker = "<< Бесплатное такси >>",
     skill = "Скилл: (%d+)	Опыт: .+ (%d+%.%d+)%%",
     rank = "Ранг: (%d+)  	Опыт: .+ (%d+%.%d+)%%",
-    order = "%[%d+%] (.+)%[ID:(%d+)%]	(.+)	(.+)	",
+    order = "([a-zA-Z0-9_]+)%[ID:(%d+)%](.+[^%d.])(%d.+).+%(",
     repair = "^ Механик [a-zA-Z0-9_]+ хочет отремонтировать ваш автомобиль за %d+ вирт{FFFFFF} %(%( Нажмите Y/N для принятия/отмены %)%)$",
     refill = "^ Механик [a-zA-Z0-9_]+ хочет заправить ваш автомобиль за %d+ вирт{FFFFFF} %(%( Нажмите Y/N для принятия/отмены %)%)$",
     refillFormat = "^ Механик .+ хочет заправить ваш автомобиль за (%d+) вирт{FFFFFF} %(%( Нажмите Y/N для принятия/отмены %)%)$",
     fuelClassic = "FUEL ~w~%d+",
-    fuelClassicFormat = "FUEL ~w~(%d+)"
+    fuelClassicFormat = "FUEL ~w~(%d+)",
+    currentOrderTextdraw = "([a-zA-Z0-9_]+)~n~distance: (%d+)m"
 }
 
 local FORMAT_NOTIFICATIONS = {
@@ -118,6 +124,7 @@ function main()
         wait(100)
     until sampGetCurrentServerName() ~= "SA-MP"
 
+    addEventHandler("onReceiveRpc", onReceiveRpc)
     local _, playerID = sampGetPlayerIdByCharHandle(PLAYER_PED)
     player.nickname = sampGetPlayerNickname(playerID)
     player.id = playerID
@@ -160,6 +167,7 @@ function main()
     lua_thread.create(chat.disableFrozenMessagesProcessingThread)
     lua_thread.create(vehicle.refreshInfoThread)
     lua_thread.create(orders.deleteOrdersThread)
+    lua_thread.create(updateTextdrawInfoThread)
 
     sampRegisterChatCommand(
         "taximate",
@@ -218,7 +226,7 @@ function main()
                     chat.addMessageToQueue("/clist 0", true, true)
                 end
                 if orders.currentOrder then
-                    orders.cancelCurrentOrder()
+                    orders.startOrderCanceling()
                 end
             end
 
@@ -236,11 +244,14 @@ function main()
                 end
             else
                 if isKeysPressed(ini.settings.key2, ini.settings.key2add, false) and ini.settings.hotKeys then
-                    orders.cancelCurrentOrder()
+                    orders.startOrderCanceling()
                 end
             end
         elseif orders.currentOrder then
-            orders.cancelCurrentOrder()
+            if os.clock() - orders.lastOrderCanceling > 2 then
+                orders.startOrderCanceling()
+                orders.lastOrderCanceling = os.clock()
+            end
         else
             orders.autoAccept = false
             if isKeysPressed(ini.settings.key3, ini.settings.key3add, false) and ini.settings.hotKeys then
@@ -393,15 +404,13 @@ function chat.sendNotification(order)
             if order.currentDistance < 30 and ini.settings.SMSArrival ~= "" then
                 chat.addMessageToQueue(
                     string.format(
-                        "/t %d %s",
-                        order.id,
-                        chat.subSMSText(ini.settings.SMSPrefix, ini.settings.SMSArrival)
+                        "/service chat %s", chat.subSMSText(ini.settings.SMSPrefix, ini.settings.SMSArrival)
                     )
                 )
                 order.arrived = true
             elseif order.SMSClock < os.clock() and order.updateDistance and ini.settings.SMSText ~= "" then
                 chat.addMessageToQueue(
-                    string.format("/t %d %s", order.id, chat.subSMSText(ini.settings.SMSPrefix, ini.settings.SMSText))
+                    string.format("/service chat %s", chat.subSMSText(ini.settings.SMSPrefix, ini.settings.SMSText))
                 )
                 if
                     order.firstSMS and vehicle.maxPassengers == 1 and ini.settings.seatsNotify and
@@ -409,17 +418,12 @@ function chat.sendNotification(order)
                  then
                     chat.addMessageToQueue(
                         string.format(
-                            "/t %d %s",
-                            order.id,
-                            chat.subSMSText(ini.settings.SMSPrefix, ini.settings.SMSSeats)
+                            "/service chat %s", chat.subSMSText(ini.settings.SMSPrefix, ini.settings.SMSSeats)
                         )
                     )
                     order.firstSMS = false
                 end
                 order.SMSClock = os.clock() + ini.settings.SMSTimer
-                if order.pos.x == nil then
-                    order.updateDistance = false
-                end
             end
         end
     end
@@ -433,6 +437,22 @@ function chat.handleInputMessage(message)
                 local nickname, id, distance = string.match(message, MESSAGES.newOrderFormat)
                 distance = stringToMeters(distance)
                 orders.add(nickname, id, distance, time)
+            elseif string.find(message, MESSAGES.orderCanceled) then
+                local nickname = string.match(message, MESSAGES.orderCanceledFormat)
+                if orders.currentOrder then
+                    if orders.currentOrder.nickname == nickname then
+                        orders.cancelCurrentOrder(false)
+                    end
+                end
+            elseif string.find(message, MESSAGES.orderCanceledByTaxi) then
+                orders.cancelCurrentOrder(true)
+            elseif string.find(message, MESSAGES.orderCanceledByQuit) then
+                local nickname = string.match(message, MESSAGES.orderCanceledByQuit)
+                if orders.currentOrder then
+                    if orders.currentOrder.nickname == nickname then
+                        orders.cancelCurrentOrder(false)
+                    end
+                end
             elseif string.find(message, MESSAGES.orderAccepted) then
                 local driverNickname, passengerNickname = string.match(message, MESSAGES.orderAcceptedFormat)
                 if driverNickname == player.nickname and player.onWork then
@@ -457,10 +477,6 @@ function chat.handleInputMessage(message)
                                     10
                                 )
                             end
-                        else
-                            orders.currentOrder.repeatCount = orders.currentOrder.repeatCount + 1
-
-                            orders.updateGPSMark()
                         end
                     elseif orders.list[passengerNickname] then
                         if ini.settings.notifications and ini.settings.sounds then
@@ -479,12 +495,10 @@ function chat.handleInputMessage(message)
                         end
                         orders.currentOrder = orders.list[passengerNickname]
                         orders.currentOrder.SMSClock = os.clock()
-
-                        orders.updateGPSMark()
                     end
                 end
                 orders.delete(passengerNickname)
-            elseif string.find(message, MESSAGES.GPS) and player.onWork then
+            elseif string.find(message, MESSAGES.GPS) and player.onWork and not orders.currentOrder then
                 local text = "Метка на карте обновлена"
                 local result, x, y = getGPSMarkCoords3d()
                 if result then
@@ -585,28 +599,29 @@ orders = {
     updateOrdersDistanceClock = os.clock(),
     currentOrder = nil,
     currentOrderBlip = nil,
-    currentOrderCheckpoint = nil
+    currentOrderCheckpoint = nil,
+    lastOrderCanceling = os.clock()
 }
 
-function orders.cancelCurrentOrder()
+function orders.startOrderCanceling()
+    chat.addMessageToQueue(
+        string.format("/service chat %s", chat.subSMSText(ini.settings.SMSPrefix, ini.settings.SMSCancel))
+    )
+    chat.addMessageToQueue("/service cancel taxi", true, true)
+end
+
+function orders.cancelCurrentOrder(canceledByTaxi)
     if ini.settings.notifications and ini.settings.sounds then
         sounds.play("correct_order")
     end
     if ini.settings.notifications then
         imgui.addNotification("Вызов отменён\nМетка на карте удалена", 5)
     end
-    if ini.settings.sendSMSCancel and ini.settings.SMSCancel ~= "" then
-        chat.addMessageToQueue(
-            string.format(
-                "/t %d %s",
-                orders.currentOrder.id,
-                chat.subSMSText(ini.settings.SMSPrefix, ini.settings.SMSCancel)
-            )
-        )
+    if canceledByTaxi then
+        orders.canceled[orders.currentOrder.nickname] = os.clock()
+        orders.removeGPSMark()
     end
-    orders.canceled[orders.currentOrder.nickname] = os.clock()
     orders.currentOrder = nil
-    orders.removeGPSMark()
 end
 
 function orders.removeGPSMark()
@@ -617,20 +632,6 @@ function orders.removeGPSMark()
         orders.currentOrderCheckpoint = nil
     end
     chat.addMessageToQueue("/gps", true, true)
-end
-
-function orders.updateGPSMark()
-    local result, posX, posY, posZ = getGPSMarkCoords3d()
-    if orders.currentOrder and result then
-        orders.currentOrder.pos.x = posX
-        orders.currentOrder.pos.y = posY
-        orders.currentOrder.pos.z = posZ
-        orders.currentOrder.zone = getZone(posX, posY)
-        orders.currentOrder.distance =
-            getDistanceToCoords3d(orders.currentOrder.pos.x, orders.currentOrder.pos.y, orders.currentOrder.pos.z)
-        orders.currentOrder.currentDistance = orders.currentOrder.distance
-        orders.currentOrder.showMark = true
-    end
 end
 
 function orders.calculate2dCoords(circle1, circle2, circle3)
@@ -708,7 +709,6 @@ function orders.add(nickname, id, distance, time)
         firstSMS = true,
         arrived = false,
         updateDistance = true,
-        repeatCount = 0,
         direction = 0,
         tempCircles = {{x = posX, y = posY, radius = distance}, nil, nil},
         zone = "Неизвестно",
@@ -916,11 +916,6 @@ function orders.handle(orderNickname, orderDistance, orderClock)
                 end
             end
         end
-    elseif
-        orderNickname == orders.currentOrder.nickname and ini.settings.acceptRepeatOrder and
-            orders.currentOrder.repeatCount < 3
-     then
-        orders.accept(orderNickname, orderClock)
     end
 end
 
@@ -933,8 +928,7 @@ vehicle = {
     handle = nil,
     markers = {},
     cruiseControlEnabled = false,
-    gasPressed = false,
-    updateFuelClock = os.clock() - 5
+    gasPressed = false
 }
 
 function vehicle.refreshInfoThread()
@@ -942,7 +936,6 @@ function vehicle.refreshInfoThread()
         wait(0)
         vehicle.name, vehicle.handle, vehicle.maxPassengers = vehicle.getInfo()
         vehicle.refreshPassengersList()
-        vehicle.refreshFuel()
     end
 end
 
@@ -967,24 +960,54 @@ function vehicle.addPassenger(passengerNickname)
     end
 end
 
-function vehicle.refreshFuel()
-    if ini.settings.autoRefill then
-        if os.clock() - vehicle.updateFuelClock > 5 then
-            vehicle.fuel = 0
+function updateTextdrawInfoThread()
+    while true do
+        wait(0)
+        
+        if os.clock() - player.textdrawUpdateClock > 1 then
+
             for textdrawId = 0, 2100 do
                 if sampTextdrawIsExists(textdrawId) then
+
                     local textdrawString = sampTextdrawGetString(textdrawId)
-                    if textdrawString == "Fuel" and sampTextdrawIsExists(textdrawId - 1) then
-                        vehicle.fuel = tonumber(sampTextdrawGetString(textdrawId - 1))
-                    elseif string.find(textdrawString, MESSAGES.fuelClassic) then
-                        vehicle.fuel = tonumber(string.match(textdrawString, MESSAGES.fuelClassicFormat))
+                    
+                    -- Обновление количества топлива
+                    if ini.settings.autoRefill then
+                        vehicle.fuel = nil
+                        if textdrawString == "Fuel" and sampTextdrawIsExists(textdrawId - 1) then
+                            vehicle.fuel = tonumber(sampTextdrawGetString(textdrawId - 1))
+                        elseif string.find(textdrawString, MESSAGES.fuelClassic) then
+                            vehicle.fuel = tonumber(string.match(textdrawString, MESSAGES.fuelClassicFormat))
+                        end
                     end
+
+                    -- Обновление активного вызова 
+                    if vehicle.maxPassengers then
+                        if string.find(textdrawString, MESSAGES.currentOrderTextdraw) then
+                            local nickname, distance = string.match(textdrawString, MESSAGES.currentOrderTextdraw)
+                            distance = tonumber(distance)
+                            id = getPlayerIdByNickname(nickname)
+                            if type(id) == "number" then
+                                local accept = true
+                                if orders.currentOrder and orders.currentOrder.nickname == nickname then
+                                    accept = false
+                                end
+                                if accept then
+                                    orders.add(nickname, id, distance, os.clock())
+                                    orders.currentOrder = orders.list[nickname]
+                                    orders.list[nickname] = nil
+                                    player.onWork = true
+                                end
+                            end
+                        end
+                    end
+                        
                 end
             end
-            vehicle.updateFuelClock = os.clock()
-        end
-    else
-        vehicle.fuel = nil
+
+            player.textdrawUpdateClock = os.clock()
+
+        end   
     end
 end
 
@@ -1159,7 +1182,8 @@ player = {
     salary = 0,
     salaryLimit = 0,
     tips = 0,
-    connected = false
+    connected = false,
+    textdrawUpdateClock = os.clock()
 }
 
 function player.refresh()
@@ -1206,7 +1230,7 @@ ini = {
         soundVolume = 50,
         dispatcherMessages = true,
         finishWork = true,
-        SMSPrefix = "[Taxi]",
+        SMSPrefix = "",
         SMSText = "Жёлтый {carname} в пути. Дистанция: {distance}",
         SMSArrival = "Жёлтый {carname} прибыл на место вызова",
         SMSSeats = "Такси имеет только одно пассажирское место",
@@ -1441,9 +1465,7 @@ function binds.pressProcessingThread()
                         if orders.currentOrder then
                             text =
                                 string.format(
-                                "/t %d %s",
-                                orders.currentOrder.id,
-                                chat.subSMSText(ini.settings.SMSPrefix, bind.buffer.v)
+                                "/service chat %s", chat.subSMSText(ini.settings.SMSPrefix, bind.buffer.v)
                             )
                             chat.addMessageToQueue(text)
                         end
@@ -1613,15 +1635,8 @@ function sampev.onShowDialog(DdialogId, Dstyle, Dtitle, Dbutton1, Dbutton2, Dtex
             lua_thread.create(
                 function()
                     local ordersList = {}
-
                     for string in string.gmatch(Dtext, "[^\n]+") do
-                        local nickname, id, time, distance
-                        if string:find("/service ac taxi") then
-                            nickname, id, time, distance = string.match(string, MESSAGES.order)
-                        else
-                            nickname, id, time, distance =
-                                string.match(string, utf8sub(MESSAGES.order, 1, utf8len(MESSAGES.order) - 1))
-                        end
+                        local nickname, id, time, distance = string.match(string, MESSAGES.order)
                         time = stringToSeconds(time)
                         distance = stringToMeters(distance)
                         if orders.list[nickname] then
@@ -1727,8 +1742,8 @@ function sampev.onServerMessage(color, message)
                 return false
             end
         elseif
-            string.find(message, MESSAGES.noOrders) or string.find(message, MESSAGES.enterService1) or
-                string.find(message, MESSAGES.enterService2)
+            string.find(message, MESSAGES.noOrders1) or string.find(message, MESSAGES.noOrders2) or 
+                string.find(message, MESSAGES.enterService1) or string.find(message, MESSAGES.enterService2)
          then
             if chat.hiddenMessages["/service"].bool then
                 chat.hiddenMessages["/service"].bool = false
@@ -1741,22 +1756,19 @@ function sampev.onServerMessage(color, message)
             end
         else
             chat.handleInputMessage(message)
-            local dispatcher = false
             if string.find(message, MESSAGES.newOrderFormat) then
-                dispatcher = true
                 local nickname = string.match(message, MESSAGES.newOrderFormat)
                 if blacklist.check(nickname) and ini.settings.blacklistHide then
                     return false
                 end
             end
             if string.find(message, MESSAGES.orderAcceptedFormat) then
-                dispatcher = true
                 local _, nickname = string.match(message, MESSAGES.orderAcceptedFormat)
                 if blacklist.check(nickname) and ini.settings.blacklistHide then
                     return false
                 end
             end
-            if dispatcher and not ini.settings.dispatcherMessages then
+            if string.find(message, "^ %[Такси%] Диспетчер:.+$") and vehicle.maxPassengers and not ini.settings.dispatcherMessages then
                 return false
             end
         end
@@ -2295,7 +2307,7 @@ function imgui.onDrawHUD()
                 end
             end
             if imgui.Button(buttonText, vec(95, 10)) then
-                orders.cancelCurrentOrder()
+                orders.startOrderCanceling()
             end
             imgui.EndChild()
         end
@@ -2435,7 +2447,7 @@ function imgui.OnDrawBinder()
                     end
                     buttonName = buttonName .. text
                     if imgui.Button(buttonName .. "##sms" .. bindIndex, vec(80.5, 10)) and orders.currentOrder then
-                        chat.addMessageToQueue(string.format("/t %d %s", orders.currentOrder.id, text))
+                        chat.addMessageToQueue(string.format("/service chat %s", text))
                     end
                     if utf8len(text) > 25 then
                         imgui.SetTooltip(text, 500)
@@ -2908,15 +2920,6 @@ function imgui.onDrawSettings()
                 ini.settings.canceledOrderDelay = imgui.canceledOrderDelay.v
                 inicfg.save(ini, "Taximate/settings.ini")
             end
-            if
-                imgui.Checkbox(
-                    "Принимать повторные вызовы от текущего клиента",
-                    imgui.ImBool(ini.settings.acceptRepeatOrder)
-                )
-             then
-                ini.settings.acceptRepeatOrder = not ini.settings.acceptRepeatOrder
-                inicfg.save(ini, "Taximate/settings.ini")
-            end
             if imgui.Checkbox("Обновлять дистанцию вызовов раз в", imgui.ImBool(ini.settings.ordersDistanceUpdate)) then
                 ini.settings.ordersDistanceUpdate = not ini.settings.ordersDistanceUpdate
                 inicfg.save(ini, "Taximate/settings.ini")
@@ -2973,9 +2976,6 @@ function imgui.onDrawSettings()
             end
             local color = "{FFFFFF}"
             local text = chat.subSMSText(ini.settings.SMSPrefix, ini.settings.SMSText)
-            if utf8len(text) > 63 then
-                color = "{FF0000}"
-            end
             imgui.TextColoredRGB(color .. "Доклад:")
             imgui.SameLine()
             imgui.PushItemWidth(toScreenX(165))
@@ -2983,12 +2983,8 @@ function imgui.onDrawSettings()
                 ini.settings.SMSText = imgui.SMSText.v
                 inicfg.save(ini, "Taximate/settings.ini")
             end
-            imgui.SetTooltip("SMS: " .. utf8sub(text, 1, 63), 200)
             local color = "{FFFFFF}"
             local text = chat.subSMSText(ini.settings.SMSPrefix, ini.settings.SMSArrival)
-            if utf8len(text) > 63 then
-                color = "{FF0000}"
-            end
             imgui.TextColoredRGB(color .. "Прибытие:")
             imgui.SameLine()
             imgui.PushItemWidth(toScreenX(158))
@@ -2996,12 +2992,8 @@ function imgui.onDrawSettings()
                 ini.settings.SMSArrival = imgui.SMSArrival.v
                 inicfg.save(ini, "Taximate/settings.ini")
             end
-            imgui.SetTooltip("SMS: " .. utf8sub(text, 1, 63), 200)
             local color = "{FFFFFF}"
             local text = chat.subSMSText(ini.settings.SMSPrefix, ini.settings.SMSSeats)
-            if utf8len(text) > 63 then
-                color = "{FF0000}"
-            end
             imgui.TextColoredRGB(color .. "Одно пасс. место:")
             imgui.SameLine()
             imgui.PushItemWidth(toScreenX(139.5))
@@ -3009,12 +3001,8 @@ function imgui.onDrawSettings()
                 ini.settings.SMSSeats = imgui.SMSSeats.v
                 inicfg.save(ini, "Taximate/settings.ini")
             end
-            imgui.SetTooltip("SMS: " .. utf8sub(text, 1, 63), 200)
             local color = "{FFFFFF}"
             local text = chat.subSMSText(ini.settings.SMSPrefix, ini.settings.SMSCancel)
-            if utf8len(text) > 63 then
-                color = "{FF0000}"
-            end
             imgui.TextColoredRGB(color .. "Отмена вызова:")
             imgui.SameLine()
             imgui.PushItemWidth(toScreenX(144.5))
@@ -3022,7 +3010,6 @@ function imgui.onDrawSettings()
                 ini.settings.SMSCancel = imgui.SMSCancel.v
                 inicfg.save(ini, "Taximate/settings.ini")
             end
-            imgui.SetTooltip("SMS: " .. utf8sub(text, 1, 63), 200)
             imgui.TextDisabled("Доступные для замены токены: {carname}, {distance}, {zone}")
             imgui.NewLine()
         end
@@ -3767,6 +3754,29 @@ function sampev.onDisableRaceCheckpoint()
     orders.GPSMark = nil
 end
 
+function onReceiveRpc(int, bit)
+    if int == 56 then
+        local bIconID = raknetBitStreamReadInt8(bit)
+        local posX = raknetBitStreamReadFloat(bit)
+        local posY = raknetBitStreamReadFloat(bit)
+        local posZ = raknetBitStreamReadFloat(bit)
+        local type = raknetBitStreamReadInt8(bit)
+        local color = raknetBitStreamReadInt32(bit)
+        local style = raknetBitStreamReadInt8(bit)
+        
+        if orders.currentOrder and type == 0 and color == -16776961 and style == 3 then
+            orders.currentOrder.pos.x = posX
+            orders.currentOrder.pos.y = posY
+            orders.currentOrder.pos.z = posZ
+            orders.currentOrder.zone = getZone(posX, posY)
+            orders.currentOrder.distance =
+                getDistanceToCoords3d(orders.currentOrder.pos.x, orders.currentOrder.pos.y, orders.currentOrder.pos.z)
+            orders.currentOrder.currentDistance = orders.currentOrder.distance
+            orders.currentOrder.showMark = true
+        end
+    end
+end
+
 function getGPSMarkCoords3d()
     wait(500)
     if orders.GPSMark then
@@ -3774,6 +3784,16 @@ function getGPSMarkCoords3d()
         return found, orders.GPSMark.x, orders.GPSMark.y, orders.GPSMark.z
     end
     return false
+end
+
+function getPlayerIdByNickname(Nickname)
+    for id = 0, sampGetMaxPlayerId(false) do
+        if sampIsPlayerConnected(id) then
+            if sampGetPlayerNickname(id) == tostring(Nickname) then
+                return id
+            end
+        end
+    end
 end
 
 function toScreenY(gY)
@@ -3945,15 +3965,6 @@ function try(f, catch_f)
     if not status then
         catch_f(exception)
     end
-end
-
-local _print = print
-function print(...)
-    local pack = table.pack(...)
-    for i = 1, pack.n do
-        pack[i] = u8:decode(tostring(pack[i]))
-    end
-    _print(table.unpack(pack))
 end
 
 local find = string.find
