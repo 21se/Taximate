@@ -1,7 +1,7 @@
 script_author("21se")
 script_moonloader(026)
 script_version("1.3.7")
-script_version_number(58)
+script_version_number(59)
 script_url("github.com/21se/Taximate")
 script_name(string.format("Taximate v%s (%d)", thisScript().version, thisScript().version_num))
 local script_updates = {update = false}
@@ -966,14 +966,16 @@ function updateTextdrawInfoThread()
         
         if os.clock() - player.textdrawUpdateClock > 1 then
 
+            vehicle.fuel = nil
+
             for textdrawId = 0, 2100 do
                 if sampTextdrawIsExists(textdrawId) then
 
                     local textdrawString = sampTextdrawGetString(textdrawId)
-                    
+
                     -- Обновление количества топлива
                     if ini.settings.autoRefill then
-                        vehicle.fuel = nil
+                        
                         if textdrawString == "Fuel" and sampTextdrawIsExists(textdrawId - 1) then
                             vehicle.fuel = tonumber(sampTextdrawGetString(textdrawId - 1))
                         elseif string.find(textdrawString, MESSAGES.fuelClassic) then
