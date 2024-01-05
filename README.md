@@ -1,4 +1,4 @@
-# [Скачать Taximate](https://github.com/21se/Taximate/releases)
+# [Скачать Taximate](https://github.com/21se/Taximate/releases/latest/download/Taximate.zip)
 
 ## Зависимости (установить перед запуском скрипта)
 -   [SAMP 0.3.7 R1](http://files.sa-mp.com/sa-mp-0.3.7-install.exe)
