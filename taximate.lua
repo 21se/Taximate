@@ -1,7 +1,7 @@
 script_author("21se")
 script_moonloader(026)
 script_version("1.3.7")
-script_version_number(59)
+script_version_number(60)
 script_url("github.com/21se/Taximate")
 script_name(string.format("Taximate v%s (%d)", thisScript().version, thisScript().version_num))
 local script_updates = {update = false}
@@ -1639,68 +1639,70 @@ function sampev.onShowDialog(DdialogId, Dstyle, Dtitle, Dbutton1, Dbutton2, Dtex
                     local ordersList = {}
                     for string in string.gmatch(Dtext, "[^\n]+") do
                         local nickname, id, time, distance = string.match(string, MESSAGES.order)
-                        time = stringToSeconds(time)
-                        distance = stringToMeters(distance)
-                        if orders.list[nickname] then
-                            if distance < orders.list[nickname].distance then
-                                orders.list[nickname].direction = 1
-                            elseif distance > orders.list[nickname].distance then
-                                orders.list[nickname].direction = -1
-                            end
-                            orders.list[nickname].distance = distance
-                            orders.list[nickname].time = os.clock() - time
-                        else
-                            orders.add(nickname, id, distance, os.clock() - time)
-                        end
-                        table.insert(ordersList, nickname)
-                        local posX, posY = getCharCoordinates(PLAYER_PED)
-                        if not orders.list[nickname].tempCircles[1] then
-                            orders.list[nickname].tempCircles[1] = {
-                                x = posX,
-                                y = posY,
-                                radius = distance
-                            }
-                        elseif not orders.list[nickname].tempCircles[2] then
-                            if
-                                math.abs(orders.list[nickname].tempCircles[1].x - posX) > 15 or
-                                    math.abs(orders.list[nickname].tempCircles[1].y - posY) > 15
-                             then
-                                orders.list[nickname].tempCircles[2] = {
-                                    x = posX,
-                                    y = posY,
-                                    radius = distance
-                                }
-                            end
-                        elseif not orders.list[nickname].tempCircles[3] then
-                            if
-                                (math.abs(orders.list[nickname].tempCircles[1].x - posX) > 15 or
-                                    math.abs(orders.list[nickname].tempCircles[1].y - posY) > 15) and
-                                    (math.abs(orders.list[nickname].tempCircles[2].x - posX) > 15 or
-                                        math.abs(orders.list[nickname].tempCircles[2].y - posY) > 15)
-                             then
-                                orders.list[nickname].tempCircles[3] = {
-                                    x = posX,
-                                    y = posY,
-                                    radius = distance
-                                }
-                                local result, calcX, calcY =
-                                    orders.calculate2dCoords(
-                                    orders.list[nickname].tempCircles[1],
-                                    orders.list[nickname].tempCircles[2],
-                                    orders.list[nickname].tempCircles[3]
-                                )
-                                if result then
-                                    orders.list[nickname].pos = {
-                                        x = calcX,
-                                        y = calcY,
-                                        z = 30
-                                    }
-                                    orders.list[nickname].zone = getZone(calcX, calcY)
+                        if nickname ~= nil then
+                            time = stringToSeconds(time)
+                            distance = stringToMeters(distance)
+                            if orders.list[nickname] then
+                                if distance < orders.list[nickname].distance then
+                                    orders.list[nickname].direction = 1
+                                elseif distance > orders.list[nickname].distance then
+                                    orders.list[nickname].direction = -1
                                 end
+                                orders.list[nickname].distance = distance
+                                orders.list[nickname].time = os.clock() - time
+                            else
+                                orders.add(nickname, id, distance, os.clock() - time)
+                            end
+                            table.insert(ordersList, nickname)
+                            local posX, posY = getCharCoordinates(PLAYER_PED)
+                            if not orders.list[nickname].tempCircles[1] then
+                                orders.list[nickname].tempCircles[1] = {
+                                    x = posX,
+                                    y = posY,
+                                    radius = distance
+                                }
+                            elseif not orders.list[nickname].tempCircles[2] then
+                                if
+                                    math.abs(orders.list[nickname].tempCircles[1].x - posX) > 15 or
+                                        math.abs(orders.list[nickname].tempCircles[1].y - posY) > 15
+                                then
+                                    orders.list[nickname].tempCircles[2] = {
+                                        x = posX,
+                                        y = posY,
+                                        radius = distance
+                                    }
+                                end
+                            elseif not orders.list[nickname].tempCircles[3] then
+                                if
+                                    (math.abs(orders.list[nickname].tempCircles[1].x - posX) > 15 or
+                                        math.abs(orders.list[nickname].tempCircles[1].y - posY) > 15) and
+                                        (math.abs(orders.list[nickname].tempCircles[2].x - posX) > 15 or
+                                            math.abs(orders.list[nickname].tempCircles[2].y - posY) > 15)
+                                then
+                                    orders.list[nickname].tempCircles[3] = {
+                                        x = posX,
+                                        y = posY,
+                                        radius = distance
+                                    }
+                                    local result, calcX, calcY =
+                                        orders.calculate2dCoords(
+                                        orders.list[nickname].tempCircles[1],
+                                        orders.list[nickname].tempCircles[2],
+                                        orders.list[nickname].tempCircles[3]
+                                    )
+                                    if result then
+                                        orders.list[nickname].pos = {
+                                            x = calcX,
+                                            y = calcY,
+                                            z = 30
+                                        }
+                                        orders.list[nickname].zone = getZone(calcX, calcY)
+                                    end
 
-                                orders.list[nickname].tempCircles[1] = nil
-                                orders.list[nickname].tempCircles[2] = nil
-                                orders.list[nickname].tempCircles[3] = nil
+                                    orders.list[nickname].tempCircles[1] = nil
+                                    orders.list[nickname].tempCircles[2] = nil
+                                    orders.list[nickname].tempCircles[3] = nil
+                                end
                             end
                         end
                     end
@@ -1770,7 +1772,7 @@ function sampev.onServerMessage(color, message)
                     return false
                 end
             end
-            if string.find(message, "^ %[Такси%] Диспетчер:.+$") and vehicle.maxPassengers and not ini.settings.dispatcherMessages then
+            if (string.find(message, "^ Сообщение: .+$") or string.find(message, "^ %[Такси%] Диспетчер:.+$")) and vehicle.maxPassengers and not ini.settings.dispatcherMessages then
                 return false
             end
         end
