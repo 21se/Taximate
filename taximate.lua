@@ -1,7 +1,7 @@
 script_author("21se")
 script_moonloader(026)
 script_version("1.3.7")
-script_version_number(60)
+script_version_number(61)
 script_url("github.com/21se/Taximate")
 script_name(string.format("Taximate v%s (%d)", thisScript().version, thisScript().version_num))
 local script_updates = {update = false}
@@ -67,17 +67,17 @@ local COLOR_LIST = {
 }
 
 local MESSAGES = {
-    newOrder = "^ %[Такси%] Диспетчер: Вызов от [a-zA-Z0-9_]+%[%d+%] .+%. Примерное расстояние .+м$",
-    newOrderFormat = "^ %[Такси%] Диспетчер: Вызов от (.+)%[(%d+)%] .+%. Примерное расстояние (.+)$",
-    orderAccepted = "^ %[Такси%] Диспетчер: [a-zA-Z0-9_]+%[%d+%] принял[а]? вызов от [a-zA-Z0-9_]+%[%d+%]$",
-    orderAcceptedFormat = "^ %[Такси%] Диспетчер: (.+)%[%d+%] принял[а]? вызов от (.+)%[%d+%]$",
-    wrongPerson = " ^%[Такси%] Диспетчер: Вызов от этого человека не поступал$",
-    orderCanceled = "^ %[Такси%] Диспетчер: [a-zA-Z0-9_]+%[%d+%] отменил вызов$",
-    orderCanceledFormat = "^ %[Такси%] Диспетчер: (.+)%[%d+%] отменил вызов$",
-    orderCanceledByTaxi = "^ %[Такси%] Диспетчер: Вы отказались от вызова$",
-    orderCanceledByQuit = "^ %[Такси%] Диспетчер: (.+) отменил вызов %(Выход из игры%)$",
+    newOrder = "^ %[Таксопарк%] Диспетчер: Вызов от [a-zA-Z0-9_]+%[%d+%] .+%. Примерное расстояние .+м$",
+    newOrderFormat = "^ %[Таксопарк%] Диспетчер: Вызов от (.+)%[(%d+)%] .+%. Примерное расстояние (.+)$",
+    orderAccepted = "^ %[Таксопарк%] Диспетчер: [a-zA-Z0-9_]+%[%d+%] принял[а]? вызов от [a-zA-Z0-9_]+%[%d+%]$",
+    orderAcceptedFormat = "^ %[Таксопарк%] Диспетчер: (.+)%[%d+%] принял[а]? вызов от (.+)%[%d+%]$",
+    wrongPerson = " ^%[Таксопарк%] Диспетчер: Вызов от этого человека не поступал$",
+    orderCanceled = "^ %[Таксопарк%] Диспетчер: [a-zA-Z0-9_]+%[%d+%] отменил вызов$",
+    orderCanceledFormat = "^ %[Таксопарк%] Диспетчер: (.+)%[%d+%] отменил вызов$",
+    orderCanceledByTaxi = "^ %[Таксопарк%] Диспетчер: Вы отказались от вызова$",
+    orderCanceledByQuit = "^ %[Таксопарк%] Диспетчер: (.+) отменил вызов %(Выход из игры%)$",
     noOrders1 = "^ Вызовов не поступало$",
-    noOrders2 = " ^%[Такси%] Диспетчер: От вас вызовов не поступало$",
+    noOrders2 = " ^%[Таксопарк%] Диспетчер: От вас вызовов не поступало$",
     enterService1 = "^ Введите: /service$",
     enterService2 = "^ Введите: /service %[call / ac / cancel / chat%] %[police / medic / mechanic / food / taxi%]$",
     clist = "^ Цвет выбран$",
@@ -101,7 +101,8 @@ local MESSAGES = {
     refillFormat = "^ Механик .+ хочет заправить ваш автомобиль за (%d+) вирт{FFFFFF} %(%( Нажмите Y/N для принятия/отмены %)%)$",
     fuelClassic = "FUEL ~w~%d+",
     fuelClassicFormat = "FUEL ~w~(%d+)",
-    currentOrderTextdraw = "([a-zA-Z0-9_]+)~n~distance: (%d+)m"
+    currentOrderTextdraw = "([a-zA-Z0-9_]+)~n~distance: (%d+)m",
+    currentOrderTextdrawInDoors = "([a-zA-Z0-9_]+)~n~~r~%[indoors%]"
 }
 
 local FORMAT_NOTIFICATIONS = {
@@ -226,7 +227,11 @@ function main()
                     chat.addMessageToQueue("/clist 0", true, true)
                 end
                 if orders.currentOrder then
-                    orders.startOrderCanceling()
+                    if orders.currentOrderTextdrawExist then
+                        orders.startOrderCanceling()
+                    else
+                        orders.cancelCurrentOrder(true)
+                    end
                 end
             end
 
@@ -244,13 +249,21 @@ function main()
                 end
             else
                 if isKeysPressed(ini.settings.key2, ini.settings.key2add, false) and ini.settings.hotKeys then
-                    orders.startOrderCanceling()
+                    if orders.currentOrderTextdrawExist then
+                        orders.startOrderCanceling()
+                    else
+                        orders.cancelCurrentOrder(true)
+                    end
                 end
             end
         elseif orders.currentOrder then
-            if os.clock() - orders.lastOrderCanceling > 2 then
-                orders.startOrderCanceling()
-                orders.lastOrderCanceling = os.clock()
+            if orders.currentOrderTextdrawExist then
+                if os.clock() - orders.lastOrderCanceling > 2 then
+                    orders.startOrderCanceling()
+                    orders.lastOrderCanceling = os.clock()
+                end
+            else
+                orders.cancelCurrentOrder(true)
             end
         else
             orders.autoAccept = false
@@ -600,7 +613,8 @@ orders = {
     currentOrder = nil,
     currentOrderBlip = nil,
     currentOrderCheckpoint = nil,
-    lastOrderCanceling = os.clock()
+    lastOrderCanceling = os.clock(),
+    currentOrderTextdrawExist = false
 }
 
 function orders.startOrderCanceling()
@@ -723,68 +737,51 @@ function orders.refreshCurrentOrder()
                 chat.sendNotification(orders.currentOrder)
                 local charInStream, charHandle = sampGetCharHandleBySampPlayerId(orders.currentOrder.id)
                 if charInStream and ini.settings.updateOrderMark then
-                    orders.currentOrder.pos.x, orders.currentOrder.pos.y, orders.currentOrder.pos.z =
+                    local newPosX, newPosY = getCharCoordinates(charHandle)
+                    
+                    -- если дистанция резко сменилась считаем что клиент телепортировался в виртуальный мир
+                    if getDistanceBetweenCoords2d(newPosX, newPosY, orders.currentOrder.pos.x, orders.currentOrder.pos.y) < 200 then
+                        orders.currentOrder.pos.x, orders.currentOrder.pos.y, orders.currentOrder.pos.z =
                         getCharCoordinates(charHandle)
-                    orders.currentOrder.zone = getZone(orders.currentOrder.pos.x, orders.currentOrder.pos.y)
-                    if orders.currentOrder.showMark then
-                        if not orders.currentOrderBlip then
-                            orders.currentOrderBlip =
-                                addBlipForCoord(
-                                orders.currentOrder.pos.x,
-                                orders.currentOrder.pos.y,
-                                orders.currentOrder.pos.z
-                            )
-                            changeBlipColour(orders.currentOrderBlip, 0xBB0000FF)
-                            orders.currentOrderCheckpoint =
-                                createCheckpoint(
-                                1,
-                                orders.currentOrder.pos.x,
-                                orders.currentOrder.pos.y,
-                                orders.currentOrder.pos.z,
-                                orders.currentOrder.pos.x,
-                                orders.currentOrder.pos.y,
-                                orders.currentOrder.pos.z,
-                                2.99
-                            )
-                            chat.addMessageToQueue("/gps", true, true)
-                            if ini.settings.notifications then
-                                imgui.addNotification("Клиент поблизости\nМетка на карте обновлена", 5)
-                            end
-                            if ini.settings.notifications and ini.settings.sounds then
-                                sounds.play("correct_order")
-                            end
-                        else
-                            removeBlip(orders.currentOrderBlip)
-                            orders.currentOrderBlip =
-                                addBlipForCoord(
-                                orders.currentOrder.pos.x,
-                                orders.currentOrder.pos.y,
-                                orders.currentOrder.pos.z
-                            )
-                            changeBlipColour(orders.currentOrderBlip, 0xBB0000FF)
-                            setCheckpointCoords(
-                                orders.currentOrderCheckpoint,
-                                orders.currentOrder.pos.x,
-                                orders.currentOrder.pos.y,
-                                orders.currentOrder.pos.z
-                            )
-                        end
+                        orders.currentOrder.zone = getZone(orders.currentOrder.pos.x, orders.currentOrder.pos.y) 
+                    end
+                end
 
-                        if orders.currentOrderBlip then
-                            local distance =
-                                getDistanceToCoords3d(
-                                orders.currentOrder.pos.x,
-                                orders.currentOrder.pos.y,
-                                orders.currentOrder.pos.z
-                            )
-                            if distance <= 3 then
-                                removeBlip(orders.currentOrderBlip)
-                                deleteCheckpoint(orders.currentOrderCheckpoint)
-                                orders.currentOrderBlip = nil
-                                orders.currentOrderCheckpoint = nil
-                                orders.currentOrder.showMark = false
-                            end
-                        end
+                if orders.currentOrder.showMark then
+                    if not orders.currentOrderBlip then
+                        orders.currentOrderBlip =
+                            addBlipForCoord(
+                            orders.currentOrder.pos.x,
+                            orders.currentOrder.pos.y,
+                            orders.currentOrder.pos.z
+                        )
+                        changeBlipColour(orders.currentOrderBlip, 0xBB0000FF)
+                        orders.currentOrderCheckpoint =
+                            createCheckpoint(
+                            1,
+                            orders.currentOrder.pos.x,
+                            orders.currentOrder.pos.y,
+                            orders.currentOrder.pos.z,
+                            orders.currentOrder.pos.x,
+                            orders.currentOrder.pos.y,
+                            orders.currentOrder.pos.z,
+                            2.99
+                        )
+                    else
+                        removeBlip(orders.currentOrderBlip)
+                        orders.currentOrderBlip =
+                            addBlipForCoord(
+                            orders.currentOrder.pos.x,
+                            orders.currentOrder.pos.y,
+                            orders.currentOrder.pos.z
+                        )
+                        changeBlipColour(orders.currentOrderBlip, 0xBB0000FF)
+                        setCheckpointCoords(
+                            orders.currentOrderCheckpoint,
+                            orders.currentOrder.pos.x,
+                            orders.currentOrder.pos.y,
+                            orders.currentOrder.pos.z
+                        )
                     end
                 end
 
@@ -960,6 +957,21 @@ function vehicle.addPassenger(passengerNickname)
     end
 end
 
+function searchMarker()
+    for id = 0, 175 do
+        local MarkerStruct = 0xBA86F0 + id * 40
+        local color = readMemory(MarkerStruct + 0, 8, false)
+        local posX = representIntAsFloat(readMemory(MarkerStruct + 8, 4, false))
+        local posY = representIntAsFloat(readMemory(MarkerStruct + 12, 4, false))
+        local posZ = representIntAsFloat(readMemory(MarkerStruct + 16, 4, false))
+        if color == -16776961 and MarkerPosX ~= 0.0 and MarkerPosY ~= 0.0 and MarkerPosZ ~= 0.0 then
+            return true, posX, posY, posZ
+        end
+    end
+
+    return false, nil, nil, nil
+end
+
 function updateTextdrawInfoThread()
     while true do
         wait(0)
@@ -967,6 +979,7 @@ function updateTextdrawInfoThread()
         if os.clock() - player.textdrawUpdateClock > 1 then
 
             vehicle.fuel = nil
+            orders.currentOrderTextdrawExist = false
 
             for textdrawId = 0, 2100 do
                 if sampTextdrawIsExists(textdrawId) then
@@ -975,33 +988,67 @@ function updateTextdrawInfoThread()
 
                     -- Обновление количества топлива
                     if ini.settings.autoRefill then
-                        
                         if textdrawString == "Fuel" and sampTextdrawIsExists(textdrawId - 1) then
                             vehicle.fuel = tonumber(sampTextdrawGetString(textdrawId - 1))
                         elseif string.find(textdrawString, MESSAGES.fuelClassic) then
                             vehicle.fuel = tonumber(string.match(textdrawString, MESSAGES.fuelClassicFormat))
                         end
                     end
-
+                    
                     -- Обновление активного вызова 
+                    local acceptOrder = false
+                    local inDoors = false
+                    local orderNickname, orderDistance, orderId
+
                     if vehicle.maxPassengers then
-                        if string.find(textdrawString, MESSAGES.currentOrderTextdraw) then
-                            local nickname, distance = string.match(textdrawString, MESSAGES.currentOrderTextdraw)
-                            distance = tonumber(distance)
-                            id = getPlayerIdByNickname(nickname)
-                            if type(id) == "number" then
-                                local accept = true
-                                if orders.currentOrder and orders.currentOrder.nickname == nickname then
-                                    accept = false
-                                end
-                                if accept then
-                                    orders.add(nickname, id, distance, os.clock())
-                                    orders.currentOrder = orders.list[nickname]
-                                    orders.list[nickname] = nil
-                                    player.onWork = true
+                        if string.find(textdrawString, MESSAGES.currentOrderTextdraw) or
+                            string.find(textdrawString, MESSAGES.currentOrderTextdrawInDoors) then
+
+                            orders.currentOrderTextdrawExist = true
+                            orderNickname, orderDistance = string.match(textdrawString, MESSAGES.currentOrderTextdraw)
+                            if orderNickname == nil then
+                                orderNickname = string.match(textdrawString, MESSAGES.currentOrderTextdrawInDoors)
+                                inDoors = orderNickname ~= nil
+                            else
+                                orderDistance = tonumber(orderDistance)
+                            end
+                            orderId = getPlayerIdByNickname(orderNickname)
+                            if orderNickname ~= nil and orderId ~= nil then
+                                if not orders.currentOrder or orders.currentOrder.nickname ~= orderNickname then
+                                    acceptOrder = true
                                 end
                             end
                         end
+                    end
+
+                    if acceptOrder then
+
+                        local result, posX, posY, posZ
+                        if inDoors then
+                            result, posX, posY, posZ = searchMarker()
+                            if result then
+                                orderDistance = getDistanceToCoords3d(posX, posY, posZ)
+                            end
+                        end
+
+                        if not inDoors or result then
+                            orders.add(orderNickname, orderId, orderDistance, os.clock())
+                            orders.currentOrder = orders.list[orderNickname]
+                            orders.list[orderNickname] = nil
+                            player.onWork = true
+                        
+                            if result then
+                                orders.currentOrder.pos.x = posX
+                                orders.currentOrder.pos.y = posY
+                                orders.currentOrder.pos.z = posZ
+                                orders.currentOrder.zone = getZone(posX, posY)
+                            end
+
+                            orders.currentOrder.distance = orderDistance
+                            orders.currentOrder.currentDistance = orders.currentOrder.distance
+                            orders.currentOrder.showMark = true
+                        end
+                        
                     end
                         
                 end
@@ -1772,7 +1819,7 @@ function sampev.onServerMessage(color, message)
                     return false
                 end
             end
-            if (string.find(message, "^ Сообщение: .+$") or string.find(message, "^ %[Такси%] Диспетчер:.+$")) and vehicle.maxPassengers and not ini.settings.dispatcherMessages then
+            if (string.find(message, "^ Сообщение: .+$") or string.find(message, "^ %[Таксопарк%] Диспетчер:.+$")) and vehicle.maxPassengers and not ini.settings.dispatcherMessages then
                 return false
             end
         end
@@ -2311,7 +2358,11 @@ function imgui.onDrawHUD()
                 end
             end
             if imgui.Button(buttonText, vec(95, 10)) then
-                orders.startOrderCanceling()
+                if orders.currentOrderTextdrawExist then
+                    orders.startOrderCanceling()
+                else
+                    orders.cancelCurrentOrder(true)
+                end
             end
             imgui.EndChild()
         end
@@ -3767,7 +3818,7 @@ function onReceiveRpc(int, bit)
         local type = raknetBitStreamReadInt8(bit)
         local color = raknetBitStreamReadInt32(bit)
         local style = raknetBitStreamReadInt8(bit)
-        
+
         if orders.currentOrder and type == 0 and color == -16776961 and style == 3 then
             orders.currentOrder.pos.x = posX
             orders.currentOrder.pos.y = posY
